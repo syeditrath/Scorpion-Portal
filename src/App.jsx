@@ -216,89 +216,227 @@ function Sidebar({page,go,sideOpen,alerts,data}) {
    DASHBOARD
 ════════════════════════════════════════════════════════════════════════════ */
 function Dashboard({data,alerts,go}) {
-  const scorpionExp = data.scorpionDocs.filter(d=>daysUntil(d.expiryDate)!==null&&daysUntil(d.expiryDate)<=90).length;
-  const mpExp       = data.manpower.reduce((n,p)=>{
+  /* ── computed stats ── */
+  const scorpionExp = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=90; }).length;
+  const scorpionExp30 = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=30; }).length;
+
+  const mpPeople = data.manpower.length;
+  const mpCats   = data.manpowerCats.length;
+  const mpDocAlerts = data.manpower.reduce((n,p)=>{
     const ds=[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)];
     return n + ds.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
   },0);
-  const eqExp = data.equipment.reduce((n,e)=>{
+
+  const eqTotal  = data.equipment.length;
+  const eqActive = data.equipment.filter(e=>e.status==="Active").length;
+  const eqMaint  = data.equipment.filter(e=>e.status==="Under Maintenance").length;
+  const eqExp    = data.equipment.reduce((n,e)=>{
     const ds=[...(e.certifications||[]).map(c=>c.expiryDate),...(e.insurance||[]).map(c=>c.expiryDate),...(e.permits||[]).map(c=>c.expiryDate)];
     return n + ds.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
   },0);
 
-  const SECTIONS = [
-    { id:"scorpion", label:"Scorpion Documents", icon:"◉", color:T.blue,   dim:T.blueDim,
-      stats:[{l:"Total Docs",v:data.scorpionDocs.length},{l:"Expiring",v:scorpionExp,alert:true}],
-      desc:"Company licenses, insurance, contracts & more" },
-    { id:"manpower", label:"Manpower",           icon:"◈", color:T.green,  dim:T.greenDim,
-      stats:[{l:"People",v:data.manpower.length},{l:"Categories",v:data.manpowerCats.length},{l:"Alerts",v:mpExp,alert:true}],
-      desc:"Staff profiles, passports, iqama, certifications" },
-    { id:"equipment",label:"Equipment",          icon:"◎", color:T.gold,   dim:T.goldDim,
-      stats:[{l:"Assets",v:data.equipment.length},{l:"Alerts",v:eqExp,alert:true}],
-      desc:"Equipment list with certs, invoices, permits" },
+  const totalAlerts  = alerts.length;
+  const overdueCount = alerts.filter(a=>a.days<0).length;
+  const expiring30   = alerts.filter(a=>a.days>=0&&a.days<=30).length;
+
+  /* ── compliance pct (items with expiry tracked) ── */
+  const allTracked = [
+    ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>daysUntil(d.expiryDate)),
+    ...data.manpower.flatMap(p=>[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)].filter(Boolean).map(daysUntil)),
+    ...data.equipment.flatMap(e=>[...(e.certifications||[]),...(e.insurance||[]),...(e.permits||[])].map(r=>daysUntil(r.expiryDate))),
   ];
+  const validCount = allTracked.filter(d=>d!==null&&d>0).length;
+  const pct = allTracked.length ? Math.round(validCount/allTracked.length*100) : 100;
+
+  const expired  = alerts.filter(a=>a.days<0).sort((a,b)=>a.days-b.days);
+  const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
 
   return (
-    <div style={{maxWidth:1000,margin:"0 auto"}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text,marginBottom:6}}>OVERVIEW</div>
-      <div style={{fontSize:13,color:T.textMuted,marginBottom:26}}>Click any section to manage its records.</div>
+    <div style={{maxWidth:1100,margin:"0 auto"}}>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:28}}>
-        {SECTIONS.map((s,i)=>(
-          <div key={s.id} className="fade-up" onClick={()=>go(s.id)}
-            style={{background:T.card,border:`2px solid ${T.border}`,borderRadius:18,padding:"24px",cursor:"pointer",animationDelay:`${i*.08}s`,transition:"border-color .2s,transform .2s,box-shadow .2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=s.color;e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 32px ${s.color}22`;}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
-              <div style={{width:44,height:44,background:s.dim,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,color:s.color}}>{s.icon}</div>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{s.label}</div>
-                <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{s.desc}</div>
-              </div>
-            </div>
-            <div style={{display:"flex",gap:12,marginBottom:18}}>
-              {s.stats.map(st=>(
-                <div key={st.l} style={{flex:1,background:T.bg,borderRadius:10,padding:"12px 14px"}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:st.alert&&st.v>0?T.red:s.color,lineHeight:1}}>{st.v}</div>
-                  <div style={{fontSize:11,color:T.textMuted,marginTop:3}}>{st.l}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",color:s.color,fontSize:13,fontWeight:600,gap:4}}>
-              Open {s.label} <span style={{fontSize:16}}>→</span>
-            </div>
+      {/* ── Top KPI strip ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:20}}>
+        {[
+          {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲"},
+          {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕"},
+          {label:"Due in 30 Days",  v:expiring30,   color:expiring30>0?T.gold:T.textMuted,  icon:"⏱"},
+          {label:"Compliance",      v:`${pct}%`,    color:pct>=80?T.green:pct>=60?T.gold:T.red, icon:"◎"},
+          {label:"People",          v:mpPeople,     color:T.green,  icon:"◈"},
+          {label:"Equipment Assets",v:eqTotal,      color:T.gold,   icon:"◎"},
+        ].map((k,i)=>(
+          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:34,fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:500}}>{k.label}</div>
           </div>
         ))}
       </div>
 
-      {alerts.length>0&&(
-        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 22px",animationDelay:".25s"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:16,color:T.textSub,letterSpacing:".5px"}}>⚠ EXPIRY ALERTS</span>
-            <span style={{background:T.redDim,color:T.red,borderRadius:999,padding:"2px 10px",fontSize:12,fontWeight:700}}>{alerts.length}</span>
+      {/* ── Compliance bar ── */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 20px",marginBottom:18,animationDelay:".3s"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textSub,letterSpacing:".5px"}}>OVERALL COMPLIANCE</span>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:pct>=80?T.green:pct>=60?T.gold:T.red}}>{pct}%</span>
+        </div>
+        <div style={{height:8,background:T.border,borderRadius:999}}>
+          <div style={{height:"100%",width:`${pct}%`,borderRadius:999,transition:"width .8s ease",background:pct>=80?`linear-gradient(90deg,${T.green},#059669)`:pct>=60?`linear-gradient(90deg,${T.gold},#d97706)`:`linear-gradient(90deg,${T.red},#dc2626)`}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:T.textMuted}}>
+          <span>{validCount} valid of {allTracked.length} tracked items</span>
+          <span>{overdueCount>0?`${overdueCount} overdue`:"No overdue items"}</span>
+        </div>
+      </div>
+
+      {/* ── 3 section cards ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:14,marginBottom:20}}>
+
+        {/* Scorpion Documents */}
+        <div className="fade-up" onClick={()=>go("scorpion")}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".35s",transition:"border-color .2s,transform .2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.transform="translateY(-2px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+            <div style={{width:38,height:38,background:T.blueDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.blue}}>◉</div>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>SCORPION DOCUMENTS</div>
+              <div style={{fontSize:11,color:T.textMuted}}>CR, insurance, licenses, contracts</div>
+            </div>
           </div>
-          <div style={{display:"grid",gap:8}}>
-            {alerts.slice(0,12).map((a,i)=>{
-              const s=getStatus(a.days);
-              return (
-                <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:T.bg,borderRadius:10,border:`1px solid ${T.border}`}}>
-                  <div style={{width:3,height:36,borderRadius:2,background:s.color,flexShrink:0}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</div>
-                    <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>
-                      <span style={{background:`${s.color}18`,color:s.color,borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:700,marginRight:6}}>{a.src}</span>
-                    </div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:s.color,lineHeight:1}}>{Math.abs(a.days)}</div>
-                    <div style={{fontSize:9,color:T.textMuted,fontWeight:600}}>{a.days<0?"OVERDUE":"DAYS LEFT"}</div>
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            {[["Total Docs",data.scorpionDocs.length,T.blue],["Expiring",scorpionExp,scorpionExp>0?T.red:T.textMuted],["Due in 30d",scorpionExp30,scorpionExp30>0?T.gold:T.textMuted],["Categories",(data.scorpionDocCats||[]).length,T.blue]].map(([l,v,c])=>(
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:12,color:T.blue,fontWeight:600,textAlign:"right"}}>Open Documents →</div>
+        </div>
+
+        {/* Manpower */}
+        <div className="fade-up" onClick={()=>go("manpower")}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".42s",transition:"border-color .2s,transform .2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+            <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.green}}>◈</div>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>MANPOWER</div>
+              <div style={{fontSize:11,color:T.textMuted}}>Staff, documents & certifications</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            {[["People",mpPeople,T.green],["Categories",mpCats,T.green],["Doc Alerts",mpDocAlerts,mpDocAlerts>0?T.red:T.textMuted],["Certs",data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0),T.green]].map(([l,v,c])=>(
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+              </div>
+            ))}
+          </div>
+          {/* Category breakdown */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
+            {(data.manpowerCats||[]).map(c=>(
+              <span key={c} style={{background:T.greenDim,color:T.green,borderRadius:5,padding:"2px 8px",fontSize:10,fontWeight:600}}>
+                {c} ({data.manpower.filter(p=>p.category===c).length})
+              </span>
+            ))}
+          </div>
+          <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>Open Manpower →</div>
+        </div>
+
+        {/* Equipment */}
+        <div className="fade-up" onClick={()=>go("equipment")}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".49s",transition:"border-color .2s,transform .2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.gold;e.currentTarget.style.transform="translateY(-2px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+            <div style={{width:38,height:38,background:T.goldDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.gold}}>◎</div>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>EQUIPMENT</div>
+              <div style={{fontSize:11,color:T.textMuted}}>Assets, certs, invoices & permits</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            {[["Total Assets",eqTotal,T.gold],["Active",eqActive,T.green],["Maintenance",eqMaint,eqMaint>0?T.gold:T.textMuted],["Exp. Alerts",eqExp,eqExp>0?T.red:T.textMuted]].map(([l,v,c])=>(
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+            {[["📜 Certs",data.equipment.reduce((n,e)=>n+(e.certifications||[]).length,0)],["🧾 Invoices",data.equipment.reduce((n,e)=>n+(e.invoices||[]).length,0)],["🛡 Insurance",data.equipment.reduce((n,e)=>n+(e.insurance||[]).length,0)],["⬡ Permits",data.equipment.reduce((n,e)=>n+(e.permits||[]).length,0)]].map(([l,v])=>(
+              <span key={l} style={{background:T.goldDim,color:T.gold,borderRadius:5,padding:"2px 8px",fontSize:10,fontWeight:600}}>{l}: {v}</span>
+            ))}
+          </div>
+          <div style={{fontSize:12,color:T.gold,fontWeight:600,textAlign:"right"}}>Open Equipment →</div>
+        </div>
+      </div>
+
+      {/* ── Alerts split into 2 columns ── */}
+      {alerts.length>0 ? (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          {/* Overdue */}
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",animationDelay:".55s"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <div style={{width:3,height:18,borderRadius:2,background:T.red}}/>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.red,letterSpacing:".5px"}}>OVERDUE</span>
+              <span style={{background:T.redDim,color:T.red,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{expired.length}</span>
+            </div>
+            {expired.length===0
+              ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing overdue</div>
+              :<div style={{display:"grid",gap:7}}>
+                {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
+                {expired.length>8&&<div style={{fontSize:11,color:T.textMuted,textAlign:"center",paddingTop:4}}>+{expired.length-8} more — check Alerts page</div>}
+              </div>
+            }
+          </div>
+
+          {/* Expiring soon */}
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",animationDelay:".62s"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <div style={{width:3,height:18,borderRadius:2,background:T.gold}}/>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold,letterSpacing:".5px"}}>EXPIRING SOON</span>
+              <span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{expiring.length}</span>
+            </div>
+            {expiring.length===0
+              ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing expiring soon</div>
+              :<div style={{display:"grid",gap:7}}>
+                {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
+                {expiring.length>8&&<div style={{fontSize:11,color:T.textMuted,textAlign:"center",paddingTop:4}}>+{expiring.length-8} more</div>}
+              </div>
+            }
           </div>
         </div>
+      ) : (
+        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"40px 20px",textAlign:"center",animationDelay:".55s"}}>
+          <div style={{fontSize:44,marginBottom:12}}>✓</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,marginBottom:6}}>ALL CLEAR</div>
+          <div style={{fontSize:13,color:T.textMuted}}>No expiring or overdue items — everything is up to date.</div>
+        </div>
       )}
+    </div>
+  );
+}
+
+function AlertRow({a}) {
+  const s=getStatus(a.days);
+  const SRC_COLOR={"Company Doc":T.blue,"Passport":T.purple,"Visa":T.teal,"Iqama":T.green,"Muqeem":T.orange,"Cert":T.green,"Eq Cert":T.blue,"Insurance":T.purple,"Permit":T.gold};
+  const sc=SRC_COLOR[a.src]||T.blue;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:T.bg,borderRadius:9,border:`1px solid ${T.border}`}}>
+      <div style={{width:3,height:32,borderRadius:2,background:s.color,flexShrink:0}}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</div>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
+          <span style={{background:`${sc}18`,color:sc,borderRadius:4,padding:"0px 6px",fontSize:9,fontWeight:700}}>{a.src}</span>
+          {a.project&&<span style={{fontSize:10,color:T.textMuted}}>{a.project}</span>}
+        </div>
+      </div>
+      <div style={{textAlign:"right",flexShrink:0}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:s.color,lineHeight:1}}>{Math.abs(a.days)}</div>
+        <div style={{fontSize:8,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>{a.days<0?"OVERDUE":"DAYS LEFT"}</div>
+      </div>
     </div>
   );
 }
