@@ -655,13 +655,21 @@ function ManpowerPage({data,setData,showToast}) {
   const savePerson = (p,mode) => {
     setData(prev=>{
       const list=[...prev.manpower];
-      if(mode==="add"){list.push({...p,id:uid(),certs:[],docs:[]});}
-      else{const i=list.findIndex(x=>x.id===p.id);if(i>=0)list[i]=p;}
+      if(mode==="add"){
+        list.push({...p,id:uid(),certs:[],docs:[]});
+      } else {
+        const i=list.findIndex(x=>x.id===p.id);
+        if(i>=0){
+          // preserve certs and docs — never overwrite from form
+          list[i]={...list[i],...p,certs:list[i].certs||[],docs:list[i].docs||[]};
+        }
+      }
       return{...prev,manpower:list};
     });
     showToast(mode==="add"?"Person added":"Updated");
     setAddModal(false);
-    if(person) setPerson(p);
+    // refresh detail view with certs preserved
+    if(person) setPerson(prev=>prev?{...prev,...p,certs:prev.certs||[],docs:prev.docs||[]}:null);
   };
 
   const delPerson = id => {
@@ -698,12 +706,19 @@ function ManpowerPage({data,setData,showToast}) {
           parsed.forEach(row=>{
             const personName=(row.name||"").trim();
             if(!personName) return;
-            const cert={id:uid(),name:row.certName||"Certification",certNo:row.certNo||"",issueDate:row.issueDate||"",expiryDate:row.expiryDate||"",fileLink:""};
+            const certName=row.certName||"Certification";
+            const cert={id:uid(),name:certName,certNo:row.certNo||"",issueDate:row.issueDate||"",expiryDate:row.expiryDate||"",issuedBy:row.issuedBy||"",fileLink:""};
             const idx=manpower.findIndex(p=>p.name.toLowerCase()===personName.toLowerCase());
             if(idx>=0){
               if(row.idNo&&!manpower[idx].idNo) manpower[idx]={...manpower[idx],idNo:row.idNo};
-              manpower[idx]={...manpower[idx],certs:[...(manpower[idx].certs||[]),cert]};
-              updated++;
+              // Skip duplicate: same cert name + same expiry date already exists
+              const alreadyExists=(manpower[idx].certs||[]).some(c=>
+                c.name.toLowerCase()===certName.toLowerCase()&&c.expiryDate===cert.expiryDate
+              );
+              if(!alreadyExists){
+                manpower[idx]={...manpower[idx],certs:[...(manpower[idx].certs||[]),cert]};
+                updated++;
+              }
             } else {
               manpower.push({id:uid(),name:personName,idNo:row.idNo||"",category:defaultCat||"",certs:[cert],docs:[]});
               added++;
@@ -933,6 +948,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
                       </div>
                       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                         {c.certNo&&<Chip>No: {c.certNo}</Chip>}
+                        {c.issuedBy&&<Chip>{c.issuedBy}</Chip>}
                         {c.issueDate&&<Chip>Issued: {fmtDate(c.issueDate)}</Chip>}
                         {c.expiryDate&&<Chip color={s.color}>Exp: {fmtDate(c.expiryDate)}</Chip>}
                         {c.fileLink&&<FileLink href={c.fileLink}/>}
@@ -995,6 +1011,7 @@ function CertModal({mode,cert,onClose,onSave}) {
       onSave={()=>{if(!f.name){alert("Cert name required");return;}onSave(f,mode);}}>
       <FieldRow label="Certification Name *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
       <FieldRow label="Certificate No."><FInput value={f.certNo||""} onChange={set("certNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Issued By"><FInput value={f.issuedBy||""} onChange={set("issuedBy")} color={T.green}/></FieldRow>
       <FieldRow label="Issue Date"><FInput type="date" value={f.issueDate||""} onChange={set("issueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Expiry Date"><FInput type="date" value={f.expiryDate||""} onChange={set("expiryDate")} color={T.green}/></FieldRow>
       <FieldRow label="File Link"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
@@ -1253,6 +1270,38 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
         ))}
       </div>
 
+      {/* 90-day expiry alert banner */}
+      {(()=>{
+        const expiring=[...(eq.certifications||[]),...(eq.insurance||[]),...(eq.permits||[])].filter(r=>{const d=daysUntil(r.expiryDate);return d!==null&&d<=90;}).sort((a,b)=>daysUntil(a.expiryDate)-daysUntil(b.expiryDate));
+        if(!expiring.length) return null;
+        return (
+          <div style={{background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:12,padding:"12px 16px",marginBottom:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <span style={{fontSize:14,fontWeight:700,color:T.red}}>⚠ EXPIRY ALERTS</span>
+              <span style={{background:T.red,color:"#fff",borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{expiring.length}</span>
+            </div>
+            <div style={{display:"grid",gap:6}}>
+              {expiring.map((r,i)=>{
+                const d=daysUntil(r.expiryDate);const s=getStatus(d);
+                const lbl=r.equipmentName||r.itemType||r.certNo||r.policyNo||r.permitNo||"Item";
+                return (
+                  <div key={r.id||i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:T.bg,borderRadius:8,padding:"8px 12px",border:`1px solid ${s.color}33`}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lbl}</div>
+                      <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>Expires: {fmtDate(r.expiryDate)}</div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:s.color,lineHeight:1}}>{Math.abs(d)}</div>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:600}}>{d<0?"OVERDUE":"DAYS LEFT"}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Sub-tabs */}
       <div style={{display:"flex",gap:8,marginBottom:18,overflowX:"auto",paddingBottom:4}}>
         {EQ_SUBTABS.map(t=>{
@@ -1295,27 +1344,30 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
 
 function SubRecordCard({r,type,color,delay,onEdit,onDel}) {
   const expDate=r.expiryDate;
-  const s=getStatus(daysUntil(expDate));
-  const title=r.certNo||r.invoiceNo||r.policyNo||r.permitNo||"Record";
+  const days=daysUntil(expDate);
+  const s=getStatus(days);
+  // Build a meaningful title from whatever fields exist
+  const title=r.equipmentName||r.itemType||r.certNo||r.invoiceNo||r.policyNo||r.permitNo||"Record";
   return (
-    <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${expDate?s.color:color}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animationDelay:`${delay}s`}}>
+    <div className="fade-up" style={{background:T.card,border:`1px solid ${expDate&&days!==null&&days<=90?s.color+"44":T.border}`,borderLeft:`4px solid ${expDate?s.color:color}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animationDelay:`${delay}s`}}>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
           <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.text}}>{title}</span>
           {expDate&&<Tag color={s.color}>{s.label}</Tag>}
+          {expDate&&days!==null&&days<=90&&<Tag color={s.color}>{days<0?`${Math.abs(days)}d overdue`:`${days}d left`}</Tag>}
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {r.equipmentName&&r.equipmentName!==eq?.name&&<Chip>{r.equipmentName}</Chip>}
-          {r.itemType&&<Chip>{r.itemType}</Chip>}
+          {r.itemType&&r.itemType!==title&&<Chip>{r.itemType}</Chip>}
+          {r.serialNo&&<Chip>S/N: {r.serialNo}</Chip>}
+          {r.certNo&&r.certNo!==title&&<Chip>Cert: {r.certNo}</Chip>}
           {r.issuedBy&&<Chip>{r.issuedBy}</Chip>}
           {r.supplier&&<Chip>{r.supplier}</Chip>}
           {r.insurer&&<Chip>{r.insurer}</Chip>}
           {r.type&&<Chip>{r.type}</Chip>}
           {r.amount&&<Chip color={T.green}>SAR {Number(r.amount).toLocaleString()}</Chip>}
-          {r.issueDate&&<Chip>Issued: {fmtDate(r.issueDate)}</Chip>}
+          {r.issueDate&&<Chip>Start: {fmtDate(r.issueDate)}</Chip>}
           {r.date&&<Chip>Date: {fmtDate(r.date)}</Chip>}
           {expDate&&<Chip color={s.color}>Exp: {fmtDate(expDate)}</Chip>}
-          {expDate&&daysUntil(expDate)!==null&&<Chip color={s.color}>{daysUntil(expDate)>=0?`${daysUntil(expDate)}d left`:`${Math.abs(daysUntil(expDate))}d overdue`}</Chip>}
           {r.fileLink&&<FileLink href={r.fileLink}/>}
         </div>
         {r.description&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{r.description}</div>}
