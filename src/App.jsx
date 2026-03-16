@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 
 /* ─── Global CSS ─────────────────────────────────────────────────────────── */
 const GLOBAL_CSS = `
@@ -63,6 +64,55 @@ const DEFAULT_MANPOWER_CATS = [
   "Supervisors",
   "Laborers / General Workers",
 ];
+
+
+/* ─── Excel column maps ──────────────────────────────────────────────────── */
+// Manpower certifications Excel map
+// Expected columns: NAME, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
+// (flexible - tries multiple common header names)
+const MP_CERT_MAP = {
+  "NAME":"name","EMPLOYEE NAME":"name","EMPLOYEE":"name",
+  "CERTIFICATE":"certName","CERTIFICATE TYPE":"certName","CERT TYPE":"certName","CERTIFICATION":"certName",
+  "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NO.":"certNo","CERTIFICATE NUMBER":"certNo",
+  "ISSUE DATE":"issueDate","ISSUED DATE":"issueDate","DATE ISSUED":"issueDate",
+  "EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate","EXPIRE DATE":"expiryDate","EXPIRATION DATE":"expiryDate",
+  "REMARKS":"remarks","NOTES":"remarks",
+};
+
+// Equipment certifications Excel map
+// Expected columns: EQUIPMENT, SERIAL NO, CERT NO, ISSUED BY, INSPECTION DATE, EXPIRY DATE
+const EQ_CERT_MAP = {
+  "EQUIPMENT":"eqName","EQUIPMENT NAME":"eqName","UNIT":"eqName",
+  "SERIAL NO":"serialNo","SERIAL NUMBER":"serialNo","SERIAL NO.":"serialNo","S/N":"serialNo",
+  "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NUMBER":"certNo",
+  "ISSUED BY":"issuedBy","ISSUING AUTHORITY":"issuedBy",
+  "INSPECTION DATE":"inspectionDate","INSP DATE":"inspectionDate","INSP. DATE":"inspectionDate",
+  "EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate","EXPIRE DATE":"expiryDate","EXPIRATION DATE":"expiryDate",
+  "REMARKS":"remarks","NOTES":"remarks",
+};
+
+function excelDateToStr(val) {
+  if (!val) return "";
+  if (typeof val==="number") { const d=new Date(Math.round((val-25569)*86400*1000)); return d.toISOString().slice(0,10); }
+  if (typeof val==="string") { const d=new Date(val); if(!isNaN(d)) return d.toISOString().slice(0,10); }
+  return String(val);
+}
+
+function parseExcelRows(rows, map) {
+  const DATE_KEYS=["expiryDate","issueDate","inspectionDate"];
+  return rows
+    .filter(row=>Object.values(row).some(v=>v!==null&&v!==""))
+    .map(row=>{
+      const rec={id:uid()}, upper={};
+      Object.entries(row).forEach(([k,v])=>{ upper[k.toUpperCase().trim()]=v; });
+      Object.entries(map).forEach(([col,key])=>{
+        const val=upper[col];
+        if(val!==undefined&&val!==null&&val!=="")
+          rec[key]=DATE_KEYS.includes(key)?excelDateToStr(val):String(val).trim();
+      });
+      return rec;
+    });
+}
 
 const EMPTY_DATA = {
   scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLink, notes }
@@ -140,7 +190,7 @@ export default function App() {
             <button onClick={()=>setSideOpen(true)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text,letterSpacing:"3px"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:T.textMuted,letterSpacing:"1.5px",marginTop:1}}>SCORION OPS HUB</div>
+              <div style={{fontSize:11,color:T.textMuted,letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             {allExpiries.length>0 && (
               <div style={{marginLeft:"auto",zIndex:1}}>
@@ -187,7 +237,7 @@ function Sidebar({page,go,sideOpen,alerts,data}) {
           <img src="logo.png" alt="Scorpion Arabia" style={{width:56,height:56,borderRadius:10,objectFit:"cover",background:"#000",flexShrink:0}}/>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
-            <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3}}>SCORPION OPS HUB</div>
+            <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3}}>ASSET MANAGER</div>
           </div>
         </div>
       </div>
@@ -557,7 +607,9 @@ function ManpowerPage({data,setData,showToast}) {
   const [selCat,   setSelCat]   = useState("All");
   const [catModal, setCatModal] = useState(false);
   const [addModal, setAddModal] = useState(false);
-  const [person,   setPerson]   = useState(null); // selected person detail view
+  const [person,   setPerson]   = useState(null);
+  const [impModal, setImpModal] = useState(false);
+  const mpFileRef = useRef();
 
   const people  = data.manpower || [];
   const cats    = data.manpowerCats || DEFAULT_MANPOWER_CATS;
@@ -572,7 +624,7 @@ function ManpowerPage({data,setData,showToast}) {
     });
     showToast(mode==="add"?"Person added":"Updated");
     setAddModal(false);
-    if(person) setPerson(p); // refresh detail
+    if(person) setPerson(p);
   };
 
   const delPerson = id => {
@@ -582,7 +634,6 @@ function ManpowerPage({data,setData,showToast}) {
 
   const saveCats = cats => setData(prev=>({...prev,manpowerCats:cats}));
 
-  // update person record in place (for adding certs/docs from detail view)
   const updatePerson = updated => {
     setData(prev=>{
       const list=[...prev.manpower];
@@ -591,6 +642,44 @@ function ManpowerPage({data,setData,showToast}) {
       return{...prev,manpower:list};
     });
     setPerson(updated);
+  };
+
+  // Import manpower certifications from Excel
+  // Each row: NAME, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
+  // Finds matching person by name and appends certs; creates person if not found
+  const importMpCerts = (file, defaultCat) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb=XLSX.read(e.target.result,{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        const parsed=parseExcelRows(rows, MP_CERT_MAP);
+        if(!parsed.length){showToast("No valid rows found","del");return;}
+
+        setData(prev=>{
+          const manpower=[...prev.manpower];
+          let added=0, updated=0;
+          parsed.forEach(row=>{
+            const personName=(row.name||"").trim();
+            if(!personName) return;
+            const cert={id:uid(),name:row.certName||"Certification",certNo:row.certNo||"",issueDate:row.issueDate||"",expiryDate:row.expiryDate||"",fileLink:""};
+            const idx=manpower.findIndex(p=>p.name.toLowerCase()===personName.toLowerCase());
+            if(idx>=0){
+              manpower[idx]={...manpower[idx],certs:[...(manpower[idx].certs||[]),cert]};
+              updated++;
+            } else {
+              manpower.push({id:uid(),name:personName,category:defaultCat||"",certs:[cert],docs:[]});
+              added++;
+            }
+          });
+          showToast(`✓ ${parsed.length} certs imported (${added} new people, ${updated} updated)`);
+          return{...prev,manpower};
+        });
+        setImpModal(false);
+      } catch(err){ showToast("Failed to read Excel file","del"); }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   if (person) {
@@ -602,8 +691,19 @@ function ManpowerPage({data,setData,showToast}) {
     <div style={{maxWidth:1000,margin:"0 auto"}}>
       <PageHeader title="MANPOWER" sub="Staff profiles, documents & certifications" color={T.green}>
         <Btn color={T.green} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
+        <Btn color={T.gold}  onClick={()=>setImpModal(true)}>⬆ Import Excel</Btn>
         <Btn color={T.green} solid onClick={()=>setAddModal({mode:"add"})}>+ Add Person</Btn>
       </PageHeader>
+
+      {/* Excel import banner */}
+      <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
+          <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Required columns: <strong style={{color:T.textSub}}>NAME, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE</strong> — matches people by name, creates new if not found</div>
+        </div>
+        <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
+        <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
+      </div>
 
       {/* Category filter */}
       <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
@@ -663,7 +763,36 @@ function ManpowerPage({data,setData,showToast}) {
 
       {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats} onClose={()=>setAddModal(false)} onSave={savePerson}/>}
       {catModal  && <CatManagerModal title="Manpower Categories" cats={cats} onSave={saveCats} onClose={()=>setCatModal(false)}/>}
+      {impModal  && impModal.file && <MpImportModal file={impModal.file} cats={cats} onClose={()=>setImpModal(false)} onImport={importMpCerts}/>}
     </div>
+  );
+}
+
+/* ─── Manpower Import Options Modal ─────────────────────────────────────── */
+function MpImportModal({file,cats,onClose,onImport}) {
+  const [selCat,setSelCat]=useState("");
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:420,padding:"24px"}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:6}}>IMPORT MANPOWER CERTS</div>
+        <div style={{fontSize:12,color:T.textMuted,marginBottom:20}}>File: <span style={{color:T.textSub}}>{file.name}</span></div>
+        <div style={{marginBottom:18}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:".5px"}}>ASSIGN TO CATEGORY (for new people)</label>
+          <select value={selCat} onChange={e=>setSelCat(e.target.value)}
+            style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:selCat?T.text:T.textMuted,outline:"none",colorScheme:"dark"}}>
+            <option value="">No category / assign manually later</option>
+            {cats.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:10,padding:"12px 14px",marginBottom:18,fontSize:12,color:T.blue}}>
+          ℹ Existing people are matched by name. New certs are <strong>added</strong> to their profile — existing certs are not deleted.
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px",fontSize:13,fontWeight:600}}>Cancel</button>
+          <button onClick={()=>onImport(file,selCat)} style={{flex:2,background:T.gold,border:"none",color:"#000",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700}}>Import Certifications</button>
+        </div>
+      </div>
+    </Overlay>
   );
 }
 
@@ -962,6 +1091,7 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
     {id:"permits",       label:"Permits",       icon:"⬡",color:T.gold},
   ];
 
+  const eqFileRef=useRef();
   const saveSubRecord=(type,rec,mode)=>{
     const list=[...(eq[type]||[])];
     if(mode==="add")list.push({...rec,id:uid()});
@@ -975,6 +1105,33 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
     const list=(eq[type]||[]).filter(r=>r.id!==id);
     onUpdate({...eq,[type]:list});
     showToast("Deleted","del");
+  };
+
+  // Import equipment certifications from Excel for THIS equipment
+  // Columns: EQUIPMENT, SERIAL NO, CERT NO, ISSUED BY, INSPECTION DATE, EXPIRY DATE
+  const importEqCerts = file => {
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        const parsed=parseExcelRows(rows,EQ_CERT_MAP);
+        if(!parsed.length){showToast("No valid rows found","del");return;}
+        const certs=parsed.map(r=>({
+          id:uid(),
+          certNo:r.certNo||"",
+          issuedBy:r.issuedBy||"",
+          inspectionDate:r.inspectionDate||"",
+          issueDate:r.inspectionDate||"",
+          expiryDate:r.expiryDate||"",
+          fileLink:"",
+        }));
+        onUpdate({...eq,certifications:[...(eq.certifications||[]),...certs]});
+        showToast(`✓ Imported ${certs.length} certifications`);
+      }catch{showToast("Failed to read file","del");}
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const curTab=EQ_SUBTABS.find(t=>t.id===activeTab);
@@ -1015,6 +1172,17 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
         })}
       </div>
 
+      {/* Excel import banner — only for certifications tab */}
+      {activeTab==="certifications"&&(
+        <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:T.blue}}>📂 Import Certifications from Excel</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>EQUIPMENT, SERIAL NO, CERT NO, ISSUED BY, INSPECTION DATE, EXPIRY DATE</strong></div>
+          </div>
+          <input ref={eqFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){importEqCerts(e.target.files[0]);e.target.value="";}}}/>
+          <button onClick={()=>eqFileRef.current.click()} style={{background:T.blue,color:"#000",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
+        </div>
+      )}
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
         <Btn color={curTab.color} solid onClick={()=>setSubModal({mode:"add",type:activeTab})}>+ Add {curTab.label.replace(/s$/,"")}</Btn>
       </div>
