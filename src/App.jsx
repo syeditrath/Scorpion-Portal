@@ -641,11 +641,12 @@ function DocModal({mode,doc,cats,onClose,onSave}) {
    MANPOWER PAGE
 ════════════════════════════════════════════════════════════════════════════ */
 function ManpowerPage({data,setData,showToast}) {
-  const [selCat,   setSelCat]   = useState("All");
-  const [catModal, setCatModal] = useState(false);
-  const [addModal, setAddModal] = useState(false);
-  const [person,   setPerson]   = useState(null);
-  const [impModal, setImpModal] = useState(false);
+  const [selCat,      setSelCat]      = useState("All");
+  const [catModal,    setCatModal]    = useState(false);
+  const [addModal,    setAddModal]    = useState(false);
+  const [person,      setPerson]      = useState(null);
+  const [editingFrom, setEditingFrom] = useState(null); // person being edited from detail view
+  const [impModal,    setImpModal]    = useState(false);
   const mpFileRef = useRef();
 
   const people  = data.manpower || [];
@@ -660,7 +661,6 @@ function ManpowerPage({data,setData,showToast}) {
       } else {
         const i=list.findIndex(x=>x.id===p.id);
         if(i>=0){
-          // preserve certs and docs — never overwrite from form
           list[i]={...list[i],...p,certs:list[i].certs||[],docs:list[i].docs||[]};
         }
       }
@@ -668,8 +668,14 @@ function ManpowerPage({data,setData,showToast}) {
     });
     showToast(mode==="add"?"Person added":"Updated");
     setAddModal(false);
-    // refresh detail view with certs preserved
-    if(person) setPerson(prev=>prev?{...prev,...p,certs:prev.certs||[],docs:prev.docs||[]}:null);
+    // if we were editing from detail view, go back to detail with updated data
+    if(editingFrom){
+      setPerson(prev=>{
+        const base=prev||editingFrom;
+        return{...base,...p,certs:base.certs||[],docs:base.docs||[]};
+      });
+      setEditingFrom(null);
+    }
   };
 
   const delPerson = id => {
@@ -735,7 +741,8 @@ function ManpowerPage({data,setData,showToast}) {
 
   if (person) {
     const fresh = data.manpower.find(p=>p.id===person.id)||person;
-    return <PersonDetail person={fresh} cats={cats} onBack={()=>setPerson(null)} onUpdate={updatePerson} onDelete={()=>delPerson(fresh.id)} onEdit={()=>setAddModal({mode:"edit",person:fresh})} showToast={showToast}/>;
+    return <PersonDetail person={fresh} cats={cats} onBack={()=>setPerson(null)} onUpdate={updatePerson} onDelete={()=>delPerson(fresh.id)}
+      onEdit={()=>{setEditingFrom(fresh);setPerson(null);setAddModal({mode:"edit",person:fresh});}} showToast={showToast}/>;
   }
 
   return (
@@ -812,7 +819,13 @@ function ManpowerPage({data,setData,showToast}) {
         </div>
       }
 
-      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats} onClose={()=>setAddModal(false)} onSave={savePerson}/>}
+      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats}
+        onClose={()=>{
+          setAddModal(false);
+          // if cancelled while editing from detail, go back to detail view
+          if(editingFrom){setPerson(editingFrom);setEditingFrom(null);}
+        }}
+        onSave={savePerson}/>}
       {catModal  && <CatManagerModal title="Manpower Categories" cats={cats} onSave={saveCats} onClose={()=>setCatModal(false)}/>}
       {impModal  && impModal.file && <MpImportModal file={impModal.file} cats={cats} onClose={()=>setImpModal(false)} onImport={importMpCerts}/>}
     </div>
@@ -1027,6 +1040,7 @@ function EquipmentPage({data,setData,showToast}) {
   const [selEq,   setSelEq]   = useState(null); // selected equipment
   const [fProj,   setFProj]   = useState("");
   const [fStatus, setFStatus] = useState("");
+  const eqBulkRef = useRef(); // must be here — hooks cannot be after early return
 
   const equipment = data.equipment || [];
   const projects  = data.projects  || [];
@@ -1067,7 +1081,6 @@ function EquipmentPage({data,setData,showToast}) {
     return <EquipmentDetail eq={fresh} projects={projects} onBack={()=>setSelEq(null)} onUpdate={updateEq} onDelete={()=>delEq(fresh.id)} onEdit={()=>setModal({mode:"edit",eq:fresh})} showToast={showToast}/>;
   }
 
-  const eqBulkRef = useRef();
   const STATUS_COLORS={"Active":T.green,"Under Maintenance":T.gold,"Inactive":T.red};
 
   const importBulkEqCerts = file => {
