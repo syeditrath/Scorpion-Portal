@@ -24,7 +24,7 @@ const GLOBAL_CSS = `
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
 const T = {
-  bg:"#38BDF8", sidebar:"#0e1117", card:"#0e1117", card2:"#111620", cardHover:"#131820",
+  bg:"#38BDF8", sidebar:"#22C55E", card:"#0e1117", card2:"#111620", cardHover:"#131820",
   border:"#1e293b", borderLight:"#253147",
   text:"#f1f5fb", textSub:"#8899b0", textMuted:"#3d5068",
   blue:"#38bdf8", green:"#34d399", gold:"#fbbf24", red:"#f87171",
