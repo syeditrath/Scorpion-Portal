@@ -678,15 +678,18 @@ function ProjectDocs({data,setData,showToast}) {
   const changeTab = t => { setSubTab(t); setSelProj(null); setFProj(""); };
 
   const saveDoc = (doc, mode) => {
-    const st = subTab; // capture current subTab — state won't change during save
-    setData(prev=>{
-      const list=[...prev.projectDocs];
-      if(mode==="add") list.push({...doc,id:uid(),subTab:st});
-      else { const i=list.findIndex(d=>d.id===doc.id); if(i>=0) list[i]={...doc,subTab:st}; }
-      return{...prev,projectDocs:list};
-    });
-    showToast(mode==="add"?"Document added":"Updated");
+    const st = subTab; // capture before any state changes
+    // Close modal FIRST so it unmounts cleanly before data update triggers re-render
     setModal(null);
+    setTimeout(() => {
+      setData(prev=>{
+        const list=[...prev.projectDocs];
+        if(mode==="add") list.push({...doc,id:uid(),subTab:st});
+        else { const i=list.findIndex(d=>d.id===doc.id); if(i>=0) list[i]={...doc,subTab:st}; }
+        return{...prev,projectDocs:list};
+      });
+      showToast(mode==="add"?"Document added":"Updated");
+    }, 0);
   };
 
   const delDoc = id => {
@@ -1020,14 +1023,16 @@ function ScorpionDocs({data,setData,showToast}) {
   const visible = selCat==="All" ? docs : docs.filter(d=>d.category===selCat);
 
   const saveDoc = (doc, mode) => {
-    setData(prev => {
-      const list = [...prev.scorpionDocs];
-      if (mode==="add") list.push({...doc, id:uid()});
-      else { const i=list.findIndex(d=>d.id===doc.id); if(i>=0) list[i]=doc; }
-      return {...prev, scorpionDocs:list};
-    });
-    showToast(mode==="add"?"Document added":"Document updated");
     setModal(null);
+    setTimeout(() => {
+      setData(prev => {
+        const list = [...prev.scorpionDocs];
+        if (mode==="add") list.push({...doc, id:uid()});
+        else { const i=list.findIndex(d=>d.id===doc.id); if(i>=0) list[i]=doc; }
+        return {...prev, scorpionDocs:list};
+      });
+      showToast(mode==="add"?"Document added":"Document updated");
+    }, 0);
   };
 
   const delDoc = id => {
@@ -1133,28 +1138,25 @@ function ManpowerPage({data,setData,showToast}) {
   const visible = selCat==="All" ? people : people.filter(p=>p.category===selCat);
 
   const savePerson = (p,mode) => {
-    setData(prev=>{
-      const list=[...prev.manpower];
-      if(mode==="add"){
-        list.push({...p,id:uid(),certs:[],docs:[]});
-      } else {
-        const i=list.findIndex(x=>x.id===p.id);
-        if(i>=0){
-          list[i]={...list[i],...p,certs:list[i].certs||[],docs:list[i].docs||[]};
-        }
-      }
-      return{...prev,manpower:list};
-    });
-    showToast(mode==="add"?"Person added":"Updated");
+    const ef = editingFrom;
     setAddModal(false);
-    // if we were editing from detail view, go back to detail with updated data
-    if(editingFrom){
-      setPerson(prev=>{
-        const base=prev||editingFrom;
-        return{...base,...p,certs:base.certs||[],docs:base.docs||[]};
+    setTimeout(()=>{
+      setData(prev=>{
+        const list=[...prev.manpower];
+        if(mode==="add"){
+          list.push({...p,id:uid(),certs:[],docs:[]});
+        } else {
+          const i=list.findIndex(x=>x.id===p.id);
+          if(i>=0) list[i]={...list[i],...p,certs:list[i].certs||[],docs:list[i].docs||[]};
+        }
+        return{...prev,manpower:list};
       });
-      setEditingFrom(null);
-    }
+      showToast(mode==="add"?"Person added":"Updated");
+      if(ef){
+        setPerson(prev=>{ const base=prev||ef; return{...base,...p,certs:base.certs||[],docs:base.docs||[]}; });
+        setEditingFrom(null);
+      }
+    },0);
   };
 
   const delPerson = id => {
@@ -1218,14 +1220,21 @@ function ManpowerPage({data,setData,showToast}) {
     reader.readAsArrayBuffer(file);
   };
 
-  if (person) {
-    const fresh = data.manpower.find(p=>p.id===person.id)||person;
-    return <PersonDetail person={fresh} cats={cats} onBack={()=>setPerson(null)} onUpdate={updatePerson} onDelete={()=>delPerson(fresh.id)}
-      onEdit={()=>{setEditingFrom(fresh);setPerson(null);setAddModal({mode:"edit",person:fresh});}} showToast={showToast}/>;
-  }
+  const personFresh = person ? (data.manpower.find(p=>p.id===person.id)||person) : null;
 
   return (
     <div style={{maxWidth:1000,margin:"0 auto"}}>
+      {/* Show PersonDetail when a person is selected */}
+      {personFresh && (
+        <PersonDetail person={personFresh} cats={cats}
+          onBack={()=>setPerson(null)}
+          onUpdate={updatePerson}
+          onDelete={()=>delPerson(personFresh.id)}
+          onEdit={()=>{setEditingFrom(personFresh);setPerson(null);setAddModal({mode:"edit",person:personFresh});}}
+          showToast={showToast}/>
+      )}
+      {/* Show list when no person selected */}
+      {!personFresh && <>
       <PageHeader title="MANPOWER" sub="Staff profiles, documents & certifications" color={T.green}>
         <Btn color={T.green} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
         <Btn color={T.gold}  onClick={()=>setImpModal(true)}>⬆ Import Excel</Btn>
@@ -1301,12 +1310,12 @@ function ManpowerPage({data,setData,showToast}) {
       {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats}
         onClose={()=>{
           setAddModal(false);
-          // if cancelled while editing from detail, go back to detail view
           if(editingFrom){setPerson(editingFrom);setEditingFrom(null);}
         }}
         onSave={savePerson}/>}
       {catModal  && <CatManagerModal title="Manpower Categories" cats={cats} onSave={saveCats} onClose={()=>setCatModal(false)}/>}
       {impModal  && impModal.file && <MpImportModal file={impModal.file} cats={cats} onClose={()=>setImpModal(false)} onImport={importMpCerts}/>}
+      </>}
     </div>
   );
 }
@@ -1347,12 +1356,14 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
   const PTABS=[{id:"profile",label:"Profile"},{id:"certs",label:`Certifications (${(person.certs||[]).length})`}];
 
   const saveCert=(cert,mode)=>{
-    const certs=[...(person.certs||[])];
-    if(mode==="add")certs.push({...cert,id:uid()});
-    else{const i=certs.findIndex(c=>c.id===cert.id);if(i>=0)certs[i]=cert;}
-    onUpdate({...person,certs});
-    showToast(mode==="add"?"Cert added":"Cert updated");
     setCertModal(null);
+    setTimeout(()=>{
+      const certs=[...(person.certs||[])];
+      if(mode==="add")certs.push({...cert,id:uid()});
+      else{const i=certs.findIndex(c=>c.id===cert.id);if(i>=0)certs[i]=cert;}
+      onUpdate({...person,certs});
+      showToast(mode==="add"?"Cert added":"Cert updated");
+    },0);
   };
 
   const delCert=id=>{
@@ -1529,15 +1540,17 @@ function EquipmentPage({data,setData,showToast}) {
   });
 
   const saveEq=(eq,mode)=>{
-    setData(prev=>{
-      const list=[...prev.equipment];
-      if(mode==="add")list.push({...eq,id:uid(),certifications:[],invoices:[],insurance:[],permits:[]});
-      else{const i=list.findIndex(e=>e.id===eq.id);if(i>=0)list[i]=eq;}
-      return{...prev,equipment:list};
-    });
-    showToast(mode==="add"?"Equipment added":"Updated");
     setModal(null);
-    if(selEq)setSelEq(eq);
+    setTimeout(()=>{
+      setData(prev=>{
+        const list=[...prev.equipment];
+        if(mode==="add")list.push({...eq,id:uid(),certifications:[],invoices:[],insurance:[],permits:[]});
+        else{const i=list.findIndex(e=>e.id===eq.id);if(i>=0)list[i]=eq;}
+        return{...prev,equipment:list};
+      });
+      showToast(mode==="add"?"Equipment added":"Updated");
+      if(selEq)setSelEq(eq);
+    },0);
   };
 
   const delEq=id=>{
@@ -1555,11 +1568,7 @@ function EquipmentPage({data,setData,showToast}) {
     setSelEq(updated);
   };
 
-  if(selEq){
-    const fresh=data.equipment.find(e=>e.id===selEq.id)||selEq;
-    return <EquipmentDetail eq={fresh} projects={projects} onBack={()=>setSelEq(null)} onUpdate={updateEq} onDelete={()=>delEq(fresh.id)} onEdit={()=>setModal({mode:"edit",eq:fresh})} showToast={showToast}/>;
-  }
-
+  const eqFresh = selEq ? (data.equipment.find(e=>e.id===selEq.id)||selEq) : null;
   const STATUS_COLORS={"Active":T.green,"Under Maintenance":T.gold,"Inactive":T.red};
 
   const importBulkEqCerts = file => {
@@ -1605,6 +1614,10 @@ function EquipmentPage({data,setData,showToast}) {
 
   return (
     <div style={{maxWidth:1100,margin:"0 auto"}}>
+      {/* Show EquipmentDetail when equipment selected */}
+      {eqFresh && <EquipmentDetail eq={eqFresh} projects={projects} onBack={()=>setSelEq(null)} onUpdate={updateEq} onDelete={()=>delEq(eqFresh.id)} onEdit={()=>setModal({mode:"edit",eq:eqFresh})} showToast={showToast}/>}
+      {/* Show list when nothing selected */}
+      {!eqFresh && <>
       <PageHeader title="EQUIPMENT" sub="Assets with certifications, invoices, insurance & permits" color={T.gold}>
         <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"dark"}}>
           <option value="">All Projects</option>
@@ -1673,6 +1686,7 @@ function EquipmentPage({data,setData,showToast}) {
       }
 
       {modal&&<EqModal mode={modal.mode} eq={modal.eq} projects={projects} onClose={()=>setModal(null)} onSave={saveEq}/>}
+      </>}
     </div>
   );
 }
@@ -1691,12 +1705,14 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
 
   const eqFileRef=useRef();
   const saveSubRecord=(type,rec,mode)=>{
-    const list=[...(eq[type]||[])];
-    if(mode==="add")list.push({...rec,id:uid()});
-    else{const i=list.findIndex(r=>r.id===rec.id);if(i>=0)list[i]=rec;}
-    onUpdate({...eq,[type]:list});
-    showToast(mode==="add"?"Record added":"Record updated");
     setSubModal(null);
+    setTimeout(()=>{
+      const list=[...(eq[type]||[])];
+      if(mode==="add")list.push({...rec,id:uid()});
+      else{const i=list.findIndex(r=>r.id===rec.id);if(i>=0)list[i]=rec;}
+      onUpdate({...eq,[type]:list});
+      showToast(mode==="add"?"Record added":"Record updated");
+    },0);
   };
 
   const delSubRecord=(type,id)=>{
