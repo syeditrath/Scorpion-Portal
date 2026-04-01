@@ -6,10 +6,10 @@ const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body, #root { height: 100%; }
-  body { font-family: 'Barlow', sans-serif; background: #1e293b; color: #e8edf5; -webkit-font-smoothing: antialiased; }
+  body { font-family: 'Barlow', sans-serif; background: #F9FAFB; color: #e8edf5; -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: #38BDF8; }
-  ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: #F9FAFB; }
+  ::-webkit-scrollbar-thumb { background: #F9FAFB; border-radius: 3px; }
   input, select, textarea, button { font-family: 'Barlow', sans-serif; }
   button { cursor: pointer; }
   @keyframes fadeUp  { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
