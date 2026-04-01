@@ -6,12 +6,23 @@ const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body, #root { height: 100%; }
-  body { font-family: 'Barlow', sans-serif; background: #fdf8f0; color: #1a0a00; -webkit-font-smoothing: antialiased; }
+  body { font-family: 'Barlow', sans-serif; background: #f0e6d3; color: #1a0a00; -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: #fdf8f0; }
+  ::-webkit-scrollbar-track { background: #f0e6d3; }
   ::-webkit-scrollbar-thumb { background: #e8d5b7; border-radius: 3px; }
   input, select, textarea, button { font-family: 'Barlow', sans-serif; }
   button { cursor: pointer; }
+  /* Responsive font scaling */
+  html { font-size: 16px; }
+  @media (min-width: 1400px) { html { font-size: 17px; } }
+  @media (min-width: 1800px) { html { font-size: 19px; } }
+  @media (max-width: 768px)  { html { font-size: 14px; } }
+
+  /* Responsive layout helpers */
+  .resp-grid-2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr)); gap:clamp(10px,1.5vw,20px); }
+  .resp-grid-3 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr)); gap:clamp(10px,1.5vw,18px); }
+  .resp-grid-4 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr)); gap:clamp(8px,1.2vw,16px); }
+
   @keyframes fadeUp  { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
   @keyframes slideUp { from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:translateY(0);} }
   @keyframes fadeIn  { from{opacity:0;}to{opacity:1;} }
@@ -19,6 +30,13 @@ const GLOBAL_CSS = `
   .fade-up  { animation: fadeUp  0.3s ease both; }
   .slide-up { animation: slideUp 0.35s cubic-bezier(0.34,1.3,0.64,1) both; }
   .fade-in  { animation: fadeIn  0.2s ease both; }
+  /* Card distinct from background */
+  .app-card {
+    background: #fdf8f0;
+    border: 1px solid #e8d5b7;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(26,10,0,0.06), 0 0 0 1px rgba(232,213,183,0.4);
+  }
   .slide-in { animation: slideIn 0.3s ease both; }
   @keyframes spinSlow   { from{transform:rotate(0deg);}to{transform:rotate(360deg);} }
   @keyframes pulse      { 0%,100%{transform:scale(1);}50%{transform:scale(1.06);} }
@@ -33,10 +51,10 @@ const GLOBAL_CSS = `
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
 const T = {
-  bg:"#fdf8f0",
+  bg:"#f0e6d3",
   sidebar:"#080b10",
   card:"#fdf8f0",
-  card2:"#f5ede0",
+  card2:"#f7f0e6",
   cardHover:"#f0e6d3",
   border:"#e8d5b7",
   borderLight:"#dcc9a0",
@@ -58,7 +76,7 @@ const T = {
   tealDim:"rgba(45,212,191,0.12)",
   orangeDim:"rgba(251,146,60,0.12)",
   inputBg:"#fdf8f0",
-  shadow:"0 4px 16px rgba(26,10,0,0.10)",
+  shadow:"0 2px 12px rgba(26,10,0,0.08), 0 0 0 1px rgba(232,213,183,0.6)",
 };
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -417,7 +435,7 @@ export default function App() {
           </div>
         </header>
 
-        <main style={{flex:1,overflowY:"auto",padding:"24px 20px"}}>
+        <main style={{flex:1,overflowY:"auto",padding:"clamp(16px,2.5vw,36px) clamp(16px,3vw,40px)"}}>
           {page==="dashboard" && <Dashboard data={data} alerts={allExpiries} go={go}/>}
           {page==="scorpion"  && <ScorpionDocs data={data} setData={setData} showToast={showToast}/>}
           {page==="projects"  && <ProjectDocs data={data} setData={setData} showToast={showToast}/>}
@@ -450,14 +468,14 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
   return (
-    <aside style={{width:255,flexShrink:0,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
+    <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
       <div style={{padding:"22px 20px 18px",borderBottom:`1px solid ${T.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:56,height:56,borderRadius:"50%",background:"#000",flexShrink:0,overflow:"hidden",boxShadow:"0 0 0 2px rgba(251,191,36,0.5)"}}>
           <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
         </div>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#ffffff",letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",color:"#ffffff",letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
             <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
           </div>
         </div>
@@ -470,7 +488,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
             <button key={n.id} onClick={()=>go(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderRadius:8,border:"none",marginBottom:3,textAlign:"left",background:active?"rgba(59,130,246,0.15)":"transparent",borderLeft:`2px solid ${active?"#93c5fd":"transparent"}`,transition:"all .15s"}}>
               <span style={{fontSize:20,color:active?"#93c5fd":"#94a3b8"}}>{n.icon}</span>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:600,color:active?"#93c5fd":"#e2e8f0"}}>{n.label}</div>
+                <div style={{fontSize:"clamp(12px,1vw,14px)",fontWeight:600,color:active?"#93c5fd":"#e2e8f0"}}>{n.label}</div>
                 <div style={{fontSize:10,color:"#64748b",marginTop:1}}>{n.desc}</div>
               </div>
               {badge>0&&<span style={{background:T.red,color:"#fff",borderRadius:999,padding:"1px 7px",fontSize:10,fontWeight:700}}>{badge}</span>}
@@ -608,7 +626,7 @@ function Dashboard({data,alerts,go}) {
   const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
 
   return (
-    <div style={{maxWidth:1100,margin:"0 auto"}}>
+    <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
 
       {/* ── Top KPI strip ── */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:20}}>
@@ -620,19 +638,19 @@ function Dashboard({data,alerts,go}) {
           {label:"People",          v:mpPeople,     color:T.green,  icon:"◈"},
           {label:"Equipment Assets",v:eqTotal,      color:T.gold,   icon:"◎"},
         ].map((k,i)=>(
-          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
+          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:34,fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(28px,3vw,42px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
             <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:500}}>{k.label}</div>
           </div>
         ))}
       </div>
 
       {/* ── Compliance bar ── */}
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 20px",marginBottom:18,animationDelay:".3s"}}>
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"16px 20px",marginBottom:18,animationDelay:".3s"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textSub,letterSpacing:".5px"}}>OVERALL COMPLIANCE</span>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:pct>=80?T.green:pct>=60?T.gold:T.red}}>{pct}%</span>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(18px,2vw,26px)",color:pct>=80?T.green:pct>=60?T.gold:T.red}}>{pct}%</span>
         </div>
         <div style={{height:8,background:T.border,borderRadius:999}}>
           <div style={{height:"100%",width:`${pct}%`,borderRadius:999,transition:"width .8s ease",background:pct>=80?`linear-gradient(90deg,${T.green},#059669)`:pct>=60?`linear-gradient(90deg,${T.gold},#d97706)`:`linear-gradient(90deg,${T.red},#dc2626)`}}/>
@@ -648,7 +666,7 @@ function Dashboard({data,alerts,go}) {
 
         {/* Scorpion Documents */}
         <div className="fade-up" onClick={()=>go("scorpion")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".35s",transition:"border-color .2s,transform .2s"}}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".35s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -661,7 +679,7 @@ function Dashboard({data,alerts,go}) {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             {[["Total Docs",data.scorpionDocs.length,T.blue],["Expiring",scorpionExp,scorpionExp>0?T.red:T.textMuted],["Due in 30d",scorpionExp30,scorpionExp30>0?T.gold:T.textMuted],["Categories",(data.scorpionDocCats||[]).length,T.blue]].map(([l,v,c])=>(
               <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
               </div>
             ))}
@@ -671,7 +689,7 @@ function Dashboard({data,alerts,go}) {
 
         {/* Project Docs */}
         <div className="fade-up" onClick={()=>go("projects")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".40s",transition:"border-color .2s,transform .2s"}}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".40s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.teal;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -689,7 +707,7 @@ function Dashboard({data,alerts,go}) {
               ["Work Orders",(data.projectDocs||[]).filter(d=>d.subTab==="workorders").length,T.purple],
             ].map(([l,v,c])=>(
               <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
               </div>
             ))}
@@ -699,7 +717,7 @@ function Dashboard({data,alerts,go}) {
 
         {/* Manpower */}
         <div className="fade-up" onClick={()=>go("manpower")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".42s",transition:"border-color .2s,transform .2s"}}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".42s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -712,7 +730,7 @@ function Dashboard({data,alerts,go}) {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             {[["People",mpPeople,T.green],["Categories",mpCats,T.green],["Doc Alerts",mpDocAlerts,mpDocAlerts>0?T.red:T.textMuted],["Certs",data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0),T.green]].map(([l,v,c])=>(
               <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
               </div>
             ))}
@@ -730,7 +748,7 @@ function Dashboard({data,alerts,go}) {
 
         {/* Equipment */}
         <div className="fade-up" onClick={()=>go("equipment")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".49s",transition:"border-color .2s,transform .2s"}}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".49s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.gold;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -743,7 +761,7 @@ function Dashboard({data,alerts,go}) {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             {[["Total Assets",eqTotal,T.gold],["Active",eqActive,T.green],["Maintenance",eqMaint,eqMaint>0?T.gold:T.textMuted],["Exp. Alerts",eqExp,eqExp>0?T.red:T.textMuted]].map(([l,v,c])=>(
               <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
               </div>
             ))}
@@ -761,7 +779,7 @@ function Dashboard({data,alerts,go}) {
       {alerts.length>0 ? (
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
           {/* Overdue */}
-          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",animationDelay:".55s"}}>
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".55s"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
               <div style={{width:3,height:18,borderRadius:2,background:T.red}}/>
               <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.red,letterSpacing:".5px"}}>OVERDUE</span>
@@ -777,7 +795,7 @@ function Dashboard({data,alerts,go}) {
           </div>
 
           {/* Expiring soon */}
-          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",animationDelay:".62s"}}>
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".62s"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
               <div style={{width:3,height:18,borderRadius:2,background:T.gold}}/>
               <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold,letterSpacing:".5px"}}>EXPIRING SOON</span>
@@ -793,7 +811,7 @@ function Dashboard({data,alerts,go}) {
           </div>
         </div>
       ) : (
-        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"40px 20px",textAlign:"center",animationDelay:".55s"}}>
+        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"40px 20px",textAlign:"center",animationDelay:".55s"}}>
           <div style={{fontSize:44,marginBottom:12}}>✓</div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,marginBottom:6}}>ALL CLEAR</div>
           <div style={{fontSize:13,color:T.textMuted}}>No expiring or overdue items — everything is up to date.</div>
@@ -880,7 +898,7 @@ function ProjectDocs({data,setData,showToast}) {
   const woDocs   = docs.filter(d=>d.subTab==="workorders"&&(!fProj||d.project===fProj));
 
   return (
-    <div style={{maxWidth:1100,margin:"0 auto"}}>
+    <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
       <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={changeTab}/>
 
       {/* ══ INVOICES ════════════════════════════════════════════════════ */}
@@ -923,7 +941,7 @@ function ProjectDocs({data,setData,showToast}) {
                   const total=pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
                   return (
                     <div key={p} className="fade-up" onClick={()=>setSelProj(p)}
-                      style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"20px",cursor:"pointer",animationDelay:`${i*.05}s`,transition:"border-color .2s,transform .2s"}}
+                      style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:`${i*.05}s`,transition:"border-color .2s,transform .2s"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -1218,7 +1236,7 @@ function ScorpionDocs({data,setData,showToast}) {
   const saveCats = cats => setData(prev=>({...prev, scorpionDocCats:cats}));
 
   return (
-    <div style={{maxWidth:1000,margin:"0 auto"}}>
+    <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
       <PageHeader title="SCORPION DOCUMENTS" sub="Company licenses, insurance, contracts & registrations" color={T.blue}>
         <Btn color={T.blue} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
         <Btn color={T.blue} solid onClick={()=>setModal({mode:"add"})}>+ Add Document</Btn>
@@ -1398,7 +1416,7 @@ function ManpowerPage({data,setData,showToast}) {
   const personFresh = person ? (data.manpower.find(p=>p.id===person.id)||person) : null;
 
   return (
-    <div style={{maxWidth:1000,margin:"0 auto"}}>
+    <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
       {/* Show PersonDetail when a person is selected */}
       {personFresh && (
         <PersonDetail person={personFresh} cats={cats}
@@ -1557,7 +1575,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
   ].filter(([,v])=>v&&v!=="—");
 
   return (
-    <div style={{maxWidth:900,margin:"0 auto"}}>
+    <div style={{maxWidth:"min(1100px,95vw)",margin:"0 auto",width:"100%"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
         <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>← Back</button>
         <div style={{flex:1}}>
@@ -1597,7 +1615,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
       </div>
 
       {activeTab==="profile"&&(
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 22px"}}>
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 22px"}}>
           {PROFILE_ROWS.map(([k,v])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid ${T.border}`}}>
               <span style={{fontSize:13,color:T.textMuted,fontWeight:500}}>{k}</span>
@@ -1788,7 +1806,7 @@ function EquipmentPage({data,setData,showToast}) {
   };
 
   return (
-    <div style={{maxWidth:1100,margin:"0 auto"}}>
+    <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
       {/* Show EquipmentDetail when equipment selected */}
       {eqFresh && <EquipmentDetail eq={eqFresh} projects={projects} onBack={()=>setSelEq(null)} onUpdate={updateEq} onDelete={()=>delEq(eqFresh.id)} onEdit={()=>setModal({mode:"edit",eq:eqFresh})} showToast={showToast}/>}
       {/* Show list when nothing selected */}
@@ -1932,7 +1950,7 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
   const records=eq[activeTab]||[];
 
   return (
-    <div style={{maxWidth:1000,margin:"0 auto"}}>
+    <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
         <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
         <div style={{flex:1}}>
