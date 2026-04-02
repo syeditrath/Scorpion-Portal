@@ -47,6 +47,26 @@ const GLOBAL_CSS = `
   .spin-slow  { animation: spinSlow 8s linear infinite; }
   .pulse-logo { animation: pulse 3s ease-in-out infinite; }
   .glow-ring  { animation: glowRing 2.5s ease-in-out infinite; }
+
+  /* Dark mode */
+  body.dark-mode { background: #0d1117 !important; color: #e8edf5 !important; }
+  body.dark-mode ::-webkit-scrollbar-track { background: #0d1117; }
+  body.dark-mode ::-webkit-scrollbar-thumb { background: #1e293b; }
+
+  /* Search highlight */
+  .search-match { background: rgba(251,191,36,0.3); border-radius:3px; }
+
+  /* Mobile responsive */
+  @media (max-width:768px) {
+    .hide-mobile { display:none !important; }
+    .mobile-full { width:100% !important; }
+  }
+  @media (min-width:769px) {
+    .show-mobile-only { display:none !important; }
+  }
+
+  /* Export button pulse */
+  @keyframes exportPulse { 0%,100%{opacity:1;}50%{opacity:0.6;} }
 `;
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
@@ -79,10 +99,44 @@ const T = {
   shadow:"0 2px 12px rgba(26,10,0,0.08), 0 0 0 1px rgba(232,213,183,0.6)",
 };
 
+/* ─── Dark theme ─────────────────────────────────────────────────────────── */
+const DARK = {
+  bg:"#0d1117", sidebar:"#0a0e14", card:"#161b22", card2:"#1c2333", cardHover:"#21262d",
+  border:"#30363d", borderLight:"#3d444d",
+  text:"#e8edf5", textSub:"#8b949e", textMuted:"#484f58",
+  blue:"#38bdf8", green:"#34d399", gold:"#fbbf24", red:"#f87171",
+  purple:"#a78bfa", teal:"#2dd4bf", orange:"#fb923c",
+  blueDim:"rgba(56,189,248,0.12)", greenDim:"rgba(52,211,153,0.12)",
+  goldDim:"rgba(251,191,36,0.12)", redDim:"rgba(248,113,113,0.12)",
+  purpleDim:"rgba(167,139,250,0.12)", tealDim:"rgba(45,212,191,0.12)",
+  orangeDim:"rgba(251,146,60,0.12)",
+  inputBg:"#0d1117", shadow:"0 4px 16px rgba(0,0,0,0.4)",
+};
+
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 const uid       = () => Math.random().toString(36).slice(2,9);
 const daysUntil = d  => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : null;
 const fmtDate   = d  => d ? new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+
+/* ─── Export utilities ───────────────────────────────────────────────────── */
+function exportToExcel(rows, filename) {
+  if(!rows||!rows.length) return;
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Data");
+  XLSX.writeFile(wb, filename + ".xlsx");
+}
+
+function ExportBtn({data, filename, label}) {
+  return (
+    <button onClick={()=>exportToExcel(data, filename)}
+      style={{background:"rgba(52,211,153,0.12)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6,cursor:"pointer",transition:"all .15s"}}
+      onMouseEnter={e=>{e.currentTarget.style.background="rgba(52,211,153,0.22)";}}
+      onMouseLeave={e=>{e.currentTarget.style.background="rgba(52,211,153,0.12)";}}>
+      ⬇ {label||"Export Excel"}
+    </button>
+  );
+}
 
 function getStatus(days) {
   if (days === null) return { label:"Unknown",       color:T.textMuted, bg:"rgba(61,80,104,.15)" };
@@ -194,6 +248,14 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
   return parseExcelRows(rows, map);
 }
 
+/* ─── Auth ────────────────────────────────────────────────────────────────── */
+const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
+const AUTH_KEY = "cta_auth";
+
+function isAuthenticated() {
+  try { return localStorage.getItem(AUTH_KEY) === "true"; } catch { return false; }
+}
+
 const EMPTY_DATA = {
   scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLink, notes }
   manpowerCats: DEFAULT_MANPOWER_CATS,
@@ -222,6 +284,106 @@ function persist(data) { try { localStorage.setItem("cta_v1", JSON.stringify(dat
 /* ════════════════════════════════════════════════════════════════════════════
    ROOT APP
 ════════════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   LOGIN PAGE
+════════════════════════════════════════════════════════════════════════════ */
+function LoginPage({onLogin}) {
+  const [pw,    setPw]    = useState("");
+  const [error, setError] = useState("");
+  const [show,  setShow]  = useState(false);
+  const [shake, setShake] = useState(false);
+
+  const attempt = () => {
+    if(!onLogin(pw)) {
+      setError("Incorrect password. Please try again.");
+      setShake(true);
+      setPw("");
+      setTimeout(()=>setShake(false), 600);
+    }
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9998,background:"linear-gradient(135deg,#080b10 0%,#0e1520 60%,#080b10 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+
+      {/* Background rings */}
+      <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
+        {[500,700,900].map((s,i)=>(
+          <div key={i} style={{position:"absolute",top:"50%",left:"50%",width:s,height:s,transform:"translate(-50%,-50%)",border:`1px solid rgba(251,191,36,${0.04-i*0.01})`,borderRadius:"50%",animation:`spinSlow ${16+i*6}s linear infinite ${i%2?"reverse":""}`}}/>
+        ))}
+      </div>
+
+      <div className="slide-up" style={{
+        background:"rgba(14,17,23,0.95)",
+        border:"1px solid rgba(251,191,36,0.2)",
+        borderRadius:20,
+        padding:"40px 36px",
+        width:"100%",
+        maxWidth:420,
+        backdropFilter:"blur(12px)",
+        boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
+        animation: shake ? "none" : undefined,
+        transform: shake ? "translateX(0)" : undefined,
+      }}>
+
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",margin:"0 auto 16px",border:"2px solid rgba(251,191,36,0.5)",boxShadow:"0 0 24px rgba(251,191,36,0.2)"}}>
+            <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+          </div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#ffffff",letterSpacing:"2px"}}>SCORPION ARABIA</div>
+          <div style={{fontSize:12,color:"#38bdf8",letterSpacing:"3px",marginTop:4,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600}}>PORTAL ACCESS</div>
+        </div>
+
+        {/* Password field */}
+        <div style={{marginBottom:16}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:"1.5px"}}>COMPANY PASSWORD</label>
+          <div style={{position:"relative"}}>
+            <input
+              type={show?"text":"password"}
+              value={pw}
+              onChange={e=>{setPw(e.target.value);setError("");}}
+              onKeyDown={e=>e.key==="Enter"&&attempt()}
+              placeholder="Enter password…"
+              style={{width:"100%",background:"rgba(255,255,255,0.05)",border:`1px solid ${error?"rgba(248,113,113,0.6)":"rgba(255,255,255,0.12)"}`,borderRadius:10,padding:"12px 44px 12px 14px",fontSize:14,color:"#ffffff",outline:"none",colorScheme:"dark",transition:"border-color .2s"}}
+              onFocus={e=>e.target.style.borderColor="rgba(251,191,36,0.5)"}
+              onBlur={e=>e.target.style.borderColor=error?"rgba(248,113,113,0.6)":"rgba(255,255,255,0.12)"}
+            />
+            <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.4)",fontSize:16,cursor:"pointer",padding:2}}>
+              {show?"🙈":"👁"}
+            </button>
+          </div>
+          {error && <div style={{fontSize:12,color:"#f87171",marginTop:6,display:"flex",alignItems:"center",gap:5}}>⚠ {error}</div>}
+        </div>
+
+        {/* Login button */}
+        <button onClick={attempt} style={{
+          width:"100%",
+          background:"linear-gradient(135deg,#fbbf24,#f59e0b)",
+          border:"none",borderRadius:10,
+          padding:"13px",
+          fontFamily:"'Barlow Condensed',sans-serif",
+          fontWeight:800,fontSize:16,
+          color:"#080b10",
+          letterSpacing:"1.5px",
+          cursor:"pointer",
+          boxShadow:"0 4px 20px rgba(251,191,36,0.35)",
+          transition:"transform .15s,box-shadow .15s",
+          marginBottom:16,
+        }}
+          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 28px rgba(251,191,36,0.5)";}}
+          onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 20px rgba(251,191,36,0.35)";}}
+        >
+          ENTER PORTAL
+        </button>
+
+        <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.2)",letterSpacing:"1px"}}>
+          Contact your administrator if you forgot the password
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    WELCOME SCREEN
 ════════════════════════════════════════════════════════════════════════════ */
@@ -382,6 +544,19 @@ export default function App() {
   const [toast,       setToast]      = useState(null);
   const [projMod,     setProjMod]    = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [authed,      setAuthed]     = useState(isAuthenticated);
+  const [darkMode,    setDarkMode]   = useState(()=>{ try{return localStorage.getItem("cta_dark")==="true";}catch{return false;} });
+  const [globalSearch,setGlobalSearch] = useState("");
+  const [showSearch,  setShowSearch] = useState(false);
+
+  // Apply dark mode class to body
+  useEffect(()=>{
+    document.body.classList.toggle("dark-mode", darkMode);
+    try{localStorage.setItem("cta_dark", darkMode);}catch{}
+  },[darkMode]);
+
+  const TH = darkMode ? DARK : T; // active theme
+  const logout = () => { try{localStorage.removeItem(AUTH_KEY);}catch{} setAuthed(false); };
 
   useEffect(() => { persist(data); }, [data]);
 
@@ -409,12 +584,24 @@ export default function App() {
     ]),
   ].filter(x=>x.days!==null&&x.days<=90).sort((a,b)=>a.days-b.days);
 
+  // Global search results
+  const searchResults = globalSearch.length > 1 ? (() => {
+    const q = globalSearch.toLowerCase();
+    const results = [];
+    data.scorpionDocs.forEach(d=>{ if(Object.values(d).some(v=>String(v).toLowerCase().includes(q))) results.push({type:"Company Doc",label:d.name,sub:d.category,page:"scorpion"}); });
+    (data.projectDocs||[]).forEach(d=>{ if(Object.values(d).some(v=>String(v).toLowerCase().includes(q))) results.push({type:"Project Doc",label:d.name,sub:d.project,page:"projects"}); });
+    data.manpower.forEach(p=>{ if(Object.values(p).some(v=>String(v).toLowerCase().includes(q))) results.push({type:"Person",label:p.name,sub:p.designation,page:"manpower"}); });
+    data.equipment.forEach(e=>{ if(Object.values(e).some(v=>String(v).toLowerCase().includes(q))) results.push({type:"Equipment",label:e.name,sub:e.serialNo,page:"equipment"}); });
+    return results.slice(0,12);
+  })() : [];
+
   return (
-    <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg}}>
-      {showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
+    <div style={{display:"flex",height:"100vh",overflow:"hidden",background:darkMode?DARK.bg:T.bg}}>
+      {!authed && <LoginPage onLogin={(pw)=>{ if(pw===COMPANY_PASSWORD){localStorage.setItem(AUTH_KEY,"true");setAuthed(true);}else{return false;}return true; }}/>}
+      {authed && showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
-      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}}/>
+      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
@@ -425,13 +612,39 @@ export default function App() {
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:"#ffffff",letterSpacing:"3px"}}>SCORPION ARABIA</div>
               <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
-            {allExpiries.length>0 && (
-              <div style={{marginLeft:"auto",zIndex:1}}>
-                <div style={{background:"rgba(220,38,38,0.25)",border:"1px solid rgba(220,38,38,0.5)",color:"#fca5a5",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
-                  ▲ <span style={{background:T.red,color:"#fff",borderRadius:999,padding:"1px 7px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span> alerts
-                </div>
+            <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
+              {/* Global search */}
+              <div style={{position:"relative"}}>
+                {showSearch
+                  ? <input autoFocus value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)}
+                      onBlur={()=>{if(!globalSearch)setShowSearch(false);}}
+                      placeholder="Search everything…"
+                      style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:8,padding:"7px 12px",fontSize:13,color:"#fff",outline:"none",width:220}}/>
+                  : <button onClick={()=>setShowSearch(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⌕</button>
+                }
+                {searchResults.length>0&&showSearch&&(
+                  <div style={{position:"absolute",top:42,right:0,background:darkMode?DARK.card:T.card,border:`1px solid ${darkMode?DARK.border:T.border}`,borderRadius:12,width:320,maxHeight:380,overflowY:"auto",boxShadow:T.shadow,zIndex:200}}>
+                    {searchResults.map((r,i)=>(
+                      <div key={i} onClick={()=>{go(r.page);setShowSearch(false);setGlobalSearch("");}}
+                        style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${darkMode?DARK.border:T.border}`,transition:"background .15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background=darkMode?DARK.cardHover:T.cardHover}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <div style={{fontSize:13,fontWeight:600,color:darkMode?DARK.text:T.text}}>{r.label}</div>
+                        <div style={{fontSize:11,color:darkMode?DARK.textMuted:T.textMuted,marginTop:2,display:"flex",gap:6}}>
+                          <span style={{background:darkMode?DARK.blueDim:T.blueDim,color:darkMode?DARK.blue:T.blue,borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>{r.type}</span>
+                          <span>{r.sub}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+              {allExpiries.length>0 && (
+                <div style={{background:"rgba(220,38,38,0.25)",border:"1px solid rgba(220,38,38,0.5)",color:"#fca5a5",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                  ▲ <span style={{background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 6px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -458,7 +671,7 @@ export default function App() {
 /* ════════════════════════════════════════════════════════════════════════════
    SIDEBAR
 ════════════════════════════════════════════════════════════════════════════ */
-function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
+function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggleDark,onLogout}) {
   const isMobile = window.innerWidth < 900;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
@@ -508,7 +721,21 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
           </div>
         </button>
       </div>
-      <div style={{padding:"8px 18px 16px",fontSize:10,color:T.textMuted,textAlign:"center"}}>Scorpion Arabia © 2025</div>
+      <div style={{padding:"10px 10px 16px",borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:6}}>
+        <button onClick={onToggleDark} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,0.08)",background:darkMode?"rgba(251,191,36,0.12)":"transparent",cursor:"pointer",transition:"all .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.08)"}
+          onMouseLeave={e=>e.currentTarget.style.background=darkMode?"rgba(251,191,36,0.12)":"transparent"}>
+          <span style={{fontSize:16}}>{darkMode?"☀️":"🌙"}</span>
+          <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>{darkMode?"Light Mode":"Dark Mode"}</span>
+        </button>
+        <button onClick={onLogout} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,border:"1px solid rgba(248,113,113,0.2)",background:"transparent",cursor:"pointer",transition:"all .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(248,113,113,0.1)"}
+          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          <span style={{fontSize:14}}>🚪</span>
+          <span style={{fontSize:12,fontWeight:600,color:"#f87171"}}>Log Out</span>
+        </button>
+        <div style={{fontSize:10,color:"rgba(255,255,255,0.2)",textAlign:"center",marginTop:2}}>Scorpion Arabia © 2025</div>
+      </div>
     </aside>
   );
 }
@@ -1239,6 +1466,7 @@ function ScorpionDocs({data,setData,showToast}) {
     <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
       <PageHeader title="SCORPION DOCUMENTS" sub="Company licenses, insurance, contracts & registrations" color={T.blue}>
         <Btn color={T.blue} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
+        <ExportBtn data={docs.map(d=>({Name:d.name,Category:d.category,"Ref No":d.docNo,"Issue Date":d.issueDate,"Expiry Date":d.expiryDate,"File Link":d.fileLink,Notes:d.notes}))} filename="Scorpion_Documents"/>
         <Btn color={T.blue} solid onClick={()=>setModal({mode:"add"})}>+ Add Document</Btn>
       </PageHeader>
 
@@ -1431,6 +1659,7 @@ function ManpowerPage({data,setData,showToast}) {
       <PageHeader title="MANPOWER" sub="Staff profiles, documents & certifications" color={T.green}>
         <Btn color={T.green} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
         <Btn color={T.gold}  onClick={()=>setImpModal(true)}>⬆ Import Excel</Btn>
+        <ExportBtn data={people.map(p=>({Name:p.name,ID:p.idNo,Category:p.category,Designation:p.designation,Nationality:p.nationality,"Passport No":p.passportNo,"Passport Expiry":p.passportExpiry,"Visa No":p.visaNo,"Visa Expiry":p.visaExpiry,"Iqama No":p.iqamaNo,"Iqama Expiry":p.iqamaExpiry,"Muqeem No":p.muqeemNo,"Muqeem Expiry":p.muqeemExpiry}))} filename="Manpower_List"/>
         <Btn color={T.green} solid onClick={()=>setAddModal({mode:"add"})}>+ Add Person</Btn>
       </PageHeader>
 
@@ -1822,6 +2051,7 @@ function EquipmentPage({data,setData,showToast}) {
         </select>
         <input ref={eqBulkRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){importBulkEqCerts(e.target.files[0]);e.target.value="";}}}/>
         <Btn color={T.gold} onClick={()=>eqBulkRef.current.click()}>⬆ Import Excel</Btn>
+        <ExportBtn data={equipment.map(e=>({Name:e.name,Model:e.model,"Serial No":e.serialNo,Project:e.project,Status:e.status,Operator:e.operator,"Purchase Date":e.purchaseDate}))} filename="Equipment_List"/>
         <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Add Equipment</Btn>
       </PageHeader>
 
