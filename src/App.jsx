@@ -419,7 +419,7 @@ export default function App() {
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
         <header style={{background:T.sidebar,borderBottom:`1px solid ${T.border}`,padding:"0 20px",flexShrink:0,boxShadow:"0 2px 8px rgba(13,31,53,0.2)"}}>
-          <div style={{display:"flex",alignItems:"center",height:64,position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",height:56,position:"relative"}}>
             <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:"#ffffff",letterSpacing:"3px"}}>SCORPION ARABIA</div>
@@ -435,7 +435,7 @@ export default function App() {
           </div>
         </header>
 
-        <main style={{flex:1,overflowY:"auto",padding:"clamp(16px,2.5vw,36px) clamp(16px,3vw,40px)"}}>
+        <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
           {page==="dashboard" && <Dashboard data={data} alerts={allExpiries} go={go}/>}
           {page==="scorpion"  && <ScorpionDocs data={data} setData={setData} showToast={showToast}/>}
           {page==="projects"  && <ProjectDocs data={data} setData={setData} showToast={showToast}/>}
@@ -468,15 +468,15 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
   return (
-    <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
-      <div style={{padding:"22px 20px 18px",borderBottom:`1px solid ${T.border}`}}>
+    <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:"none",display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
+      <div style={{padding:"22px 20px 18px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:56,height:56,borderRadius:"50%",background:"#000",flexShrink:0,overflow:"hidden",boxShadow:"0 0 0 2px rgba(251,191,36,0.5)"}}>
           <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
         </div>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",color:"#ffffff",letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
-            <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
+            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
           </div>
         </div>
       </div>
@@ -497,7 +497,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
         })}
       </nav>
       {/* Manage Projects */}
-      <div style={{padding:"10px 10px 0"}}>
+      <div style={{padding:"6px 10px 0"}}>
         <button onClick={onManageProjects} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",textAlign:"left",transition:"all .15s",marginBottom:4}}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.1)";e.currentTarget.style.borderColor="#93c5fd";}}
           onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#334155";}}>
@@ -629,7 +629,7 @@ function Dashboard({data,alerts,go}) {
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
 
       {/* ── Top KPI strip ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
         {[
           {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲"},
           {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕"},
@@ -641,7 +641,7 @@ function Dashboard({data,alerts,go}) {
           <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(28px,3vw,42px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
-            <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:500}}>{k.label}</div>
+            <div style={{fontSize:12,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
           </div>
         ))}
       </div>
@@ -655,32 +655,32 @@ function Dashboard({data,alerts,go}) {
         <div style={{height:8,background:T.border,borderRadius:999}}>
           <div style={{height:"100%",width:`${pct}%`,borderRadius:999,transition:"width .8s ease",background:pct>=80?`linear-gradient(90deg,${T.green},#059669)`:pct>=60?`linear-gradient(90deg,${T.gold},#d97706)`:`linear-gradient(90deg,${T.red},#dc2626)`}}/>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:T.textMuted}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,color:T.textSub}}>
           <span>{validCount} valid of {allTracked.length} tracked items</span>
           <span>{overdueCount>0?`${overdueCount} overdue`:"No overdue items"}</span>
         </div>
       </div>
 
       {/* ── 3 section cards ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:14,marginBottom:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12,marginBottom:16}}>
 
         {/* Scorpion Documents */}
         <div className="fade-up" onClick={()=>go("scorpion")}
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".35s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             <div style={{width:38,height:38,background:T.blueDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.blue}}>◉</div>
             <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>SCORPION DOCUMENTS</div>
-              <div style={{fontSize:11,color:T.textMuted}}>CR, insurance, licenses, contracts</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>SCORPION DOCUMENTS</div>
+              <div style={{fontSize:12,color:T.textSub}}>CR, insurance, licenses, contracts</div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
             {[["Total Docs",data.scorpionDocs.length,T.blue],["Expiring",scorpionExp,scorpionExp>0?T.red:T.textMuted],["Due in 30d",scorpionExp30,scorpionExp30>0?T.gold:T.textMuted],["Categories",(data.scorpionDocCats||[]).length,T.blue]].map(([l,v,c])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
               </div>
             ))}
           </div>
@@ -692,23 +692,23 @@ function Dashboard({data,alerts,go}) {
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".40s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.teal;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             <div style={{width:38,height:38,background:T.tealDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.teal}}>◆</div>
             <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>PROJECT DOCS</div>
-              <div style={{fontSize:11,color:T.textMuted}}>Invoices, completion certs & work orders</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>PROJECT DOCS</div>
+              <div style={{fontSize:12,color:T.textSub}}>Invoices, completion certs & work orders</div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
             {[
               ["Total",(data.projectDocs||[]).length,T.teal],
               ["Invoices",(data.projectDocs||[]).filter(d=>d.subTab==="invoices").length,T.green],
               ["Job Certs",(data.projectDocs||[]).filter(d=>d.subTab==="certificates").length,T.blue],
               ["Work Orders",(data.projectDocs||[]).filter(d=>d.subTab==="workorders").length,T.purple],
             ].map(([l,v,c])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
               </div>
             ))}
           </div>
@@ -720,18 +720,18 @@ function Dashboard({data,alerts,go}) {
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".42s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.green}}>◈</div>
             <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>MANPOWER</div>
-              <div style={{fontSize:11,color:T.textMuted}}>Staff, documents & certifications</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>MANPOWER</div>
+              <div style={{fontSize:12,color:T.textSub}}>Staff, documents & certifications</div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
             {[["People",mpPeople,T.green],["Categories",mpCats,T.green],["Doc Alerts",mpDocAlerts,mpDocAlerts>0?T.red:T.textMuted],["Certs",data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0),T.green]].map(([l,v,c])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
               </div>
             ))}
           </div>
@@ -751,18 +751,18 @@ function Dashboard({data,alerts,go}) {
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".49s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.gold;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             <div style={{width:38,height:38,background:T.goldDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.gold}}>◎</div>
             <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>EQUIPMENT</div>
-              <div style={{fontSize:11,color:T.textMuted}}>Assets, certs, invoices & permits</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>EQUIPMENT</div>
+              <div style={{fontSize:12,color:T.textSub}}>Assets, certs, invoices & permits</div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
             {[["Total Assets",eqTotal,T.gold],["Active",eqActive,T.green],["Maintenance",eqMaint,eqMaint>0?T.gold:T.textMuted],["Exp. Alerts",eqExp,eqExp>0?T.red:T.textMuted]].map(([l,v,c])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
               </div>
             ))}
           </div>
@@ -789,7 +789,7 @@ function Dashboard({data,alerts,go}) {
               ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing overdue</div>
               :<div style={{display:"grid",gap:7}}>
                 {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
-                {expired.length>8&&<div style={{fontSize:11,color:T.textMuted,textAlign:"center",paddingTop:4}}>+{expired.length-8} more — check Alerts page</div>}
+                {expired.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expired.length-8} more — check Alerts page</div>}
               </div>
             }
           </div>
@@ -805,7 +805,7 @@ function Dashboard({data,alerts,go}) {
               ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing expiring soon</div>
               :<div style={{display:"grid",gap:7}}>
                 {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
-                {expiring.length>8&&<div style={{fontSize:11,color:T.textMuted,textAlign:"center",paddingTop:4}}>+{expiring.length-8} more</div>}
+                {expiring.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expiring.length-8} more</div>}
               </div>
             }
           </div>
@@ -944,21 +944,21 @@ function ProjectDocs({data,setData,showToast}) {
                       style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:`${i*.05}s`,transition:"border-color .2s,transform .2s"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                         <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🧾</div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p}</div>
-                          <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p}</div>
+                          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
                         </div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                        <div style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                        <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
-                          <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>Invoices</div>
+                          <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>Invoices</div>
                         </div>
-                        <div style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                        <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:800,color:T.green,lineHeight:1}}>{total>0?`SAR ${(total/1000).toFixed(0)}K`:"—"}</div>
-                          <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>Total Value</div>
+                          <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>Total Value</div>
                         </div>
                       </div>
                       <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>View Invoices →</div>
@@ -996,7 +996,7 @@ function ProjectDocs({data,setData,showToast}) {
                   style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:"4px solid "+T.blue,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{doc.name}</span>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
                       {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
                       {doc.jobNo&&<Tag color={T.blue}>Job #{doc.jobNo}</Tag>}
                     </div>
@@ -1049,7 +1049,7 @@ function ProjectDocs({data,setData,showToast}) {
                     style={{background:T.card,border:`1px solid ${hasExp&&daysUntil(doc.expiryDate)<=90?s.color+"44":T.border}`,borderLeft:"4px solid "+T.purple,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{doc.name}</span>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
                         {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
                         {hasExp&&<Tag color={s.color}>{s.label}</Tag>}
                       </div>
@@ -1108,7 +1108,7 @@ function InvoiceCard({doc,delay,onEdit,onDel}) {
     <div className="fade-up" style={{background:T.card,border:`1px solid ${due!==null&&due<=30?ds.color+"44":T.border}`,borderLeft:"4px solid "+T.green,borderRadius:12,padding:"16px 18px",animationDelay:`${delay}s`,display:"flex",alignItems:"flex-start",gap:14}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{doc.name}</span>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
           {doc.refNo&&<Tag color={T.green}>#{doc.refNo}</Tag>}
           {doc.dueDate&&due!==null&&due<=30&&<Tag color={ds.color}>{due<0?`${Math.abs(due)}d overdue`:`Due in ${due}d`}</Tag>}
         </div>
@@ -1438,7 +1438,7 @@ function ManpowerPage({data,setData,showToast}) {
       <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
-          <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, CERTIFICATE, ISSUED BY, ISSUE DATE, EXPIRY DATE</strong> (headers auto-detected from row 4) — matches people by name, creates new if not found</div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, CERTIFICATE, ISSUED BY, ISSUE DATE, EXPIRY DATE</strong> (headers auto-detected from row 4) — matches people by name, creates new if not found</div>
         </div>
         <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
         <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
@@ -1480,10 +1480,10 @@ function ManpowerPage({data,setData,showToast}) {
                     const s=getStatus(daysUntil(exp));
                     return (
                       <div key={lbl} style={{background:T.bg,borderRadius:8,padding:"7px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontSize:11,color:T.textMuted}}>{lbl}</span>
+                        <span style={{fontSize:12,color:T.textSub}}>{lbl}</span>
                         {exp
                           ?<span style={{fontSize:11,color:s.color,fontWeight:600}}>{s.label==="Valid"?fmtDate(exp):s.label}</span>
-                          :<span style={{fontSize:11,color:T.textMuted}}>—</span>
+                          :<span style={{fontSize:12,color:T.textSub}}>—</span>
                         }
                       </div>
                     );
@@ -1592,7 +1592,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
           const s=getStatus(daysUntil(exp));
           return (
             <div key={lbl} style={{background:T.card,border:`1px solid ${exp?s.color+"44":T.border}`,borderRadius:12,padding:"14px 16px"}}>
-              <div style={{fontSize:11,color:T.textMuted,fontWeight:600,marginBottom:6}}>{lbl.toUpperCase()}</div>
+              <div style={{fontSize:12,color:T.textSub,fontWeight:600,marginBottom:6}}>{lbl.toUpperCase()}</div>
               {exp
                 ?<><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:s.color}}>{s.label}</div>
                    <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{fmtDate(exp)}</div>
@@ -1829,7 +1829,7 @@ function EquipmentPage({data,setData,showToast}) {
       <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Equipment Certifications from Excel</div>
-          <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>ITEM TYPE, ITEM NAME/ID, REG/SERIAL NO, TUV PROVIDER, START DATE, EXPIRY DATE</strong> — auto-detects Sheet3, matches equipment by name or serial no.</div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>ITEM TYPE, ITEM NAME/ID, REG/SERIAL NO, TUV PROVIDER, START DATE, EXPIRY DATE</strong> — auto-detects Sheet3, matches equipment by name or serial no.</div>
         </div>
         <button onClick={()=>eqBulkRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
       </div>
@@ -1989,7 +1989,7 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
                   <div key={r.id||i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:T.bg,borderRadius:8,padding:"8px 12px",border:`1px solid ${s.color}33`}}>
                     <div style={{minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lbl}</div>
-                      <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>Expires: {fmtDate(r.expiryDate)}</div>
+                      <div style={{fontSize:12,color:T.textSub,marginTop:1}}>Expires: {fmtDate(r.expiryDate)}</div>
                     </div>
                     <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
                       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:s.color,lineHeight:1}}>{Math.abs(d)}</div>
@@ -2021,7 +2021,7 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
         <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
           <div>
             <div style={{fontSize:13,fontWeight:600,color:T.blue}}>📂 Import Certifications from Excel</div>
-            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>ITEM TYPE, ITEM NAME/ID, REG/SERIAL NO, TUV PROVIDER, START DATE, EXPIRY DATE</strong> (Sheet3 auto-detected)</div>
+            <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>ITEM TYPE, ITEM NAME/ID, REG/SERIAL NO, TUV PROVIDER, START DATE, EXPIRY DATE</strong> (Sheet3 auto-detected)</div>
           </div>
           <input ref={eqFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){importEqCerts(e.target.files[0]);e.target.value="";}}}/>
           <button onClick={()=>eqFileRef.current.click()} style={{background:T.blue,color:"#000",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
