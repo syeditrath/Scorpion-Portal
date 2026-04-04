@@ -521,7 +521,7 @@ function WelcomeScreen({onEnter}) {
           border:"3px solid rgba(251,191,36,0.6)",
         }}>
           <img src="logo.png" alt="Scorpion Arabia"
-            style={{width:"120%",height:"120%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+            style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
         </div>
       </div>
 
@@ -693,7 +693,7 @@ export default function App() {
             <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"3px",background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
+              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENTS PORTAL</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
               {/* Global search */}
@@ -773,12 +773,12 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
           <div className="logo-ring-spin-rev" style={{position:"absolute",inset:-10,borderRadius:"50%",border:"1px dashed rgba(56,189,248,0.2)",pointerEvents:"none"}}/>
           {/* Logo */}
           <div className="logo-animate" style={{width:56,height:56,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 12px rgba(251,191,36,0.4)",border:"2px solid rgba(251,191,36,0.5)",position:"relative",zIndex:1}}>
-            <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+            <img src="logo.png" alt="Scorpion Arabia" style={{width:"120%",height:"120%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
         </div>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:".5px",lineHeight:1.1,background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
-            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
+            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGEMENT SYSTEM</div>
           </div>
         </div>
       </div>
