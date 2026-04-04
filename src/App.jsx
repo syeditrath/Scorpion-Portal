@@ -604,7 +604,7 @@ function WelcomeScreen({onEnter}) {
         fontFamily:"'Barlow Condensed',sans-serif",
         animation:"subReveal 1s ease 2s both",
       }}>
-        Document & Asset Management System
+        Document Management
       </div>
     </div>
   );
@@ -778,7 +778,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
         </div>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:".5px",lineHeight:1.1,background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
-            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGEMENT SYSTEM</div>
+            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGEMENT</div>
           </div>
         </div>
       </div>
