@@ -294,13 +294,13 @@ const STORAGE_BUCKET  = "portal-files";
 async function uploadToSupabase(file, folder) {
   const ext   = file.name.split(".").pop();
   const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
-  const res   = await fetch(`${https://kojtmdvzkrkdkorsulss.supabase.co}/storage/v1/object/${portal-files}/${scorpion-portal}`, {
+  const res   = await fetch(`${"https://kojtmdvzkrkdkorsulss.supabase.co"}/storage/v1/object/${"portal-files"}/${"scorpion-portal"}`, {
     method:"POST",
-    headers:{"Authorization":`Bearer ${eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk}`,"Content-Type":file.type,"x-upsert":"true"},
+    headers:{"Authorization":`Bearer ${"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk"}`,"Content-Type":file.type,"x-upsert":"true"},
     body: file,
   });
   if (!res.ok) { const e=await res.json(); throw new Error(e.message||"Upload failed"); }
-  return `${https://kojtmdvzkrkdkorsulss.supabase.co}/storage/v1/object/public/${portal-files}/${scorpion-portal}`;
+  return `${"https://kojtmdvzkrkdkorsulss.supabase.co"}/storage/v1/object/public/${"portal-files"}/${"scorpion-portal"}`;
 }
 
 function isSupabaseConfigured() {
