@@ -287,8 +287,8 @@ const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY = "cta_auth";
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
-const SUPABASE_URL    = "https://kojtmdvzkrkdkorsulss.supabase.co";    // e.g. https://xxxx.supabase.co
-const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk"; // your anon/public key
+const SUPABASE_URL    = "YOUR_SUPABASE_URL";    // e.g. https://xxxx.supabase.co
+const SUPABASE_ANON   = "YOUR_SUPABASE_ANON_KEY"; // your anon/public key
 const STORAGE_BUCKET  = "portal-files";
 
 async function uploadToSupabase(file, folder) {
@@ -604,7 +604,7 @@ function WelcomeScreen({onEnter}) {
         fontFamily:"'Barlow Condensed',sans-serif",
         animation:"subReveal 1s ease 2s both",
       }}>
-        Document Management
+        Document & Asset Management System
       </div>
     </div>
   );
@@ -693,7 +693,7 @@ export default function App() {
             <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"3px",background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENTS PORTAL</div>
+              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
               {/* Global search */}
@@ -767,18 +767,18 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
     <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:"none",display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
       <div style={{padding:"22px 20px 18px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <div style={{position:"relative",flexShrink:0,width:56,height:56}}>
-          {/* Spinning rings behind logo */}
-          <div className="logo-ring-spin" style={{position:"absolute",inset:-5,borderRadius:"50%",border:"1.5px solid rgba(251,191,36,0.35)",pointerEvents:"none"}}/>
-          <div className="logo-ring-spin-rev" style={{position:"absolute",inset:-10,borderRadius:"50%",border:"1px dashed rgba(56,189,248,0.2)",pointerEvents:"none"}}/>
-          {/* Logo */}
-          <div className="logo-animate" style={{width:60,height:60,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 12px rgba(251,191,36,0.4)",border:"2px solid rgba(251,191,36,0.5)",position:"relative",zIndex:1}}>
-            <img src="logo.png" alt="Scorpion Arabia" style={{width:"110%",height:"110%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+          <div style={{position:"relative",flexShrink:0,width:72,height:72}}>
+          {/* Spinning rings — thin and tight */}
+          <div className="logo-ring-spin" style={{position:"absolute",inset:-2,borderRadius:"50%",border:"1px solid rgba(251,191,36,0.4)",pointerEvents:"none"}}/>
+          <div className="logo-ring-spin-rev" style={{position:"absolute",inset:-5,borderRadius:"50%",border:"1px dashed rgba(56,189,248,0.18)",pointerEvents:"none"}}/>
+          {/* Logo — bigger, black border minimal */}
+          <div className="logo-animate" style={{width:72,height:72,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 16px rgba(251,191,36,0.35)",border:"1.5px solid rgba(251,191,36,0.4)",position:"relative",zIndex:1}}>
+            <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
         </div>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:".5px",lineHeight:1.1,background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
-            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGEMENT</div>
+            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
           </div>
         </div>
       </div>
