@@ -2582,7 +2582,6 @@ function FSelect({value,onChange,color,children}) {
 function FLink({value,onChange,folder}) {
   const [uploading,setUploading] = useState(false);
   const [uploadErr,setUploadErr] = useState("");
-  const [preview,  setPreview]   = useState(false);
   const fileRef = useRef();
   const configured = isSupabaseConfigured();
 
@@ -2609,10 +2608,10 @@ function FLink({value,onChange,folder}) {
           style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.blue,outline:"none",colorScheme:"light"}}
           onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
         {value&&(
-          <button type="button" onClick={()=>setPreview(true)}
-            style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"0 12px",fontSize:12,fontWeight:600,flexShrink:0,cursor:"pointer"}}>
-            👁 Preview
-          </button>
+          <a href={value} target="_blank" rel="noreferrer"
+            style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"0 12px",fontSize:12,fontWeight:600,flexShrink:0,cursor:"pointer",textDecoration:"none",display:"flex",alignItems:"center",whiteSpace:"nowrap"}}>
+            ↗ Open
+          </a>
         )}
       </div>
       {configured && (
@@ -2631,7 +2630,7 @@ function FLink({value,onChange,folder}) {
         </div>
       )}
       {uploadErr && <div style={{fontSize:11,color:T.red}}>{uploadErr}</div>}
-      {preview && <FilePreviewModal url={value} onClose={()=>setPreview(false)}/>}
+
     </div>
   );
 }
@@ -2727,17 +2726,13 @@ function FilePreviewModal({url,onClose}) {
 const Chip     = ({children,color}) => <span style={{background:T.bg,border:`1px solid ${T.borderLight}`,borderRadius:6,padding:"2px 9px",fontSize:12,color:color||T.textSub,fontWeight:500}}>{children}</span>;
 const Tag      = ({children,color}) => <span style={{background:`${color}18`,border:`1px solid ${color}33`,borderRadius:5,padding:"2px 8px",fontSize:11,color,fontWeight:700}}>{children}</span>;
 const ABtn     = ({onClick,color,children}) => <button onClick={onClick} style={{width:30,height:30,borderRadius:7,border:`1px solid ${color}33`,background:`${color}18`,color,fontSize:13,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</button>;
-function FileLink({href}) {
-  const [preview,setPreview] = useState(false);
+const FileLink = ({href}) => {
   if(!href) return null;
   return (
-    <>
-      <button onClick={e=>{e.stopPropagation();setPreview(true);}}
-        style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:6,padding:"2px 9px",fontSize:12,color:T.blue,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>
-        📎 View File
-      </button>
-      {preview && <FilePreviewModal url={href} onClose={()=>setPreview(false)}/>}
-    </>
+    <a href={href} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
+      style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:6,padding:"3px 10px",fontSize:12,color:T.blue,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>
+      📎 View File
+    </a>
   );
-}
+};
 const Btn      = ({children,onClick,color,solid}) => <button onClick={onClick} style={{background:solid?color:T.bg,border:`1px solid ${solid?color:T.border}`,color:solid?"#000":color||T.textSub,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,transition:"all .15s"}}>{children}</button>;
