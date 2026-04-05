@@ -2497,6 +2497,35 @@ function FormModal({
   onSave,
   children
 }) {
+  const [screenWidth, setScreenWidth] = React.useState(window.innerWidth);
+  const [screenHeight, setScreenHeight] = React.useState(window.innerHeight);
+
+  React.useEffect(() => {
+    const onResize = () => {
+      setScreenWidth(window.innerWidth);
+      setScreenHeight(window.innerHeight);
+    };
+
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const isMobile = screenWidth <= 640;
+  const isTablet = screenWidth > 640 && screenWidth <= 1024;
+  const isShortScreen = screenHeight <= 760;
+
+  const modalWidth = isMobile
+    ? "100%"
+    : isTablet
+    ? "92vw"
+    : "min(88vw, 900px)";
+
+  const modalMaxHeight = isMobile
+    ? "92vh"
+    : isShortScreen
+    ? "90vh"
+    : "auto";
+
   return (
     <div
       onClick={onClose}
@@ -2508,18 +2537,22 @@ function FormModal({
         backdropFilter: "blur(4px)",
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
-        padding: "24px",
+        alignItems: isMobile || isShortScreen ? "flex-start" : "center",
+        padding: isMobile ? "10px" : isTablet ? "18px" : "24px",
+        overflowY: "auto",
       }}
     >
       <div
         className="slide-up"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "min(94vw, 980px)",
+          width: modalWidth,
+          maxWidth: isMobile ? "100%" : isTablet ? "820px" : "980px",
+          maxHeight: modalMaxHeight,
+          marginTop: isMobile || isShortScreen ? "12px" : "0",
           background: T.sidebar,
           border: `1px solid ${color}33`,
-          borderRadius: 18,
+          borderRadius: isMobile ? 16 : 18,
           boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
           overflow: "hidden",
           display: "flex",
@@ -2528,7 +2561,7 @@ function FormModal({
       >
         <div
           style={{
-            padding: "20px 22px",
+            padding: isMobile ? "16px" : "20px 22px",
             borderBottom: `1px solid ${T.border}`,
             display: "flex",
             alignItems: "center",
@@ -2540,7 +2573,7 @@ function FormModal({
             style={{
               fontFamily: "'Barlow Condensed', sans-serif",
               fontWeight: 800,
-              fontSize: 24,
+              fontSize: isMobile ? 20 : 24,
               letterSpacing: "1px",
               color: color,
             }}
@@ -2555,8 +2588,9 @@ function FormModal({
               border: `1px solid ${T.border}`,
               color: T.textSub,
               borderRadius: 10,
-              padding: "8px 12px",
+              padding: isMobile ? "7px 10px" : "8px 12px",
               fontSize: 14,
+              lineHeight: 1,
             }}
           >
             ✕
@@ -2565,9 +2599,10 @@ function FormModal({
 
         <div
           style={{
-            padding: "22px",
+            padding: isMobile ? "16px" : "22px",
             display: "grid",
-            gap: 16,
+            gap: isMobile ? 14 : 16,
+            overflowY: modalMaxHeight === "auto" ? "visible" : "auto",
           }}
         >
           {children}
@@ -2575,12 +2610,13 @@ function FormModal({
 
         <div
           style={{
-            padding: "18px 22px",
+            padding: isMobile ? "16px" : "18px 22px",
             borderTop: `1px solid ${T.border}`,
             display: "flex",
             justifyContent: "flex-end",
             gap: 10,
             background: "rgba(255,255,255,0.02)",
+            flexWrap: isMobile ? "wrap" : "nowrap",
           }}
         >
           <button
@@ -2592,6 +2628,7 @@ function FormModal({
               borderRadius: 10,
               padding: "10px 16px",
               fontWeight: 600,
+              minWidth: isMobile ? "calc(50% - 5px)" : "auto",
             }}
           >
             Cancel
@@ -2606,6 +2643,7 @@ function FormModal({
               borderRadius: 10,
               padding: "10px 18px",
               fontWeight: 800,
+              minWidth: isMobile ? "calc(50% - 5px)" : "auto",
             }}
           >
             Save
