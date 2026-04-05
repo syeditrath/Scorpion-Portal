@@ -1555,7 +1555,6 @@ function ScorpionDocs({data,setData,showToast}) {
     <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
       <PageHeader title="SCORPION DOCUMENTS" sub="Company licenses, insurance, contracts & registrations" color={T.blue}>
         <Btn color={T.blue} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
-        <ExportBtn data={docs.map(d=>({Name:d.name,Category:d.category,"Ref No":d.docNo,"Issue Date":d.issueDate,"Expiry Date":d.expiryDate,"File Link":d.fileLink,Notes:d.notes}))} filename="Scorpion_Documents"/>
         <Btn color={T.blue} solid onClick={()=>setModal({mode:"add"})}>+ Add Document</Btn>
       </PageHeader>
 
@@ -1608,16 +1607,7 @@ function ScorpionDocs({data,setData,showToast}) {
 function DocModal({mode,doc,cats,onClose,onSave}) {
   const [f,setF]=useState(doc||{});
   const F=(k,label,type)=>({key:k,label,type:type||"text"});
-  const fields = [
-  F("name","Document Name"),
-  F("category","Category","select"),
-  F("docNo","Reference / Doc No."),
-  F("issueDate","Issue Date","date"),
-  F("expiryDate","Expiry Date","date"),
-  F("fileLink","File Link (Google Drive / SharePoint)","link"),
-  F("notes","Notes","textarea"),
-  F("fileUpload","Upload File","file")
-];
+  const fields=[F("name","Document Name"),F("category","Category","select"),F("docNo","Reference / Doc No."),F("issueDate","Issue Date","date"),F("expiryDate","Expiry Date","date"),F("fileLink","File Link (Google Drive / SharePoint)","link"),F("notes","Notes","textarea"),F("fileUpload","Upload File","file")];
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} DOCUMENT`} color={T.blue} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Document name is required");return;}onSave(f,mode);}}>
