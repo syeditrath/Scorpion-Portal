@@ -294,7 +294,7 @@ const STORAGE_BUCKET  = "portal-files";
 async function uploadToSupabase(file, folder) {
   const ext   = file.name.split(".").pop();
   const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
-  const res   = await fetch(`${"https://kojtmdvzkrkdkorsulss.supabase.co"}/storage/v1/object/${"portal-files"}/${"scorpion-portal"}`, {
+  const res   = await fetch(`${https://kojtmdvzkrkdkorsulss.supabase.co}/storage/v1/object/${portal-files}/${scorpion-portal}`, {
     method:"POST",
     headers:{"Authorization":`Bearer ${eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk}`,"Content-Type":file.type,"x-upsert":"true"},
     body: file,
@@ -333,7 +333,7 @@ function isAuthenticated() {
 }
 
 const EMPTY_DATA = {
-  scorpionDocs: [],   // { id, category, name, fileLink}
+  scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLink, notes }
   manpowerCats: DEFAULT_MANPOWER_CATS,
   manpower: [],       // { id, category, name, idNo, nationality, designation,
                       //   passportNo, passportExpiry, visaNo, visaExpiry,
@@ -772,7 +772,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
           <div className="logo-ring-spin" style={{position:"absolute",inset:-2,borderRadius:"50%",border:"1px solid rgba(251,191,36,0.4)",pointerEvents:"none"}}/>
           <div className="logo-ring-spin-rev" style={{position:"absolute",inset:-5,borderRadius:"50%",border:"1px dashed rgba(56,189,248,0.18)",pointerEvents:"none"}}/>
           {/* Logo — bigger, black border minimal */}
-          <div className="logo-animate" style={{width:72,height:72,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 16px rgba(251,191,36,0.35)",border:"1px solid rgba(251,191,36,0.4)",position:"relative",zIndex:1}}>
+          <div className="logo-animate" style={{width:72,height:72,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 16px rgba(251,191,36,0.35)",border:"1.5px solid rgba(251,191,36,0.4)",position:"relative",zIndex:1}}>
             <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
         </div>
