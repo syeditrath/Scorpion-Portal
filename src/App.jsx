@@ -2501,39 +2501,41 @@ function FormModal({
 }) {
   return (
     <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(4px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-      }}
-    >
+  onClick={onClose}
+  style={{
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background: "rgba(0,0,0,0.45)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    overflowY: "auto",
+    padding: "clamp(16px, 4vh, 40px) 16px",
+  }}
+>
       <div
-        className="slide-up"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-  width: "min(90vw, 700px)",
-  maxWidth: "720px",
-  background: T.sidebar,
-  border: `1px solid ${color}33`,
-  borderRadius: 18,
-  boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-  overflow: "hidden",
-  maxHeight: "90vh",
-  display: "flex",
-  flexDirection: "column",
-}}
-      >
+  className="slide-up"
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    width: "min(90vw, 720px)",
+    maxWidth: "720px",
+    background: T.sidebar,
+    border: `1px solid ${color}33`,
+    borderRadius: 18,
+    boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+    overflow: "hidden",
+    maxHeight: "calc(100vh - 32px)",
+    display: "flex",
+    flexDirection: "column",
+    margin: "auto 0",
+  }}
+>
         {/* Header */}
         <div
           style={{
-            padding: "20px 22px",
+            padding: "max(20px, 4vh) 16px",
             borderBottom: `1px solid ${T.border}`,
             display: "flex",
             alignItems: "center",
