@@ -2495,44 +2495,40 @@ function FormModal({
   color,
   onClose,
   onSave,
-  children,
-  maxWidth = "1100px",   // make modal wide by default
-  fullHeight = true
+  children
 }) {
   return (
     <div
-  onClick={onClose}
-  style={{
-    position: "fixed",
-    inset: 0,
-    zIndex: 9999,
-    background: "rgba(0,0,0,0.45)",
-    backdropFilter: "blur(4px)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-    overflowY: "auto",
-    padding: "clamp(16px, 4vh, 40px) 16px",
-  }}
->
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "24px",
+      }}
+    >
       <div
-  className="slide-up"
-  onClick={(e) => e.stopPropagation()}
-  style={{
-    width: "min(92vw, 900px)",
-    background: T.sidebar,
-    border: `1px solid ${color}33`,
-    borderRadius: 18,
-    boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-  }}
->
-        {/* Header */}
+        className="slide-up"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(92vw, 900px)",
+          background: T.sidebar,
+          border: `1px solid ${color}33`,
+          borderRadius: 18,
+          boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <div
           style={{
-            padding: "max(20px, 4vh) 16px",
+            padding: "20px 22px",
             borderBottom: `1px solid ${T.border}`,
             display: "flex",
             alignItems: "center",
@@ -2567,11 +2563,9 @@ function FormModal({
           </button>
         </div>
 
-        {/* Body */}
         <div
           style={{
             padding: "22px",
-            
             display: "grid",
             gap: 16,
           }}
@@ -2579,7 +2573,6 @@ function FormModal({
           {children}
         </div>
 
-        {/* Footer */}
         <div
           style={{
             padding: "18px 22px",
