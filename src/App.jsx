@@ -71,7 +71,7 @@ const GLOBAL_CSS = `
     background: linear-gradient(90deg,#d97706,#fbbf24,#fde68a,#fbbf24,#d97706);
     background-size: 200% auto;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; animation: shimmer 3s linear infinite;
+    background-clip: text; animation: shimmer 10s ease-in-out infinite;
   }
   /* App card base */
   .app-card {
