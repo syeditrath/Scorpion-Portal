@@ -1456,14 +1456,10 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
       onSave={()=>{if(!f.name){alert("Invoice title required");return;}onSave(f,mode);}}>
       <FieldRow label="Invoice Title *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
       <FieldRow label="Project *">
-        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
-          <option value="">Select project…</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}> 
         </FSelect>
       </FieldRow>
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Client"><FInput value={f.client||""} onChange={set("client")} color={T.green}/></FieldRow>
-      <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
       <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
