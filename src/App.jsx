@@ -49,9 +49,9 @@ const GLOBAL_CSS = `
   .fade-in   { animation: fadeIn   0.22s ease both; }
   .slide-in  { animation: slideIn  0.32s cubic-bezier(0.22,1,0.36,1) both; }
   .pop-in    { animation: popIn    0.4s  cubic-bezier(0.34,1.3,0.64,1) both; }
-  .spin-slow  { animation: spinSlow 3s linear infinite; }
+  .spin-slow  { animation: spinSlow 8s linear infinite; }
   .pulse-logo { animation: pulse 3s ease-in-out infinite; }
-  .glow-ring  { animation: glowRing 5s ease-in-out infinite; }
+  .glow-ring  { animation: glowRing 2.5s ease-in-out infinite; }
 
   /* Logo animations */
   .logo-animate      { animation: logoPulse 5s ease-in-out infinite; }
@@ -71,7 +71,7 @@ const GLOBAL_CSS = `
     background: linear-gradient(90deg,#d97706,#fbbf24,#fde68a,#fbbf24,#d97706);
     background-size: 200% auto;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; animation: shimmer 10s linear infinite;
+    background-clip: text; animation: shimmer 3s linear infinite;
   }
   /* App card base */
   .app-card {
@@ -695,7 +695,7 @@ export default function App() {
             <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"3px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 4s linear infinite",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.7))"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT MANAGER</div>
+              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
               {/* Global search */}
@@ -761,7 +761,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
-    {id:"projects",  icon:"◆", label:"Project Documents",       desc:"Invoices, certs & orders"},
+    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
@@ -2486,7 +2486,7 @@ function Empty({icon,label,sub,color,onAdd}) {
 function Overlay({children,onClose}) {
   return (
     <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"32px 16px",overflowY:"auto"}}>
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 16px"}}>
       {children}
     </div>
   );
@@ -2495,18 +2495,28 @@ function Overlay({children,onClose}) {
 function FormModal({title,color,children,onClose,onSave}) {
   return (
     <Overlay onClose={onClose}>
-      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:600,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-        {/* Header — sticky */}
+      <div className="slide-up" style={{
+        background:T.sidebar,
+        border:`1px solid ${T.border}`,
+        borderRadius:18,
+        width:"100%",
+        maxWidth:600,
+        maxHeight:"90vh",
+        display:"flex",
+        flexDirection:"column",
+        boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
+      }}>
+        {/* Header */}
         <div style={{padding:"20px 24px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text,letterSpacing:".5px"}}>{title}</div>
-          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>×</button>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,cursor:"pointer"}}>×</button>
         </div>
-        {/* Scrollable body */}
-        <div style={{padding:"20px 24px",overflowY:"auto",maxHeight:"calc(85vh - 140px)"}}>{children}</div>
-        {/* Footer — sticky */}
-        <div style={{padding:"14px 24px 24px",display:"flex",gap:10,borderTop:`1px solid ${T.border}`,flexShrink:0,background:T.sidebar}}>
-          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"12px",fontSize:14,fontWeight:600}}>Cancel</button>
-          <button onClick={onSave}  style={{flex:2,background:color,border:"none",color:"#000",borderRadius:10,padding:"12px",fontSize:15,fontWeight:700}}>Save</button>
+        {/* Scrollable body — takes all remaining space */}
+        <div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>{children}</div>
+        {/* Footer */}
+        <div style={{padding:"14px 24px 22px",display:"flex",gap:10,borderTop:`1px solid ${T.border}`,flexShrink:0,background:T.sidebar}}>
+          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"12px",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          <button onClick={onSave}  style={{flex:2,background:color,border:"none",color:"#000",borderRadius:10,padding:"12px",fontSize:15,fontWeight:700,cursor:"pointer"}}>Save</button>
         </div>
       </div>
     </Overlay>
