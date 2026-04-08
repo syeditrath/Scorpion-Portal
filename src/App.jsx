@@ -2484,7 +2484,7 @@ function Empty({icon,label,sub,color,onAdd}) {
 function Overlay({children,onClose}) {
   return (
     <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 16px"}}>
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"90px 16px 20px"}}>
       {children}
     </div>
   );
@@ -2499,7 +2499,7 @@ function FormModal({title,color,children,onClose,onSave}) {
         borderRadius:18,
         width:"80%",
         maxWidth:480,
-        maxHeight:"50vh",
+        maxHeight:"82vh",
         display:"flex",
         flexDirection:"column",
         boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
