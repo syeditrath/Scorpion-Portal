@@ -23,6 +23,29 @@ const GLOBAL_CSS = `
   .resp-grid-3 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr)); gap:clamp(10px,1.5vw,18px); }
   .resp-grid-4 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr)); gap:clamp(8px,1.2vw,16px); }
 
+  /* Responsive card grids */
+  @media (max-width:600px) {
+    .kpi-grid      { grid-template-columns: repeat(2,1fr) !important; }
+    .section-grid  { grid-template-columns: 1fr !important; }
+    .alert-grid    { grid-template-columns: 1fr !important; }
+    .person-grid   { grid-template-columns: 1fr !important; }
+    .proj-grid     { grid-template-columns: 1fr !important; }
+  }
+  @media (min-width:601px) and (max-width:900px) {
+    .kpi-grid      { grid-template-columns: repeat(3,1fr) !important; }
+    .section-grid  { grid-template-columns: repeat(2,1fr) !important; }
+    .person-grid   { grid-template-columns: repeat(2,1fr) !important; }
+    .proj-grid     { grid-template-columns: repeat(2,1fr) !important; }
+  }
+  @media (min-width:1600px) {
+    .kpi-grid      { grid-template-columns: repeat(6,1fr) !important; }
+    .section-grid  { grid-template-columns: repeat(4,1fr) !important; }
+  }
+  @media (min-width:2000px) {
+    .kpi-grid      { grid-template-columns: repeat(6,1fr) !important; }
+    .section-grid  { grid-template-columns: repeat(4,1fr) !important; }
+  }
+
   @keyframes fadeUp    { from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);} }
   @keyframes fadeDown  { from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);} }
   @keyframes slideUp   { from{opacity:0;transform:translateY(32px) scale(0.97);}to{opacity:1;transform:translateY(0) scale(1);} }
@@ -71,7 +94,7 @@ const GLOBAL_CSS = `
     background: linear-gradient(90deg,#d97706,#fbbf24,#fde68a,#fbbf24,#d97706);
     background-size: 200% auto;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; 
+    background-clip: text; animation: shimmer 3s linear infinite;
   }
   /* App card base */
   .app-card {
@@ -183,11 +206,10 @@ function getStatus(days) {
 /* ─── Default data ───────────────────────────────────────────────────────── */
 const DEFAULT_SCORPION_CATS = [
   "Company Registration / CR",
-  "Insurance",
+  "Insurance Policies",
   "Trade Licenses",
   "Contracts & Agreements",
   "IBAN",
-  "ZAKAT",
   "Other",
 ];
 
@@ -408,7 +430,7 @@ function LoginPage({onLogin}) {
           <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",margin:"0 auto 16px",border:"2px solid rgba(251,191,36,0.5)",boxShadow:"0 0 24px rgba(251,191,36,0.2)"}}>
             <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,letterSpacing:"2px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,letterSpacing:"2px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 4s linear infinite",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
           <div style={{fontSize:12,color:"#38bdf8",letterSpacing:"3px",marginTop:4,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600}}>PORTAL ACCESS</div>
         </div>
 
@@ -689,14 +711,14 @@ export default function App() {
 
       <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout}/>
 
-      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0,transition:"margin-left .28s cubic-bezier(0.22,1,0.36,1)"}}>
         {/* ── Top bar ── */}
         <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:"0 20px",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
           <div style={{display:"flex",alignItems:"center",height:56,position:"relative"}}>
-            <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
-            <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"3px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.7))"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT MANAGER</div>
+            <button onClick={()=>setSideOpen(o=>!o)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1,cursor:"pointer"}}>☰</button>
+            <div className="hide-mobile" style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"3px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 4s linear infinite",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.7))"}}>SCORPION ARABIA</div>
+              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
               {/* Global search */}
@@ -734,7 +756,7 @@ export default function App() {
           </div>
         </header>
 
-        <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
+        <main style={{flex:1,overflowY:"auto",padding:"clamp(12px,2vw,28px) clamp(12px,2.5vw,32px)"}}>
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
           {page==="scorpion"  && <div className="slide-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
           {page==="projects"  && <div className="slide-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
@@ -758,7 +780,12 @@ export default function App() {
    SIDEBAR
 ════════════════════════════════════════════════════════════════════════════ */
 function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggleDark,onLogout}) {
-  const isMobile = window.innerWidth < 900;
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+  useEffect(()=>{
+    const handle = () => setIsMobile(window.innerWidth < 900);
+    window.addEventListener("resize", handle);
+    return () => window.removeEventListener("resize", handle);
+  },[]);
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
@@ -767,7 +794,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
   return (
-    <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:"none",display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
+    <aside style={{width:260,flexShrink:0,background:T.sidebar,borderRight:"none",display:"flex",flexDirection:"column",zIndex:50,position:"fixed",top:0,left:0,height:"100%",transform:sideOpen?"translateX(0)":"translateX(-260px)",transition:"transform .28s cubic-bezier(0.22,1,0.36,1)",boxShadow:sideOpen?"4px 0 24px rgba(0,0,0,0.4)":"none"}}>
       <div style={{padding:"22px 20px 18px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{position:"relative",flexShrink:0,width:72,height:72}}>
@@ -780,7 +807,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
           </div>
         </div>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:"1px",lineHeight:1.1,background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",filter:"drop-shadow(0 0 8px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:"1px",lineHeight:1.1,background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 4s linear infinite",filter:"drop-shadow(0 0 8px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
             <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
           </div>
         </div>
@@ -948,7 +975,7 @@ function Dashboard({data,alerts,go}) {
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
 
       {/* ── Top KPI strip ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
+      <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
         {[
           {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲"},
           {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕"},
@@ -981,7 +1008,7 @@ function Dashboard({data,alerts,go}) {
       </div>
 
       {/* ── 3 section cards ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12,marginBottom:16}}>
+      <div className="section-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12,marginBottom:16}}>
 
         {/* Scorpion Documents */}
         <div className="fade-up card-hover" onClick={()=>go("scorpion")}
@@ -1096,7 +1123,7 @@ function Dashboard({data,alerts,go}) {
 
       {/* ── Alerts split into 2 columns ── */}
       {alerts.length>0 ? (
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <div className="alert-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
           {/* Overdue */}
           <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".55s"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
@@ -1254,7 +1281,7 @@ function ProjectDocs({data,setData,showToast}) {
             </div>
             {projects.length===0
               ?<Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={()=>{}}/>
-              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,260px),1fr))",gap:14}}>
                 {projects.map((p,i)=>{
                   const pinvs=invDocs.filter(d=>d.project===p);
                   const total=pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
@@ -1456,10 +1483,14 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
       onSave={()=>{if(!f.name){alert("Invoice title required");return;}onSave(f,mode);}}>
       <FieldRow label="Invoice Title *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
       <FieldRow label="Project *">
-        <FSelect value={f.project||""} onChange={set("project")} color={T.green}> 
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
+          <option value="">Select project…</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
         </FSelect>
       </FieldRow>
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Client"><FInput value={f.client||""} onChange={set("client")} color={T.green}/></FieldRow>
+      <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
       <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
@@ -1607,7 +1638,7 @@ function ScorpionDocs({data,setData,showToast}) {
 function DocModal({mode,doc,cats,onClose,onSave}) {
   const [f,setF]=useState(doc||{});
   const F=(k,label,type)=>({key:k,label,type:type||"text"});
-  const fields=[F("name","Document Name"),F("category","Category","select"),F("fileLink","File Link (Google Drive / SharePoint)","link")];
+  const fields=[F("name","Document Name"),F("category","Category","select"),F("docNo","Reference / Doc No."),F("issueDate","Issue Date","date"),F("expiryDate","Expiry Date","date"),F("fileLink","File Link (Google Drive / SharePoint)","link"),F("notes","Notes","textarea")];
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} DOCUMENT`} color={T.blue} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Document name is required");return;}onSave(f,mode);}}>
@@ -1772,7 +1803,7 @@ function ManpowerPage({data,setData,showToast}) {
 
       {visible.length===0
         ?<Empty icon="◈" label="No people in this category" sub="Add your first team member" color={T.green} onAdd={()=>setAddModal({mode:"add"})}/>
-        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,300px),1fr))",gap:12}}>
           {visible.map((p,i)=>{
             const exps=[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)].filter(Boolean);
             const critical=exps.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
