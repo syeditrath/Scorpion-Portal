@@ -2484,7 +2484,7 @@ function Empty({icon,label,sub,color,onAdd}) {
 function Overlay({children,onClose}) {
   return (
     <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"90px 16px 20px"}}>
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"90px 16px"}}>
       {children}
     </div>
   );
