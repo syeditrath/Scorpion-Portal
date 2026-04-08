@@ -2482,9 +2482,31 @@ function Empty({icon,label,sub,color,onAdd}) {
 }
 
 function Overlay({children,onClose}) {
+  const vh = window.innerHeight;
+
+  // Dynamic top spacing based on screen height
+  let topOffset = 40;   // default
+
+  if (vh < 700) topOffset = 20;      // small laptops
+  else if (vh < 900) topOffset = 40; // normal screens
+  else topOffset = 60;               // large screens
+
   return (
-    <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"90px 16px"}}>
+    <div
+      className="fade-in"
+      onClick={e=>e.target===e.currentTarget&&onClose()}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.78)",
+        zIndex:200,
+        display:"flex",
+        justifyContent:"center",
+        alignItems:"flex-start",
+        padding:`${topOffset}px 16px 20px`,
+        overflowY:"auto"   // 👈 important for smaller screens
+      }}
+    >
       {children}
     </div>
   );
@@ -2499,9 +2521,10 @@ function FormModal({title,color,children,onClose,onSave}) {
         borderRadius:18,
         width:"80%",
         maxWidth:480,
-        maxHeight:"78vh",
+        maxHeight:"85vh",
         display:"flex",
         flexDirection:"column",
+        overflow:"hidden",
         boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
       }}>
         {/* Header */}
