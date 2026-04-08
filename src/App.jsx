@@ -676,7 +676,6 @@ export default function App() {
 
   /* ── expiry alerts across everything ── */
   const allExpiries = [
-    ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Company Doc",days:daysUntil(d.expiryDate)})),
     ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Project Doc",days:daysUntil(d.expiryDate)})),
     ...data.manpower.flatMap(p=>[
       p.passportExpiry && {label:p.name,src:"Passport",    days:daysUntil(p.passportExpiry)},
@@ -937,8 +936,8 @@ function ProjectsModal({projects,onSave,onClose}) {
 ════════════════════════════════════════════════════════════════════════════ */
 function Dashboard({data,alerts,go}) {
   /* ── computed stats ── */
-  const scorpionExp = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=90; }).length;
-  const scorpionExp30 = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=30; }).length;
+  const scorpionExp = 0; // expiry removed from scorpion docs
+  const scorpionExp30 = 0; // expiry removed from scorpion docs
 
   const mpPeople = data.manpower.length;
   const mpCats   = data.manpowerCats.length;
@@ -1604,17 +1603,13 @@ function ScorpionDocs({data,setData,showToast}) {
           {visible.map((doc,i)=>{
             const s=getStatus(daysUntil(doc.expiryDate));
             return (
-              <div key={doc.id} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${doc.expiryDate?s.color:T.blue}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"center",gap:14}}>
+              <div key={doc.id} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.blue}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"center",gap:14}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}>
                     <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:16,color:T.text}}>{doc.name}</span>
                     <Tag color={T.blue}>{doc.category}</Tag>
-                    {doc.expiryDate&&<Tag color={s.color}>{s.label}</Tag>}
                   </div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                    {doc.docNo&&<Chip>Ref: {doc.docNo}</Chip>}
-                    {doc.issueDate&&<Chip>Issued: {fmtDate(doc.issueDate)}</Chip>}
-                    {doc.expiryDate&&<Chip color={s.color}>Expires: {fmtDate(doc.expiryDate)}</Chip>}
                     {doc.fileLink&&<FileLink href={doc.fileLink}/>}
                   </div>
                   {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
@@ -1638,7 +1633,7 @@ function ScorpionDocs({data,setData,showToast}) {
 function DocModal({mode,doc,cats,onClose,onSave}) {
   const [f,setF]=useState(doc||{});
   const F=(k,label,type)=>({key:k,label,type:type||"text"});
-  const fields=[F("name","Document Name"),F("category","Category","select"),F("docNo","Reference / Doc No."),F("issueDate","Issue Date","date"),F("expiryDate","Expiry Date","date"),F("fileLink","File Link (Google Drive / SharePoint)","link"),F("notes","Notes","textarea")];
+  const fields=[F("name","Document Name"),F("category","Category","select"),F("fileLink","File Link (Google Drive / SharePoint)","link"),F("notes","Notes","textarea")];
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} DOCUMENT`} color={T.blue} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Document name is required");return;}onSave(f,mode);}}>
@@ -1778,7 +1773,7 @@ function ManpowerPage({data,setData,showToast}) {
       <PageHeader title="MANPOWER" sub="Staff profiles, documents & certifications" color={T.green}>
         <Btn color={T.green} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
         <Btn color={T.gold}  onClick={()=>setImpModal(true)}>⬆ Import Excel</Btn>
-        <ExportBtn data={people.map(p=>({Name:p.name,ID:p.idNo,Category:p.category,Designation:p.designation,Nationality:p.nationality,"Passport No":p.passportNo,"Passport Expiry":p.passportExpiry,"Visa No":p.visaNo,"Visa Expiry":p.visaExpiry,"Iqama No":p.iqamaNo,"Iqama Expiry":p.iqamaExpiry,"Muqeem No":p.muqeemNo,"Muqeem Expiry":p.muqeemExpiry}))} filename="Manpower_List"/>
+        <ExportBtn data={people.map(p=>({Name:p.name,ID:p.idNo,Category:p.category,Project:p.project,Designation:p.designation,Nationality:p.nationality,"Passport No":p.passportNo,"Passport Expiry":p.passportExpiry,"Visa No":p.visaNo,"Visa Expiry":p.visaExpiry,"Iqama No":p.iqamaNo,"Iqama Expiry":p.iqamaExpiry,"Muqeem No":p.muqeemNo,"Muqeem Expiry":p.muqeemExpiry}))} filename="Manpower_List"/>
         <Btn color={T.green} solid onClick={()=>setAddModal({mode:"add"})}>+ Add Person</Btn>
       </PageHeader>
 
@@ -1815,12 +1810,13 @@ function ManpowerPage({data,setData,showToast}) {
                 <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
                   <div>
                     <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.name}</div>
-                    <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.designation||"—"} · {p.nationality||""}</div>
+                    <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.designation||"—"} · {p.nationality||""}{p.project?" · "+p.project:""}</div>
                   </div>
                   {critical>0&&<span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"2px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>{critical} alerts</span>}
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
                   {p.category&&<Tag color={T.green}>{p.category}</Tag>}
+                  {p.project&&<Tag color={T.teal}>{p.project}</Tag>}
                   {p.idNo&&<Chip>ID: {p.idNo}</Chip>}
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -1848,7 +1844,7 @@ function ManpowerPage({data,setData,showToast}) {
         </div>
       }
 
-      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats}
+      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats} projects={data.projects||[]}
         onClose={()=>{
           setAddModal(false);
           if(editingFrom){setPerson(editingFrom);setEditingFrom(null);}
@@ -1915,7 +1911,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
 
   const PROFILE_ROWS=[
     ["Full Name",person.name],["ID No.",person.idNo],["Nationality",person.nationality],
-    ["Designation",person.designation],["Category",person.category],
+    ["Designation",person.designation],["Category",person.category],["Project",person.project],
     ["Passport No.",person.passportNo],["Passport Expiry",fmtDate(person.passportExpiry)],
     ["Visa No.",person.visaNo],["Visa Expiry",fmtDate(person.visaExpiry)],
     ["Iqama No.",person.iqamaNo],["Iqama Expiry",fmtDate(person.iqamaExpiry)],
@@ -2015,9 +2011,10 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
   );
 }
 
-function PersonModal({mode,person,cats,onClose,onSave}) {
+function PersonModal({mode,person,cats,projects,onClose,onSave}) {
   const [f,setF]=useState(person||{});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
+  const data = {projects: projects||[]};
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} PERSON`} color={T.green} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Name required");return;}onSave(f,mode);}}>
@@ -2026,6 +2023,12 @@ function PersonModal({mode,person,cats,onClose,onSave}) {
         <FSelect value={f.category||""} onChange={set("category")} color={T.green}>
           <option value="">Select…</option>
           {cats.map(c=><option key={c} value={c}>{c}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Project">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
+          <option value="">Select project…</option>
+          {(data?.projects||[]).map(p=><option key={p} value={p}>{p}</option>)}
         </FSelect>
       </FieldRow>
       <FieldRow label="ID No."><FInput value={f.idNo||""} onChange={set("idNo")} color={T.green}/></FieldRow>
