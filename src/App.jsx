@@ -2492,63 +2492,162 @@ function Empty({icon,label,sub,color,onAdd}) {
   );
 }
 
-function Overlay({children,onClose}) {
+function Overlay({ children, onClose }) {
   const vh = window.innerHeight;
 
-  // Dynamic top spacing based on screen height
-  let topOffset = 40;   // default
-
-  if (vh < 700) topOffset = 20;      // small laptops
-  else if (vh < 900) topOffset = 40; // normal screens
-  else topOffset = 60;               // large screens
+  let topOffset = 20;
+  if (vh < 700) topOffset = 10;
+  else if (vh < 820) topOffset = 16;
+  else if (vh < 980) topOffset = 24;
+  else topOffset = 32;
 
   return (
     <div
       className="fade-in"
-      onClick={e=>e.target===e.currentTarget&&onClose()}
+      onClick={e => e.target === e.currentTarget && onClose()}
       style={{
-        position:"fixed",
-        inset:0,
-        background:"rgba(0,0,0,0.78)",
-        zIndex:200,
-        display:"flex",
-        justifyContent:"center",
-        alignItems:"flex-start",
-        padding:`${topOffset}px 16px 20px`,
-        overflowY:"auto"   // 👈 important for smaller screens
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.72)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        zIndex: 200,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        padding: `${topOffset}px 16px 16px`,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
       }}
     >
-      {children}
+      <div
+        className="slide-up"
+        style={{
+          width: "100%",
+          display: "flex",
+          justifyContent: "center",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {children}
+      </div>
     </div>
   );
 }
 
-function FormModal({title,color,children,onClose,onSave}) {
+function FormModal({ title, color, children, onClose, onSave }) {
   return (
     <Overlay onClose={onClose}>
-      <div className="slide-up" style={{
-        background:T.sidebar,
-        border:`1px solid ${T.border}`,
-        borderRadius:18,
-        width:"80%",
-        maxWidth:480,
-        maxHeight:"85vh",
-        display:"flex",
-        flexDirection:"column",
-        overflow:"hidden",
-        boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
-      }}>
-        {/* Header */}
-        <div style={{padding:"20px 24px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text,letterSpacing:".5px"}}>{title}</div>
-          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,cursor:"pointer"}}>×</button>
+      <div
+        style={{
+          background: T.sidebar,
+          border: `1px solid ${T.border}`,
+          borderRadius: 20,
+          width: "100%",
+          maxWidth: 520,
+          height: "auto",
+          maxHeight: "calc(100vh - 48px)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.45)",
+          animation: "modalFloatIn 0.32s cubic-bezier(0.22,1,0.36,1) both",
+          minHeight: 0,
+        }}
+      >
+        <div
+          style={{
+            padding: "18px 22px 14px",
+            borderBottom: `1px solid ${T.border}`,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Barlow Condensed',sans-serif",
+              fontWeight: 800,
+              fontSize: 18,
+              letterSpacing: "1px",
+              color: T.text,
+            }}
+          >
+            {title}
+          </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: `1px solid ${T.border}`,
+              color: T.textSub,
+              borderRadius: 8,
+              width: 32,
+              height: 32,
+              cursor: "pointer",
+              fontSize: 16,
+            }}
+          >
+            ×
+          </button>
         </div>
-        {/* Scrollable body — takes all remaining space */}
-        <div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>{children}</div>
-        {/* Footer */}
-        <div style={{padding:"14px 24px 22px",display:"flex",gap:10,borderTop:`1px solid ${T.border}`,flexShrink:0,background:T.sidebar}}>
-          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"12px",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
-          <button onClick={onSave}  style={{flex:2,background:color,border:"none",color:"#000",borderRadius:10,padding:"12px",fontSize:15,fontWeight:700,cursor:"pointer"}}>Save</button>
+
+        <div
+          style={{
+            padding: "18px 22px",
+            overflowY: "auto",
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          {children}
+        </div>
+
+        <div
+          style={{
+            padding: "16px 22px 18px",
+            borderTop: `1px solid ${T.border}`,
+            display: "flex",
+            gap: 10,
+            justifyContent: "flex-end",
+            flexShrink: 0,
+            background: T.sidebar,
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: `1px solid ${T.border}`,
+              color: T.textSub,
+              borderRadius: 10,
+              padding: "10px 18px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={onSave}
+            style={{
+              background: color || T.green,
+              border: "none",
+              color: "#000",
+              borderRadius: 10,
+              padding: "10px 22px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 4px 16px rgba(52,211,153,0.35)",
+            }}
+          >
+            Save
+          </button>
         </div>
       </div>
     </Overlay>
