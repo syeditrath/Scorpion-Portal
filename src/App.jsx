@@ -1461,7 +1461,6 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
         </FSelect>
       </FieldRow>
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Client"><FInput value={f.client||""} onChange={set("client")} color={T.green}/></FieldRow>
       <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
       <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
@@ -1485,7 +1484,6 @@ function CertificateModal({mode,doc,projects,onClose,onSave}) {
         </FSelect>
       </FieldRow>
       <FieldRow label="Job Number"><FInput value={f.jobNo||""} onChange={set("jobNo")} color={T.blue}/></FieldRow>
-      <FieldRow label="Client"><FInput value={f.client||""} onChange={set("client")} color={T.blue}/></FieldRow>
       <FieldRow label="Certificate No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.blue}/></FieldRow>
       <FieldRow label="Start Date"><FInput type="date" value={f.startDate||""} onChange={set("startDate")} color={T.blue}/></FieldRow>
       <FieldRow label="Completion Date"><FInput type="date" value={f.completionDate||""} onChange={set("completionDate")} color={T.blue}/></FieldRow>
@@ -2499,9 +2497,9 @@ function FormModal({title,color,children,onClose,onSave}) {
         background:T.sidebar,
         border:`1px solid ${T.border}`,
         borderRadius:18,
-        width:"100%",
-        maxWidth:600,
-        maxHeight:"90vh",
+        width:"90%",
+        maxWidth:480,
+        maxHeight:"82vh",
         display:"flex",
         flexDirection:"column",
         boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
