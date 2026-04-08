@@ -17,6 +17,7 @@ const GLOBAL_CSS = `
   @media (min-width: 1400px) { html { font-size: 17px; } }
   @media (min-width: 1800px) { html { font-size: 19px; } }
   @media (max-width: 768px)  { html { font-size: 14px; } }
+  
 
   /* Responsive layout helpers */
   .resp-grid-2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr)); gap:clamp(10px,1.5vw,20px); }
@@ -42,6 +43,16 @@ const GLOBAL_CSS = `
   @keyframes textReveal { from{opacity:0;letter-spacing:12px;}to{opacity:1;letter-spacing:4px;} }
   @keyframes subReveal  { from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);} }
   @keyframes fadeOut    { from{opacity:1;}to{opacity:0;} }
+  @keyframes modalFloatIn {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 
   .fade-up   { animation: fadeUp   0.35s cubic-bezier(0.22,1,0.36,1) both; }
   .fade-down { animation: fadeDown 0.3s ease both; }
