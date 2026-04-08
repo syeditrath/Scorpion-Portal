@@ -2510,20 +2510,9 @@ function Overlay({ children, onClose }) {
         padding: "16px",
         overflow: "auto",
       }}
+      onClick={e => e.stopPropagation()}
     >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 560,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100%",
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 }
