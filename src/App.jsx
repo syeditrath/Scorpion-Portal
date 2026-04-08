@@ -2493,14 +2493,6 @@ function Empty({icon,label,sub,color,onAdd}) {
 }
 
 function Overlay({ children, onClose }) {
-  const vh = window.innerHeight;
-
-  let topOffset = 20;
-  if (vh < 700) topOffset = 10;
-  else if (vh < 820) topOffset = 16;
-  else if (vh < 980) topOffset = 24;
-  else topOffset = 32;
-
   return (
     <div
       className="fade-in"
@@ -2511,19 +2503,19 @@ function Overlay({ children, onClose }) {
         background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
-        zIndex: 200,
+        zIndex: 999,
         display: "flex",
+        alignItems: "center",
         justifyContent: "center",
-        alignItems: "flex-start",
-        padding: `${topOffset}px 16px 16px`,
-        overflowY: "auto",
-        overscrollBehavior: "contain",
+        padding: "16px",
+        overflow: "hidden",
       }}
     >
       <div
-        className="slide-up"
         style={{
           width: "100%",
+          maxWidth: 560,
+          maxHeight: "calc(100vh - 32px)",
           display: "flex",
           justifyContent: "center",
         }}
@@ -2539,20 +2531,20 @@ function FormModal({ title, color, children, onClose, onSave }) {
   return (
     <Overlay onClose={onClose}>
       <div
+        className="slide-up"
         style={{
           background: T.sidebar,
           border: `1px solid ${T.border}`,
-          borderRadius: 20,
+          borderRadius: 18,
           width: "100%",
-          maxWidth: 520,
+          maxWidth: 560,
           height: "auto",
-          maxHeight: "calc(100vh - 48px)",
+          maxHeight: "calc(100vh - 32px)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.45)",
-          animation: "modalFloatIn 0.32s cubic-bezier(0.22,1,0.36,1) both",
           minHeight: 0,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
         }}
       >
         <div
@@ -2560,8 +2552,8 @@ function FormModal({ title, color, children, onClose, onSave }) {
             padding: "18px 22px 14px",
             borderBottom: `1px solid ${T.border}`,
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
+            justifyContent: "space-between",
             flexShrink: 0,
           }}
         >
@@ -2569,9 +2561,9 @@ function FormModal({ title, color, children, onClose, onSave }) {
             style={{
               fontFamily: "'Barlow Condensed',sans-serif",
               fontWeight: 800,
-              fontSize: 18,
-              letterSpacing: "1px",
+              fontSize: 20,
               color: T.text,
+              letterSpacing: ".5px",
             }}
           >
             {title}
@@ -2580,14 +2572,18 @@ function FormModal({ title, color, children, onClose, onSave }) {
           <button
             onClick={onClose}
             style={{
-              background: "transparent",
+              background: T.bg,
               border: `1px solid ${T.border}`,
               color: T.textSub,
               borderRadius: 8,
-              width: 32,
-              height: 32,
+              width: 34,
+              height: 34,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 20,
+              flexShrink: 0,
               cursor: "pointer",
-              fontSize: 16,
             }}
           >
             ×
@@ -2607,11 +2603,10 @@ function FormModal({ title, color, children, onClose, onSave }) {
 
         <div
           style={{
-            padding: "16px 22px 18px",
-            borderTop: `1px solid ${T.border}`,
+            padding: "14px 22px 18px",
             display: "flex",
             gap: 10,
-            justifyContent: "flex-end",
+            borderTop: `1px solid ${T.border}`,
             flexShrink: 0,
             background: T.sidebar,
           }}
@@ -2619,12 +2614,13 @@ function FormModal({ title, color, children, onClose, onSave }) {
           <button
             onClick={onClose}
             style={{
-              background: "transparent",
+              flex: 1,
+              background: T.bg,
               border: `1px solid ${T.border}`,
               color: T.textSub,
               borderRadius: 10,
-              padding: "10px 18px",
-              fontSize: 13,
+              padding: "12px",
+              fontSize: 14,
               fontWeight: 600,
               cursor: "pointer",
             }}
@@ -2635,15 +2631,15 @@ function FormModal({ title, color, children, onClose, onSave }) {
           <button
             onClick={onSave}
             style={{
-              background: color || T.green,
+              flex: 2,
+              background: color,
               border: "none",
               color: "#000",
               borderRadius: 10,
-              padding: "10px 22px",
-              fontSize: 13,
+              padding: "12px",
+              fontSize: 15,
               fontWeight: 700,
               cursor: "pointer",
-              boxShadow: "0 4px 16px rgba(52,211,153,0.35)",
             }}
           >
             Save
