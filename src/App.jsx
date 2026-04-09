@@ -1299,7 +1299,7 @@ function ProjectDocs({data,setData,showToast}) {
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"0.8fr 1.4fr",gap:8,marginBottom:10}}>
   <div style={{background:T.bg,borderRadius:8,padding:"8px 10px",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:56}}>
-    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
+    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
     <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:800}}>Total Invoices</div>
   </div>
 
@@ -1505,8 +1505,8 @@ function CertificateModal({mode,doc,projects,onClose,onSave}) {
   const set=k=>v=>setF(p=>({...p,[k]:v}));
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} JOB COMPLETION CERTIFICATE`} color={T.blue} onClose={onClose}
-      onSave={()=>{if(!f.name){alert("Certificate title required");return;}onSave(f,mode);}}>
-      <FieldRow label="Certificate Title *"><FInput value={f.name||""} onChange={set("name")} color={T.blue}/></FieldRow>
+      onSave={()=>{onSave(f,mode);}}>
+      
       <FieldRow label="Project *">
         <FSelect value={f.project||""} onChange={set("project")} color={T.blue}>
           <option value="">Select project…</option>
