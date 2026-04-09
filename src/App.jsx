@@ -164,11 +164,11 @@ function formatSarCompact(value) {
   if (!num) return "—";
 
   if (num >= 1_000_000_000) {
-    return `SAR ${(num / 1_000_000_000).toFixed(3)}B`;
+    return `SAR ${(num / 1_000_000_000).toFixed(2)}B`;
   }
 
   if (num >= 1_000_000) {
-    return `SAR ${(num / 1_000_000).toFixed(3)}M`;
+    return `SAR ${(num / 1_000_000).toFixed(2)}M`;
   }
 
   if (num >= 1_000) {
