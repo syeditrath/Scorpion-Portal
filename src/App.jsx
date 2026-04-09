@@ -1238,8 +1238,8 @@ function ProjectDocs({data,setData,showToast}) {
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
               <button onClick={()=>setSelProj(null)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
               <div style={{flex:1}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>{selProj}</div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selProj}</div>
+                <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>
                   {projInvs.length} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {totalAmt.toLocaleString()}</span>
                 </div>
               </div>
@@ -1281,12 +1281,12 @@ function ProjectDocs({data,setData,showToast}) {
                         </div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                        <div style={{background:T.bg,borderRadius:8,padding:"12px 12px"}}>
+                        <div style={{background:T.bg,borderRadius:8,padding:"8px 8px"}}>
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
                           <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:600}}>Invoices</div>
                         </div>
                         <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:800,color:T.green,lineHeight:1}}>{total>0?`SAR ${(total/1000).toFixed(0)}K`:"—"}</div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{total>0?`SAR ${(total/1000).toFixed(0)}K`:"—"}</div>
                           <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>Total Value</div>
                         </div>
                       </div>
