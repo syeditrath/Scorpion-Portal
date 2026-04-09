@@ -1297,15 +1297,17 @@ function ProjectDocs({data,setData,showToast}) {
                           <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
                         </div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                        <div style={{background:T.bg,borderRadius:8,padding:"6px 6px"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
-                          <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:800}}>Total Invoices</div>
-                        </div>
-                        <div style={{background:T.bg,borderRadius:8,padding:"10px 10px"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(total)}</div>
-                          <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:800}}>Total Value</div>
-                        </div>
+                      <div style={{display:"grid",gridTemplateColumns:"0.8fr 1.4fr",gap:8,marginBottom:10}}>
+  <div style={{background:T.bg,borderRadius:8,padding:"8px 10px",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:56}}>
+    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
+    <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:800}}>Total Invoices</div>
+  </div>
+
+  <div style={{background:T.bg,borderRadius:8,padding:"12px 12px",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:56}}>
+    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(total)}</div>
+    <div style={{fontSize:12,color:T.textSub,marginTop:4,fontWeight:800}}>Total Value</div>
+  </div>
+</div>
                       </div>
                       <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>View Invoices →</div>
                     </div>
