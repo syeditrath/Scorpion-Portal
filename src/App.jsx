@@ -316,6 +316,39 @@ const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY = "cta_auth";
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
+async function fetchAppData() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`,
+    },
+  });
+
+  if (!res.ok) throw new Error("Failed to load app data");
+
+  const rows = await res.json();
+  if (!rows.length || !rows[0].data) return EMPTY_DATA;
+
+  return { ...EMPTY_DATA, ...rows[0].data };
+}
+
+async function saveAppData(data) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      data,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!res.ok) throw new Error("Failed to save app data");
+}
 const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
 const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnanl2YmNxc3RrdGVwcmZyZ251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NzI5MDEsImV4cCI6MjA5MTA0ODkwMX0.kzVvgeuCx001S-POe-pQANmz84ddUGuNzKEt8gpv1R8";
 const STORAGE_BUCKET  = "portal-files";
@@ -641,6 +674,36 @@ function WelcomeScreen({onEnter}) {
 }
 
 export default function App() {
+  if (loadingData) {
+  return (
+    <div style={{
+      height: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: T.bg,
+      color: T.text,
+      fontFamily: "'Barlow Condensed',sans-serif",
+      fontSize: 24,
+      fontWeight: 700
+    }}>
+      Loading shared data...
+    </div>
+  );
+}
+  useEffect(() => {
+  (async () => {
+    try {
+      const cloudData = await fetchAppData();
+      setData(cloudData);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load shared data from Supabase");
+    } finally {
+      setLoadingData(false);
+    }
+  })();
+}, []);
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
       const s = document.createElement("style"); s.id = "ct-g";
@@ -648,7 +711,8 @@ export default function App() {
     }
   }, []);
 
-  const [data,        setData]       = useState(loadData);
+  const [data,        setData]       = useState(EMPTY_DATA);
+  const [loadingData, setLoadingData] = useState(true);
   const [page,        setPage]       = useState("dashboard");
   const [sideOpen,    setSideOpen]   = useState(false);
   const [toast,       setToast]      = useState(null);
@@ -671,7 +735,18 @@ export default function App() {
 
   const logout = () => { try{localStorage.removeItem(AUTH_KEY);}catch{} setAuthed(false); };
 
-  useEffect(() => { persist(data); }, [data]);
+  useEffect(() => {
+  if (loadingData) return;
+
+  const t = setTimeout(() => {
+    saveAppData(data).catch(err => {
+      console.error(err);
+      alert("Failed to save shared data");
+    });
+  }, 400);
+
+  return () => clearTimeout(t);
+}, [data, loadingData]);
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(() => setToast(null), 3200); };
 
