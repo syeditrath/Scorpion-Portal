@@ -418,7 +418,7 @@ function LoginPage({onLogin}) {
           <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",margin:"0 auto 16px",border:"2px solid rgba(251,191,36,0.5)",boxShadow:"0 0 24px rgba(251,191,36,0.2)"}}>
             <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,letterSpacing:"2px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 4s linear infinite",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,letterSpacing:"2px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
           <div style={{fontSize:12,color:"#38bdf8",letterSpacing:"3px",marginTop:4,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600}}>PORTAL ACCESS</div>
         </div>
 
@@ -1264,7 +1264,7 @@ function ProjectDocs({data,setData,showToast}) {
             </div>
             {projects.length===0
               ?<Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={()=>{}}/>
-              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
                 {projects.map((p,i)=>{
                   const pinvs=invDocs.filter(d=>d.project===p);
                   const total=pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
@@ -1281,9 +1281,9 @@ function ProjectDocs({data,setData,showToast}) {
                         </div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                        <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
-                          <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>Invoices</div>
+                        <div style={{background:T.bg,borderRadius:8,padding:"12px 12px"}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
+                          <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:600}}>Invoices</div>
                         </div>
                         <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:800,color:T.green,lineHeight:1}}>{total>0?`SAR ${(total/1000).toFixed(0)}K`:"—"}</div>
