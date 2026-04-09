@@ -159,7 +159,24 @@ const DARK = {
 const uid       = () => Math.random().toString(36).slice(2,9);
 const daysUntil = d  => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : null;
 const fmtDate   = d  => d ? new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+function formatSarCompact(value) {
+  const num = Number(value || 0);
+  if (!num) return "—";
 
+  if (num >= 1_000_000_000) {
+    return `SAR ${(num / 1_000_000_000).toFixed(3)}B`;
+  }
+
+  if (num >= 1_000_000) {
+    return `SAR ${(num / 1_000_000).toFixed(3)}M`;
+  }
+
+  if (num >= 1_000) {
+    return `SAR ${(num / 1_000).toFixed(0)}K`;
+  }
+
+  return `SAR ${num.toLocaleString()}`;
+}
 /* ─── Active theme (module-level, updated by App) ───────────────────────── */
 let T = LIGHT; // default to light, App.setTheme() updates this
 function setTheme(dark) { T = dark ? DARK : LIGHT; }
@@ -1283,10 +1300,10 @@ function ProjectDocs({data,setData,showToast}) {
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
                         <div style={{background:T.bg,borderRadius:8,padding:"6px 6px"}}>
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
-                          <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:600}}>Total Invoices</div>
+                          <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:800}}>Total Invoices</div>
                         </div>
                         <div style={{background:T.bg,borderRadius:8,padding:"10px 10px"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{total>0?`SAR ${(total/1000).toFixed(0)}K`:"—"}</div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(total)}</div>
                           <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:800}}>Total Value</div>
                         </div>
                       </div>
