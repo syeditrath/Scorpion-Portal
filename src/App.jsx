@@ -1237,11 +1237,15 @@ function ProjectDocs({data,setData,showToast}) {
   };
 
   // ── Derived data (no hooks below this line) ───────────────────────────
-  const invDocs  = docs.filter(d=>d.subTab==="invoices");
-  const projInvs = selProj ? invDocs.filter(d=>d.project===selProj) : [];
-  const totalAmt = projInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-  const certDocs = docs.filter(d=>d.subTab==="certificates"&&(!fProj||d.project===fProj));
-  const woDocs   = docs.filter(d=>d.subTab==="workorders"&&(!fProj||d.project===fProj));
+  const invDocs   = docs.filter(d=>d.subTab==="invoices");
+const projInvs  = selProj ? invDocs.filter(d=>d.project===selProj) : [];
+const totalAmt  = projInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+
+const certAll   = docs.filter(d=>d.subTab==="certificates");
+const projCerts = selProj ? certAll.filter(d=>d.project===selProj) : [];
+
+const woAll     = docs.filter(d=>d.subTab==="workorders");
+const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
 
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
@@ -1321,53 +1325,181 @@ function ProjectDocs({data,setData,showToast}) {
 
       {/* ══ CERTIFICATES ════════════════════════════════════════════════ */}
       {subTab==="certificates" && (
-        <div>
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>JOB COMPLETION CERTIFICATES</div>
-              <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Certificates issued upon completion of drilling work</div>
-            </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
-                <option value="">All Projects</option>
-                {projects.map(p=><option key={p} value={p}>{p}</option>)}
-              </select>
-              <Btn color={T.blue} solid onClick={()=>setModal({mode:"add"})}>+ Add Certificate</Btn>
-            </div>
+  selProj ? (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+        <button
+          onClick={()=>setSelProj(null)}
+          style={{
+            background:T.card,
+            border:`1px solid ${T.border}`,
+            color:T.textSub,
+            borderRadius:8,
+            padding:"8px 14px",
+            fontSize:13,
+            fontWeight:600
+          }}
+        >
+          ← Back
+        </button>
+
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>
+            {selProj}
           </div>
-          <div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{certDocs.length} record{certDocs.length!==1?"s":""}</div>
-          {certDocs.length===0
-            ?<Empty icon="📜" label="No certificates yet" sub="Add your first job completion certificate" color={T.blue} onAdd={()=>setModal({mode:"add"})}/>
-            :<div style={{display:"grid",gap:10}}>
-              {certDocs.map((doc,i)=>(
-                <div key={doc.id} className="fade-up"
-                  style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:"4px solid "+T.blue,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
-                      {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
-                      {doc.jobNo&&<Tag color={T.blue}>Job #{doc.jobNo}</Tag>}
-                    </div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                      {doc.client&&<Chip>Client: {doc.client}</Chip>}
-                      {doc.startDate&&<Chip>Start: {fmtDate(doc.startDate)}</Chip>}
-                      {doc.completionDate&&<Chip color={T.green}>Completed: {fmtDate(doc.completionDate)}</Chip>}
-                      {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
-                      {doc.refNo&&<Chip>Cert No: {doc.refNo}</Chip>}
-                      {doc.fileLink&&<FileLink href={doc.fileLink}/>}
-                    </div>
-                    {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+          <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>
+            {projCerts.length} certificate{projCerts.length!==1?"s":""}
+          </div>
+        </div>
+
+        <Btn color={T.blue} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>
+          + Add Certificate
+        </Btn>
+      </div>
+
+      {projCerts.length===0
+        ? <Empty
+            icon="📜"
+            label="No certificates yet"
+            sub="Add the first certificate for this project"
+            color={T.blue}
+            onAdd={()=>setModal({mode:"add",doc:{project:selProj}})}
+          />
+        : <div style={{display:"grid",gap:10}}>
+            {projCerts.map((doc,i)=>(
+              <div
+                key={doc.id}
+                className="fade-up"
+                style={{
+                  background:T.card,
+                  border:`1px solid ${T.border}`,
+                  borderLeft:`4px solid ${T.blue}`,
+                  borderRadius:12,
+                  padding:"16px 18px",
+                  animationDelay:`${i*.03}s`,
+                  display:"flex",
+                  alignItems:"flex-start",
+                  gap:14
+                }}
+              >
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>
+                      {doc.refNo || "Job Completion Certificate"}
+                    </span>
+                    {doc.project && <Tag color={T.blue}>{doc.project}</Tag>}
                   </div>
-                  <div style={{display:"flex",gap:6,flexShrink:0}}>
-                    <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-                    <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {doc.refNo && <Chip>Ref: {doc.refNo}</Chip>}
+                    {doc.client && <Chip>Client: {doc.client}</Chip>}
+                    {doc.amount && <Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
+                    {doc.date && <Chip>Date: {fmtDate(doc.date)}</Chip>}
+                    {doc.fileLink && <FileLink href={doc.fileLink}/>}
+                  </div>
+
+                  {doc.notes && (
+                    <div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>
+                      {doc.notes}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
+                  <ABtn color={T.red} onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                </div>
+              </div>
+            ))}
+          </div>
+      }
+    </div>
+  ) : (
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:18}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>
+            JOB COMPLETION CERTIFICATES
+          </div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>
+            Select a project to view and manage its certificates
+          </div>
+        </div>
+        <Btn color={T.blue} solid onClick={()=>setModal({mode:"add"})}>
+          + Add Certificate
+        </Btn>
+      </div>
+
+      {projects.length===0
+        ? <Empty
+            icon="📜"
+            label="No projects yet"
+            sub="Add projects via Manage Projects in the sidebar"
+            color={T.blue}
+            onAdd={()=>{}}
+          />
+        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+            {projects.map((p,i)=>{
+              const pcerts = certAll.filter(d=>d.project===p);
+
+              return (
+                <div
+                  key={p}
+                  className="fade-up"
+                  onClick={()=>setSelProj(p)}
+                  style={{
+                    background:T.card,
+                    border:`1px solid ${T.border}`,
+                    borderRadius:14,
+                    boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",
+                    padding:"20px",
+                    cursor:"pointer",
+                    animationDelay:`${i*.05}s`,
+                    transition:"border-color .2s,transform .2s"
+                  }}
+                  onMouseEnter={e=>{
+                    e.currentTarget.style.borderColor=T.blue;
+                    e.currentTarget.style.transform="translateY(-2px)";
+                  }}
+                  onMouseLeave={e=>{
+                    e.currentTarget.style.borderColor=T.border;
+                    e.currentTarget.style.transform="none";
+                  }}
+                >
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                    <div style={{width:38,height:38,background:T.blueDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>
+                      📜
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {p}
+                      </div>
+                      <div style={{fontSize:12,color:T.textSub,marginTop:2}}>
+                        {pcerts.length} certificate{pcerts.length!==1?"s":""}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{background:T.bg,borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.blue,lineHeight:1}}>
+                      {pcerts.length}
+                    </div>
+                    <div style={{fontSize:12,color:T.textSub,marginTop:4,fontWeight:800}}>
+                      Total Certificates
+                    </div>
+                  </div>
+
+                  <div style={{fontSize:12,color:T.blue,fontWeight:600,textAlign:"right"}}>
+                    View Certificates →
                   </div>
                 </div>
-              ))}
-            </div>
-          }
-        </div>
-      )}
+              );
+            })}
+          </div>
+      }
+    </div>
+  )
+)}
 
       {/* ══ WORK ORDERS ═════════════════════════════════════════════════ */}
       {subTab==="workorders" && (
