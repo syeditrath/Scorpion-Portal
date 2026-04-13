@@ -1285,7 +1285,8 @@ function ProjectDocs({data,setData,showToast}) {
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
   const [fProj,   setFProj]   = useState("");
-
+  const [bulkModal, setBulkModal] = useState(false);
+  
   const docs     = data.projectDocs || [];
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
@@ -1323,7 +1324,7 @@ const projCerts = selProj ? certAll.filter(d=>d.project===selProj) : [];
 
 const woAll     = docs.filter(d=>d.subTab==="workorders");
 const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
-
+const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
       <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={changeTab}/>
@@ -1642,6 +1643,7 @@ const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
       {modal && subTab==="invoices"     && <InvoiceModal     mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selProj} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="certificates" && <CertificateModal mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="workorders"   && <WorkOrderModal   mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
     </div>
   );
 }
@@ -3117,4 +3119,575 @@ const FileLink = ({href}) => {
     </a>
   );
 };
+function BulkUploadModal({ subTab, projects, onClose, onImport }) {
+  const [rows, setRows]       = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [step, setStep]       = useState(1); // 1=upload, 2=map, 3=preview
+  const [fileName, setFileName] = useState("");
+  const [error, setError]     = useState("");
+  const fileRef               = useRef();
+
+  const FIELD_DEFS = {
+    invoices:     [
+      {key:"name",     label:"Invoice Title *", required:true},
+      {key:"project",  label:"Project"},
+      {key:"refNo",    label:"Invoice No."},
+      {key:"dueDate",  label:"Due Date"},
+      {key:"amount",   label:"Amount (SAR)"},
+      {key:"notes",    label:"Notes"},
+    ],
+    certificates: [
+      {key:"project",        label:"Project"},
+      {key:"jobNo",          label:"Job Number"},
+      {key:"refNo",          label:"Certificate No."},
+      {key:"startDate",      label:"Start Date"},
+      {key:"completionDate", label:"Completion Date"},
+      {key:"amount",         label:"Invoice Value (SAR)"},
+      {key:"notes",          label:"Notes"},
+    ],
+    workorders: [
+      {key:"name",       label:"Title *", required:true},
+      {key:"project",    label:"Project"},
+      {key:"refNo",      label:"Reference No."},
+      {key:"supplier",   label:"Client / Counterparty"},
+      {key:"amount",     label:"Contract Value (SAR)"},
+      {key:"date",       label:"Date Signed"},
+      {key:"expiryDate", label:"Expiry / End Date"},
+      {key:"notes",      label:"Notes"},
+    ],
+  };
+
+  const fields = FIELD_DEFS[subTab] || FIELD_DEFS.invoices;
+
+  const TAB_COLORS = { invoices: T.green, certificates: T.blue, workorders: T.purple };
+  const color = TAB_COLORS[subTab] || T.blue;
+
+  // Auto-map: match header to field by fuzzy name comparison
+  const autoMap = (hdrs) => {
+    const m = {};
+    fields.forEach(f => {
+      const match = hdrs.find(h => {
+        const hn = h.toLowerCase().replace(/[^a-z]/g,"");
+        const fn = f.label.toLowerCase().replace(/[^a-z]/g,"");
+        const fk = f.key.toLowerCase();
+        return hn.includes(fk) || fk.includes(hn) || hn.includes(fn.slice(0,5)) || fn.includes(hn.slice(0,5));
+      });
+      if (match) m[f.key] = match;
+    });
+    return m;
+  };
+
+  const handleFile = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    setError("");
+    const ext = file.name.split(".").pop().toLowerCase();
+
+    if (ext === "csv") {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim());
+          if (!lines.length) { setError("Empty CSV file"); return; }
+          const hdrs = lines[0].split(",").map(h => h.replace(/^"|"$/g,"").trim());
+          const data = lines.slice(1).filter(l=>l.trim()).map(line => {
+            const vals = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g) || line.split(",");
+            const row = {};
+            hdrs.forEach((h,i) => { row[h] = (vals[i]||"").replace(/^"|"$/g,"").trim(); });
+            return row;
+          }).filter(r => Object.values(r).some(v=>v));
+          setHeaders(hdrs);
+          setRows(data);
+          setMapping(autoMap(hdrs));
+          setStep(2);
+        } catch(err) { setError("Failed to parse CSV: " + err.message); }
+      };
+      reader.readAsText(file);
+    } else {
+      // Excel
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const wb = XLSX.read(ev.target.result, { type:"array", cellDates:true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rawRows = XLSX.utils.sheet_to_json(ws, { defval:"" });
+          if (!rawRows.length) { setError("No data rows found in Excel file"); return; }
+          const hdrs = Object.keys(rawRows[0]);
+          const data = rawRows.filter(r => Object.values(r).some(v=>v!==null&&v!==""));
+          setHeaders(hdrs);
+          setRows(data);
+          setMapping(autoMap(hdrs));
+          setStep(2);
+        } catch(err) { setError("Failed to parse Excel: " + err.message); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+    e.target.value = "";
+  };
+
+  const buildPreviewRows = () => {
+    return rows.map(row => {
+      const rec = {};
+      fields.forEach(f => {
+        const srcCol = mapping[f.key];
+        if (srcCol && row[srcCol] !== undefined) {
+          let val = String(row[srcCol]).trim();
+          // Normalize date values
+          if (["dueDate","date","expiryDate","startDate","completionDate","issueDate"].includes(f.key)) {
+            val = excelDateToStr(row[srcCol]) || val;
+          }
+          rec[f.key] = val;
+        }
+      });
+      // Auto-fill project if only one option
+      if (!rec.project && projects.length === 1) rec.project = projects[0];
+      return rec;
+    }).filter(r => fields.filter(f=>f.required).every(f => r[f.key]));
+  };
+
+  const previewRows = step >= 3 ? buildPreviewRows() : [];
+  const skippedCount = rows.length - previewRows.length;
+
+  const STEP_LABELS = ["Upload File", "Map Columns", "Review & Import"];
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{
+        background: T.sidebar, border:`1px solid ${T.border}`, borderRadius:18,
+        width:"100%", maxWidth:680, maxHeight:"calc(100vh - 48px)",
+        display:"flex", flexDirection:"column", overflow:"hidden",
+        boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
+      }}>
+
+        {/* Header */}
+        <div style={{padding:"20px 24px 16px", borderBottom:`1px solid ${T.border}`, flexShrink:0}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:20, color:T.text}}>
+                BULK UPLOAD — {subTab.toUpperCase()}
+              </div>
+              <div style={{fontSize:12, color:T.textMuted, marginTop:3}}>
+                Import multiple records from CSV or Excel
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:8, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, cursor:"pointer"}}>×</button>
+          </div>
+
+          {/* Step indicator */}
+          <div style={{display:"flex", alignItems:"center", gap:0, marginTop:16}}>
+            {STEP_LABELS.map((label, i) => {
+              const sNum = i + 1;
+              const active = step === sNum;
+              const done = step > sNum;
+              return (
+                <div key={i} style={{display:"flex", alignItems:"center", flex: i < 2 ? 1 : "none"}}>
+                  <div style={{display:"flex", alignItems:"center", gap:8}}>
+                    <div style={{
+                      width:28, height:28, borderRadius:"50%",
+                      background: done ? color : active ? `${color}33` : T.bg,
+                      border: `2px solid ${done||active ? color : T.border}`,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:12, fontWeight:800,
+                      color: done ? "#000" : active ? color : T.textMuted,
+                      flexShrink:0,
+                    }}>
+                      {done ? "✓" : sNum}
+                    </div>
+                    <span style={{fontSize:12, fontWeight:active?700:500, color:active?color:T.textMuted, whiteSpace:"nowrap"}}>
+                      {label}
+                    </span>
+                  </div>
+                  {i < 2 && (
+                    <div style={{flex:1, height:2, background: done ? color : T.border, margin:"0 12px"}}/>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{flex:1, overflowY:"auto", padding:"20px 24px"}}>
+
+          {/* ── STEP 1: Upload ── */}
+          {step === 1 && (
+            <div>
+              {/* Template download hint */}
+              <div style={{background:T.blueDim, border:`1px solid ${T.blue}33`, borderRadius:12, padding:"14px 16px", marginBottom:20}}>
+                <div style={{fontSize:13, fontWeight:700, color:T.blue, marginBottom:6}}>📋 Expected Columns</div>
+                <div style={{display:"flex", flexWrap:"wrap", gap:6}}>
+                  {fields.map(f => (
+                    <span key={f.key} style={{background:T.bg, border:`1px solid ${T.border}`, borderRadius:6, padding:"3px 10px", fontSize:12, color:f.required ? color : T.textSub, fontWeight:f.required?700:400}}>
+                      {f.label}{f.required?" *":""}
+                    </span>
+                  ))}
+                </div>
+                <div style={{fontSize:11, color:T.textMuted, marginTop:8}}>
+                  * Required fields. Column names are auto-detected — fuzzy matching will map them automatically.
+                </div>
+              </div>
+
+              {/* Drop zone */}
+              <div
+                onClick={() => fileRef.current.click()}
+                style={{
+                  border:`2px dashed ${color}44`, borderRadius:14,
+                  padding:"48px 24px", textAlign:"center",
+                  cursor:"pointer", transition:"all .2s",
+                  background:`${color}08`,
+                }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=color;e.currentTarget.style.background=`${color}14`;}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=`${color}44`;e.currentTarget.style.background=`${color}08`;}}
+              >
+                <div style={{fontSize:44, marginBottom:12}}>📂</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700, fontSize:18, color:T.text, marginBottom:6}}>
+                  Click to Select File
+                </div>
+                <div style={{fontSize:13, color:T.textMuted}}>Supports CSV and Excel (.xlsx, .xls)</div>
+              </div>
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{display:"none"}} onChange={handleFile}/>
+
+              {error && (
+                <div style={{marginTop:12, padding:"10px 14px", background:T.redDim, border:`1px solid ${T.red}44`, borderRadius:8, fontSize:13, color:T.red}}>
+                  ⚠ {error}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 2: Map Columns ── */}
+          {step === 2 && (
+            <div>
+              <div style={{fontSize:13, color:T.textMuted, marginBottom:16}}>
+                📄 <strong style={{color:T.text}}>{fileName}</strong> — {rows.length} rows detected. Map your spreadsheet columns to the correct fields.
+              </div>
+
+              <div style={{display:"grid", gap:10}}>
+                {fields.map(f => (
+                  <div key={f.key} style={{display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}`}}>
+                    <div style={{width:180, flexShrink:0}}>
+                      <div style={{fontSize:13, fontWeight:600, color:f.required?color:T.text}}>{f.label}</div>
+                      <div style={{fontSize:11, color:T.textMuted, marginTop:2}}>App field</div>
+                    </div>
+                    <div style={{fontSize:16, color:T.border, flexShrink:0}}>→</div>
+                    <select
+                      value={mapping[f.key] || ""}
+                      onChange={e => setMapping(m => ({...m, [f.key]: e.target.value || undefined}))}
+                      style={{flex:1, background:T.inputBg, border:`1px solid ${mapping[f.key] ? color+"66" : T.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, color:mapping[f.key]?T.text:T.textMuted, outline:"none", colorScheme:"light"}}
+                    >
+                      <option value="">— Skip this field —</option>
+                      {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                    {mapping[f.key] && (
+                      <div style={{fontSize:11, color:T.green, flexShrink:0, fontWeight:700}}>✓ Mapped</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{marginTop:16, padding:"10px 14px", background:T.goldDim, border:`1px solid ${T.gold}33`, borderRadius:8, fontSize:12, color:T.gold}}>
+                💡 Fields marked with * are required. Rows missing required fields will be skipped during import.
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 3: Preview ── */}
+          {step === 3 && (
+            <div>
+              <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:16}}>
+                <div style={{background:T.greenDim, border:`1px solid ${T.green}33`, borderRadius:8, padding:"8px 14px"}}>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:22, color:T.green}}>{previewRows.length}</span>
+                  <span style={{fontSize:12, color:T.textMuted, marginLeft:6}}>ready to import</span>
+                </div>
+                {skippedCount > 0 && (
+                  <div style={{background:T.redDim, border:`1px solid ${T.red}33`, borderRadius:8, padding:"8px 14px"}}>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:22, color:T.red}}>{skippedCount}</span>
+                    <span style={{fontSize:12, color:T.textMuted, marginLeft:6}}>skipped (missing required)</span>
+                  </div>
+                )}
+              </div>
+
+              {previewRows.length === 0 ? (
+                <div style={{textAlign:"center", padding:"40px", color:T.red, fontSize:14}}>
+                  ⚠ No valid rows to import. Go back and check your column mapping.
+                </div>
+              ) : (
+                <div style={{display:"grid", gap:8}}>
+                  {previewRows.slice(0, 20).map((row, i) => (
+                    <div key={i} style={{background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 14px"}}>
+                      <div style={{fontWeight:700, fontSize:14, color:T.text, marginBottom:6}}>
+                        {row.name || row.jobNo || `Row ${i+1}`}
+                      </div>
+                      <div style={{display:"flex", flexWrap:"wrap", gap:6}}>
+                        {fields.filter(f=>f.key!=="name"&&row[f.key]).map(f => (
+                          <span key={f.key} style={{background:T.card, border:`1px solid ${T.borderLight}`, borderRadius:5, padding:"2px 8px", fontSize:11, color:T.textSub}}>
+                            {f.label.replace(" *","")}: <strong style={{color:T.text}}>{row[f.key]}</strong>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {previewRows.length > 20 && (
+                    <div style={{textAlign:"center", fontSize:13, color:T.textMuted, padding:"10px"}}>
+                      … and {previewRows.length - 20} more rows
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer buttons */}
+        <div style={{padding:"14px 24px 22px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10, flexShrink:0}}>
+          {step > 1 && (
+            <button onClick={()=>setStep(s=>s-1)} style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:10, padding:"12px 20px", fontSize:14, fontWeight:600, cursor:"pointer"}}>
+              ← Back
+            </button>
+          )}
+          <button onClick={onClose} style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:10, padding:"12px 20px", fontSize:14, fontWeight:600, cursor:"pointer"}}>
+            Cancel
+          </button>
+          <div style={{flex:1}}/>
+          {step === 1 && (
+            <button onClick={()=>fileRef.current.click()} style={{background:color, border:"none", color:"#000", borderRadius:10, padding:"12px 28px", fontSize:14, fontWeight:700, cursor:"pointer"}}>
+              Select File
+            </button>
+          )}
+          {step === 2 && (
+            <button onClick={()=>setStep(3)} style={{background:color, border:"none", color:"#000", borderRadius:10, padding:"12px 28px", fontSize:14, fontWeight:700, cursor:"pointer"}}>
+              Preview Import →
+            </button>
+          )}
+          {step === 3 && previewRows.length > 0 && (
+            <button onClick={()=>onImport(previewRows)} style={{background:T.green, border:"none", color:"#000", borderRadius:10, padding:"12px 28px", fontSize:15, fontWeight:800, cursor:"pointer"}}>
+              ✓ Import {previewRows.length} Records
+            </button>
+          )}
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NEW COMPONENT — ScorpionBulkModal (for Scorpion Documents bulk upload)
+// ═══════════════════════════════════════════════════════════════════
+
+function ScorpionBulkModal({ cats, onClose, onImport }) {
+  const [rows, setRows]     = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [step, setStep]     = useState(1);
+  const [fileName, setFileName] = useState("");
+  const [error, setError]   = useState("");
+  const fileRef             = useRef();
+
+  const fields = [
+    {key:"name",       label:"Document Name *", required:true},
+    {key:"category",   label:"Category"},
+    {key:"docNo",      label:"Reference / Doc No."},
+    {key:"issueDate",  label:"Issue Date"},
+    {key:"expiryDate", label:"Expiry Date"},
+    {key:"fileLink",   label:"File Link"},
+    {key:"notes",      label:"Notes"},
+  ];
+
+  const autoMap = hdrs => {
+    const m = {};
+    fields.forEach(f => {
+      const match = hdrs.find(h => {
+        const hn = h.toLowerCase().replace(/[^a-z]/g,"");
+        const fk = f.key.toLowerCase();
+        return hn.includes(fk) || fk.includes(hn);
+      });
+      if (match) m[f.key] = match;
+    });
+    return m;
+  };
+
+  const handleFile = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name);
+    setError("");
+    const ext = file.name.split(".").pop().toLowerCase();
+    const reader = new FileReader();
+    if (ext === "csv") {
+      reader.onload = ev => {
+        try {
+          const lines = ev.target.result.split(/\r?\n/).filter(l=>l.trim());
+          const hdrs = lines[0].split(",").map(h=>h.replace(/^"|"$/g,"").trim());
+          const data = lines.slice(1).filter(l=>l.trim()).map(line => {
+            const vals = line.split(",");
+            const row = {};
+            hdrs.forEach((h,i)=>{ row[h]=(vals[i]||"").replace(/^"|"$/g,"").trim(); });
+            return row;
+          }).filter(r=>Object.values(r).some(v=>v));
+          setHeaders(hdrs); setRows(data); setMapping(autoMap(hdrs)); setStep(2);
+        } catch(err) { setError("Failed to parse CSV"); }
+      };
+      reader.readAsText(file);
+    } else {
+      reader.onload = ev => {
+        try {
+          const wb = XLSX.read(ev.target.result,{type:"array",cellDates:true});
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rawRows = XLSX.utils.sheet_to_json(ws,{defval:""});
+          const hdrs = Object.keys(rawRows[0]||{});
+          setHeaders(hdrs); setRows(rawRows.filter(r=>Object.values(r).some(v=>v))); setMapping(autoMap(hdrs)); setStep(2);
+        } catch(err) { setError("Failed to parse Excel"); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+    e.target.value="";
+  };
+
+  const buildPreview = () => rows.map(row => {
+    const rec = {};
+    fields.forEach(f => {
+      const src = mapping[f.key];
+      if (src && row[src] !== undefined) {
+        let val = String(row[src]).trim();
+        if (["issueDate","expiryDate"].includes(f.key)) val = excelDateToStr(row[src]) || val;
+        rec[f.key] = val;
+      }
+    });
+    return rec;
+  }).filter(r => r.name);
+
+  const previewRows = step === 3 ? buildPreview() : [];
+
+  const STEP_LABELS = ["Upload File","Map Columns","Review & Import"];
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{background:T.sidebar, border:`1px solid ${T.border}`, borderRadius:18, width:"100%", maxWidth:640, maxHeight:"calc(100vh - 48px)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 24px 64px rgba(0,0,0,0.6)"}}>
+        <div style={{padding:"20px 24px 16px", borderBottom:`1px solid ${T.border}`, flexShrink:0}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:20, color:T.text}}>BULK UPLOAD — COMPANY DOCUMENTS</div>
+              <div style={{fontSize:12, color:T.textMuted, marginTop:3}}>Import multiple documents from CSV or Excel</div>
+            </div>
+            <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,cursor:"pointer"}}>×</button>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:0,marginTop:16}}>
+            {STEP_LABELS.map((label,i)=>{
+              const sNum=i+1; const active=step===sNum; const done=step>sNum;
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",flex:i<2?1:"none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:done?T.blue:active?`${T.blue}33`:T.bg,border:`2px solid ${done||active?T.blue:T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:done?"#000":active?T.blue:T.textMuted,flexShrink:0}}>
+                      {done?"✓":sNum}
+                    </div>
+                    <span style={{fontSize:12,fontWeight:active?700:500,color:active?T.blue:T.textMuted,whiteSpace:"nowrap"}}>{label}</span>
+                  </div>
+                  {i<2&&<div style={{flex:1,height:2,background:done?T.blue:T.border,margin:"0 12px"}}/>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+          {step===1&&(
+            <div>
+              <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"14px 16px",marginBottom:20}}>
+                <div style={{fontSize:13,fontWeight:700,color:T.blue,marginBottom:6}}>📋 Expected Columns</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {fields.map(f=>(
+                    <span key={f.key} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"3px 10px",fontSize:12,color:f.required?T.blue:T.textSub,fontWeight:f.required?700:400}}>{f.label}</span>
+                  ))}
+                </div>
+              </div>
+              <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${T.blue}44`,borderRadius:14,padding:"48px 24px",textAlign:"center",cursor:"pointer",background:`${T.blue}08`}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.background=`${T.blue}14`;}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=`${T.blue}44`;e.currentTarget.style.background=`${T.blue}08`;}}>
+                <div style={{fontSize:44,marginBottom:12}}>📂</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:18,color:T.text,marginBottom:6}}>Click to Select File</div>
+                <div style={{fontSize:13,color:T.textMuted}}>Supports CSV and Excel (.xlsx, .xls)</div>
+              </div>
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{display:"none"}} onChange={handleFile}/>
+              {error&&<div style={{marginTop:12,padding:"10px 14px",background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:8,fontSize:13,color:T.red}}>⚠ {error}</div>}
+            </div>
+          )}
+
+          {step===2&&(
+            <div>
+              <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>
+                📄 <strong style={{color:T.text}}>{fileName}</strong> — {rows.length} rows. Map columns to fields.
+              </div>
+              <div style={{display:"grid",gap:10}}>
+                {fields.map(f=>(
+                  <div key={f.key} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:T.bg,borderRadius:10,border:`1px solid ${T.border}`}}>
+                    <div style={{width:180,flexShrink:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:f.required?T.blue:T.text}}>{f.label}</div>
+                    </div>
+                    <div style={{fontSize:16,color:T.border,flexShrink:0}}>→</div>
+                    <select value={mapping[f.key]||""} onChange={e=>setMapping(m=>({...m,[f.key]:e.target.value||undefined}))}
+                      style={{flex:1,background:T.inputBg,border:`1px solid ${mapping[f.key]?T.blue+"66":T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:mapping[f.key]?T.text:T.textMuted,outline:"none",colorScheme:"light"}}>
+                      <option value="">— Skip —</option>
+                      {headers.map(h=><option key={h} value={h}>{h}</option>)}
+                    </select>
+                    {mapping[f.key]&&<div style={{fontSize:11,color:T.green,flexShrink:0,fontWeight:700}}>✓</div>}
+                  </div>
+                ))}
+              </div>
+              {/* Category preview */}
+              <div style={{marginTop:14,padding:"10px 14px",background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:8,fontSize:12,color:T.gold}}>
+                💡 Available categories: {cats.join(", ")}. If "Category" column doesn't match exactly, you can edit after import.
+              </div>
+            </div>
+          )}
+
+          {step===3&&(
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+                <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:8,padding:"8px 14px"}}>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green}}>{previewRows.length}</span>
+                  <span style={{fontSize:12,color:T.textMuted,marginLeft:6}}>ready to import</span>
+                </div>
+                {rows.length - previewRows.length > 0 && (
+                  <div style={{background:T.redDim,border:`1px solid ${T.red}33`,borderRadius:8,padding:"8px 14px"}}>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.red}}>{rows.length-previewRows.length}</span>
+                    <span style={{fontSize:12,color:T.textMuted,marginLeft:6}}>skipped</span>
+                  </div>
+                )}
+              </div>
+              {previewRows.length===0
+                ?<div style={{textAlign:"center",padding:"40px",color:T.red,fontSize:14}}>⚠ No valid rows. Check column mapping.</div>
+                :<div style={{display:"grid",gap:8}}>
+                  {previewRows.slice(0,15).map((row,i)=>(
+                    <div key={i} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 14px"}}>
+                      <div style={{fontWeight:700,fontSize:14,color:T.text,marginBottom:6}}>{row.name}</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {row.category&&<span style={{background:`${T.blue}18`,borderRadius:5,padding:"2px 8px",fontSize:11,color:T.blue,fontWeight:700}}>{row.category}</span>}
+                        {row.docNo&&<Chip>Ref: {row.docNo}</Chip>}
+                        {row.issueDate&&<Chip>Issued: {row.issueDate}</Chip>}
+                        {row.expiryDate&&<Chip>Expires: {row.expiryDate}</Chip>}
+                      </div>
+                    </div>
+                  ))}
+                  {previewRows.length>15&&<div style={{textAlign:"center",fontSize:13,color:T.textMuted,padding:"10px"}}>… and {previewRows.length-15} more</div>}
+                </div>
+              }
+            </div>
+          )}
+        </div>
+
+        <div style={{padding:"14px 24px 22px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,flexShrink:0}}>
+          {step>1&&<button onClick={()=>setStep(s=>s-1)} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>← Back</button>}
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          <div style={{flex:1}}/>
+          {step===1&&<button onClick={()=>fileRef.current.click()} style={{background:T.blue,border:"none",color:"#000",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:700,cursor:"pointer"}}>Select File</button>}
+          {step===2&&<button onClick={()=>setStep(3)} style={{background:T.blue,border:"none",color:"#000",borderRadius:10,padding:"12px 28px",fontSize:14,fontWeight:700,cursor:"pointer"}}>Preview →</button>}
+          {step===3&&previewRows.length>0&&<button onClick={()=>onImport(previewRows)} style={{background:T.green,border:"none",color:"#000",borderRadius:10,padding:"12px 28px",fontSize:15,fontWeight:800,cursor:"pointer"}}>✓ Import {previewRows.length} Documents</button>}
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
 const Btn      = ({children,onClick,color,solid}) => <button onClick={onClick} style={{background:solid?color:T.bg,border:`1px solid ${solid?color:T.border}`,color:solid?"#000":color||T.textSub,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,transition:"all .15s"}}>{children}</button>;
