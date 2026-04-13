@@ -1286,7 +1286,7 @@ function ProjectDocs({data,setData,showToast}) {
   const [modal,   setModal]   = useState(null);
   const [fProj,   setFProj]   = useState("");
   const [bulkModal, setBulkModal] = useState(false);
-  
+  const [multiPdfModal, setMultiPdfModal] = useState(null);
   const docs     = data.projectDocs || [];
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
@@ -1431,7 +1431,10 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
         </div>
 
         <Btn color={T.blue} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>
-          + Add Certificate
+          <div style={{display:"flex", gap:8}}>
+  <Btn color={T.blue} onClick={()=>setMultiPdfModal({project:selProj})}>⬆ Upload PDFs</Btn>
+  <Btn color={T.blue} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>+ Add Manually</Btn>
+</div>
         </Btn>
       </div>
 
@@ -1644,6 +1647,21 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
       {modal && subTab==="certificates" && <CertificateModal mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="workorders"   && <WorkOrderModal   mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
+      {multiPdfModal && (
+  <MultiPdfCertUpload
+    project={multiPdfModal.project}
+    projects={projects}
+    onClose={()=>setMultiPdfModal(null)}
+    onImport={records => {
+      setData(prev => ({
+        ...prev,
+        projectDocs: [...prev.projectDocs, ...records.map(r => ({...r, id:uid(), subTab:"certificates"}))]
+      }));
+      setMultiPdfModal(null);
+      showToast(`✓ ${records.length} certificate${records.length!==1?"s":""} uploaded`);
+    }}
+  />
+)}
     </div>
   );
 }
@@ -3689,5 +3707,422 @@ function ScorpionBulkModal({ cats, onClose, onImport }) {
     </Overlay>
   );
 }
+function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
+  const [files,       setFiles]       = useState([]); // [{file, name, jobNo, refNo, amount, startDate, completionDate, notes, status}]
+  const [uploading,   setUploading]   = useState(false);
+  const [progress,    setProgress]    = useState({}); // {filename: "pending"|"uploading"|"done"|"error"}
+  const [selProj,     setSelProj]     = useState(project || "");
+  const [globalJobNo, setGlobalJobNo] = useState("");
+  const dropRef                       = useRef();
+  const fileInputRef                  = useRef();
 
+  const STATUS_COLOR = {
+    pending:   T.textMuted,
+    uploading: T.blue,
+    done:      T.green,
+    error:     T.red,
+  };
+  const STATUS_ICON = {
+    pending:   "⏳",
+    uploading: "↑",
+    done:      "✓",
+    error:     "✕",
+  };
+
+  // Derive a clean display name from filename
+  const cleanName = filename => {
+    return filename
+      .replace(/\.[^.]+$/, "")           // remove extension
+      .replace(/[_-]+/g, " ")            // underscores/dashes → spaces
+      .replace(/\b\w/g, c => c.toUpperCase()); // title case
+  };
+
+  const addFiles = newFiles => {
+    const pdfs = Array.from(newFiles).filter(f =>
+      /\.(pdf|png|jpg|jpeg|webp|doc|docx)$/i.test(f.name)
+    );
+    if (!pdfs.length) return;
+    const entries = pdfs.map(f => ({
+      id:              uid(),
+      file:            f,
+      displayName:     cleanName(f.name),
+      jobNo:           "",
+      refNo:           "",
+      amount:          "",
+      startDate:       "",
+      completionDate:  "",
+      notes:           "",
+    }));
+    setFiles(prev => [...prev, ...entries]);
+    setProgress(prev => {
+      const next = {...prev};
+      entries.forEach(e => { next[e.id] = "pending"; });
+      return next;
+    });
+  };
+
+  const removeFile = id => {
+    setFiles(prev => prev.filter(f => f.id !== id));
+    setProgress(prev => { const n={...prev}; delete n[id]; return n; });
+  };
+
+  const updateField = (id, key, val) => {
+    setFiles(prev => prev.map(f => f.id === id ? {...f, [key]: val} : f));
+  };
+
+  // Drag & drop
+  const onDragOver  = e => { e.preventDefault(); dropRef.current.style.borderColor = T.blue; };
+  const onDragLeave = e => { dropRef.current.style.borderColor = `${T.blue}44`; };
+  const onDrop      = e => {
+    e.preventDefault();
+    dropRef.current.style.borderColor = `${T.blue}44`;
+    addFiles(e.dataTransfer.files);
+  };
+
+  const handleUploadAll = async () => {
+    if (!selProj) { alert("Please select a project first."); return; }
+    if (!files.length) { alert("No files selected."); return; }
+    setUploading(true);
+
+    const results = [];
+
+    for (const entry of files) {
+      setProgress(prev => ({...prev, [entry.id]: "uploading"}));
+      try {
+        const url = await uploadToSupabase(entry.file, `certificates/${selProj.replace(/\s+/g,"_")}`);
+        setProgress(prev => ({...prev, [entry.id]: "done"}));
+        results.push({
+          project:        selProj,
+          jobNo:          entry.jobNo || globalJobNo || "",
+          refNo:          entry.refNo || "",
+          amount:         entry.amount || "",
+          startDate:      entry.startDate || "",
+          completionDate: entry.completionDate || "",
+          notes:          entry.notes || "",
+          fileLink:       url,
+          // name used for display (not a required field in CertificateModal)
+          _fileName:      entry.displayName,
+        });
+      } catch (err) {
+        setProgress(prev => ({...prev, [entry.id]: "error"}));
+        console.error("Upload failed for", entry.file.name, err);
+      }
+    }
+
+    setUploading(false);
+
+    if (results.length) {
+      onImport(results);
+    } else {
+      alert("All uploads failed. Check your Supabase configuration.");
+    }
+  };
+
+  const doneCount    = Object.values(progress).filter(s => s === "done").length;
+  const errorCount   = Object.values(progress).filter(s => s === "error").length;
+  const pendingCount = Object.values(progress).filter(s => s === "pending").length;
+  const allDone      = uploading && doneCount + errorCount === files.length && files.length > 0;
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        className="slide-up"
+        style={{
+          background:     T.sidebar,
+          border:         `1px solid ${T.border}`,
+          borderRadius:   18,
+          width:          "100%",
+          maxWidth:       680,
+          maxHeight:      "calc(100vh - 48px)",
+          display:        "flex",
+          flexDirection:  "column",
+          overflow:       "hidden",
+          boxShadow:      "0 24px 64px rgba(0,0,0,0.6)",
+        }}
+      >
+        {/* ── Header ── */}
+        <div style={{padding:"20px 24px 16px", borderBottom:`1px solid ${T.border}`, flexShrink:0}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:20, color:T.text}}>
+                UPLOAD JOB COMPLETION CERTIFICATES
+              </div>
+              <div style={{fontSize:12, color:T.textMuted, marginTop:3}}>
+                Select multiple PDFs — one certificate record will be created per file
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:8, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, cursor:"pointer"}}
+            >×</button>
+          </div>
+
+          {/* Project selector */}
+          <div style={{marginTop:14, display:"flex", gap:10, alignItems:"center", flexWrap:"wrap"}}>
+            <div style={{flex:1, minWidth:200}}>
+              <label style={{display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:".5px"}}>PROJECT *</label>
+              <select
+                value={selProj}
+                onChange={e => setSelProj(e.target.value)}
+                style={{width:"100%", background:T.inputBg, border:`1px solid ${selProj ? T.blue+"66" : T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:selProj ? T.text : T.textMuted, outline:"none", colorScheme:"light"}}
+              >
+                <option value="">Select project…</option>
+                {projects.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div style={{flex:1, minWidth:160}}>
+              <label style={{display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:".5px"}}>JOB NO. (apply to all)</label>
+              <input
+                value={globalJobNo}
+                onChange={e => setGlobalJobNo(e.target.value)}
+                placeholder="e.g. JOB-2025-001"
+                style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none", colorScheme:"light"}}
+                onFocus={e=>e.target.style.borderColor=T.blue}
+                onBlur={e=>e.target.style.borderColor=T.border}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div style={{flex:1, overflowY:"auto", padding:"16px 24px"}}>
+
+          {/* Drop zone */}
+          <div
+            ref={dropRef}
+            onClick={() => !uploading && fileInputRef.current.click()}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={!uploading ? onDrop : undefined}
+            style={{
+              border:        `2px dashed ${T.blue}44`,
+              borderRadius:  12,
+              padding:       files.length ? "16px" : "36px 24px",
+              textAlign:     "center",
+              cursor:        uploading ? "not-allowed" : "pointer",
+              transition:    "all .2s",
+              background:    `${T.blue}06`,
+              marginBottom:  14,
+            }}
+            onMouseEnter={e => { if (!uploading) { e.currentTarget.style.borderColor=T.blue; e.currentTarget.style.background=`${T.blue}12`; }}}
+            onMouseLeave={e => { e.currentTarget.style.borderColor=`${T.blue}44`; e.currentTarget.style.background=`${T.blue}06`; }}
+          >
+            {files.length === 0 ? (
+              <>
+                <div style={{fontSize:40, marginBottom:8}}>📂</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700, fontSize:17, color:T.text, marginBottom:4}}>
+                  Drag & drop PDFs here, or click to browse
+                </div>
+                <div style={{fontSize:12, color:T.textMuted}}>
+                  PDF, Word, PNG, JPG — select as many as you need
+                </div>
+              </>
+            ) : (
+              <div style={{fontSize:13, color:T.blue, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:8}}>
+                <span>+</span> Click or drop more files to add ({files.length} selected)
+              </div>
+            )}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+            style={{display:"none"}}
+            onChange={e => { addFiles(e.target.files); e.target.value=""; }}
+          />
+
+          {/* Progress summary bar — shown during upload */}
+          {uploading && (
+            <div style={{background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:14}}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                <span style={{fontSize:13, fontWeight:700, color:T.text}}>Uploading…</span>
+                <span style={{fontSize:13, color:T.textMuted}}>{doneCount + errorCount} / {files.length}</span>
+              </div>
+              <div style={{height:6, background:T.border, borderRadius:999, overflow:"hidden"}}>
+                <div style={{
+                  height:"100%",
+                  width: `${files.length ? ((doneCount + errorCount) / files.length * 100) : 0}%`,
+                  background: `linear-gradient(90deg, ${T.green}, ${T.blue})`,
+                  borderRadius:999,
+                  transition:"width .3s ease",
+                }}/>
+              </div>
+              <div style={{display:"flex", gap:14, marginTop:8, fontSize:12}}>
+                <span style={{color:T.green}}>✓ {doneCount} done</span>
+                {errorCount > 0 && <span style={{color:T.red}}>✕ {errorCount} failed</span>}
+                <span style={{color:T.textMuted}}>{pendingCount} remaining</span>
+              </div>
+            </div>
+          )}
+
+          {/* File list */}
+          {files.length > 0 && (
+            <div style={{display:"grid", gap:10}}>
+              {files.map((entry, i) => {
+                const st = progress[entry.id] || "pending";
+                const stColor = STATUS_COLOR[st];
+                const stIcon  = STATUS_ICON[st];
+                const isExpanded = st === "pending" || st === "error";
+
+                return (
+                  <div
+                    key={entry.id}
+                    className="fade-up"
+                    style={{
+                      background:   T.bg,
+                      border:       `1px solid ${st==="done" ? T.green+"44" : st==="error" ? T.red+"44" : T.border}`,
+                      borderLeft:   `4px solid ${stColor}`,
+                      borderRadius: 10,
+                      padding:      "12px 14px",
+                      animationDelay: `${i * 0.03}s`,
+                    }}
+                  >
+                    {/* File header row */}
+                    <div style={{display:"flex", alignItems:"center", gap:10, marginBottom: isExpanded ? 10 : 0}}>
+                      <span style={{fontSize:18, flexShrink:0}}>
+                        {/\.pdf$/i.test(entry.file.name) ? "📄" : /\.(png|jpg|jpeg|webp)$/i.test(entry.file.name) ? "🖼️" : "📝"}
+                      </span>
+                      <div style={{flex:1, minWidth:0}}>
+                        <div style={{fontSize:13, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                          {entry.displayName}
+                        </div>
+                        <div style={{fontSize:11, color:T.textMuted, marginTop:1}}>
+                          {(entry.file.size / 1024 / 1024).toFixed(2)} MB
+                        </div>
+                      </div>
+                      {/* Status badge */}
+                      <div style={{background:`${stColor}18`, border:`1px solid ${stColor}44`, borderRadius:6, padding:"3px 10px", fontSize:11, fontWeight:700, color:stColor, flexShrink:0, display:"flex", alignItems:"center", gap:5}}>
+                        <span>{stIcon}</span>
+                        <span style={{textTransform:"capitalize"}}>{st}</span>
+                      </div>
+                      {/* Remove button — only if not uploading */}
+                      {!uploading && (
+                        <button
+                          onClick={() => removeFile(entry.id)}
+                          style={{background:T.redDim, border:`1px solid ${T.red}33`, color:T.red, borderRadius:6, width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, cursor:"pointer", flexShrink:0}}
+                        >✕</button>
+                      )}
+                    </div>
+
+                    {/* Editable detail fields — shown when pending */}
+                    {isExpanded && !uploading && (
+                      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, paddingTop:8, borderTop:`1px solid ${T.border}`}}>
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>JOB NO.</label>
+                          <input
+                            value={entry.jobNo}
+                            onChange={e => updateField(entry.id, "jobNo", e.target.value)}
+                            placeholder={globalJobNo || "JOB-001"}
+                            style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                            onFocus={e=>e.target.style.borderColor=T.blue}
+                            onBlur={e=>e.target.style.borderColor=T.border}
+                          />
+                        </div>
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>CERT / REF NO.</label>
+                          <input
+                            value={entry.refNo}
+                            onChange={e => updateField(entry.id, "refNo", e.target.value)}
+                            placeholder="e.g. CERT-2025-01"
+                            style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                            onFocus={e=>e.target.style.borderColor=T.blue}
+                            onBlur={e=>e.target.style.borderColor=T.border}
+                          />
+                        </div>
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>AMOUNT (SAR)</label>
+                          <input
+                            type="number"
+                            value={entry.amount}
+                            onChange={e => updateField(entry.id, "amount", e.target.value)}
+                            placeholder="0"
+                            style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                            onFocus={e=>e.target.style.borderColor=T.blue}
+                            onBlur={e=>e.target.style.borderColor=T.border}
+                          />
+                        </div>
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>COMPLETION DATE</label>
+                          <input
+                            type="date"
+                            value={entry.completionDate}
+                            onChange={e => updateField(entry.id, "completionDate", e.target.value)}
+                            style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                            onFocus={e=>e.target.style.borderColor=T.blue}
+                            onBlur={e=>e.target.style.borderColor=T.border}
+                          />
+                        </div>
+                        <div style={{gridColumn:"1 / -1"}}>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>NOTES</label>
+                          <input
+                            value={entry.notes}
+                            onChange={e => updateField(entry.id, "notes", e.target.value)}
+                            placeholder="Optional notes…"
+                            style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                            onFocus={e=>e.target.style.borderColor=T.blue}
+                            onBlur={e=>e.target.style.borderColor=T.border}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Uploaded URL preview */}
+                    {st === "done" && (
+                      <div style={{marginTop:6, fontSize:11, color:T.green, display:"flex", alignItems:"center", gap:6}}>
+                        <span>✓ Uploaded successfully</span>
+                      </div>
+                    )}
+                    {st === "error" && (
+                      <div style={{marginTop:6, fontSize:11, color:T.red}}>
+                        ✕ Upload failed — check Supabase config or file size
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Footer ── */}
+        <div style={{padding:"14px 24px 22px", borderTop:`1px solid ${T.border}`, flexShrink:0, display:"flex", gap:10, alignItems:"center"}}>
+          <div style={{flex:1, fontSize:12, color:T.textMuted}}>
+            {files.length > 0
+              ? `${files.length} file${files.length!==1?"s":""} selected — each becomes one certificate record`
+              : "No files selected yet"}
+          </div>
+          <button
+            onClick={onClose}
+            disabled={uploading}
+            style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:10, padding:"11px 20px", fontSize:14, fontWeight:600, cursor:uploading?"not-allowed":"pointer", opacity:uploading?0.5:1}}
+          >
+            {allDone ? "Close" : "Cancel"}
+          </button>
+          {!uploading && files.length > 0 && (
+            <button
+              onClick={handleUploadAll}
+              style={{
+                background:   `linear-gradient(135deg, ${T.blue}, #2563eb)`,
+                border:       "none",
+                color:        "#fff",
+                borderRadius: 10,
+                padding:      "11px 28px",
+                fontSize:     14,
+                fontWeight:   800,
+                cursor:       "pointer",
+                display:      "flex",
+                alignItems:   "center",
+                gap:          8,
+                boxShadow:    `0 4px 16px ${T.blue}44`,
+              }}
+            >
+              ⬆ Upload {files.length} File{files.length!==1?"s":""}
+            </button>
+          )}
+        </div>
+      </div>
+    </Overlay>
+  );
+}
 const Btn      = ({children,onClick,color,solid}) => <button onClick={onClick} style={{background:solid?color:T.bg,border:`1px solid ${solid?color:T.border}`,color:solid?"#000":color||T.textSub,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,transition:"all .15s"}}>{children}</button>;
