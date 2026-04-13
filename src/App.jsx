@@ -1048,6 +1048,41 @@ function Dashboard({data,alerts,go}) {
   const expired  = alerts.filter(a=>a.days<0).sort((a,b)=>a.days-b.days);
   const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
 
+  const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
+  const invoiceCount = invoiceDocs.length;
+  const totalInvoiced = invoiceDocs.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+  const receivedAmount = invoiceDocs
+    .filter(d => {
+      const status = String(d.paymentStatus || d.status || "").toLowerCase();
+      return status === "paid" || status === "received";
+    })
+    .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+  const partialAmount = invoiceDocs
+    .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() === "partial")
+    .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+  const pendingAmount = Math.max(0, totalInvoiced - receivedAmount - partialAmount);
+  const receivedPct = totalInvoiced ? Math.round((receivedAmount / totalInvoiced) * 100) : 0;
+  const partialPct = totalInvoiced ? Math.round((partialAmount / totalInvoiced) * 100) : 0;
+  const pendingPct = Math.max(0, 100 - receivedPct - partialPct);
+  const invoiceProjects = (data.projects || [])
+    .map(project => {
+      const docs = invoiceDocs.filter(d => d.project === project);
+      if (!docs.length) return null;
+      const total = docs.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+      const received = docs
+        .filter(d => {
+          const status = String(d.paymentStatus || d.status || "").toLowerCase();
+          return status === "paid" || status === "received";
+        })
+        .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+      const projectPending = Math.max(0, total - received);
+      const pctReceived = total ? Math.round((received / total) * 100) : 0;
+      return { project, count: docs.length, total, received, pending: projectPending, pctReceived };
+    })
+    .filter(Boolean)
+    .sort((a,b) => b.total - a.total)
+    .slice(0,4);
+
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
 
@@ -1084,309 +1119,155 @@ function Dashboard({data,alerts,go}) {
         </div>
       </div>
 
-      {/* ── 3 section cards ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12,marginBottom:16}}>
-        {/* ── Invoice Financials strip ── */}
-      {(()=>{
-        const allInvs   = (data.projectDocs||[]).filter(d=>d.subTab==="invoices");
-        const totalVal  = allInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-        const paidVal   = allInvs.filter(d=>d.paymentStatus==="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-        const pendingVal= allInvs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-        const partialVal= allInvs.filter(d=>d.paymentStatus==="Partial").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-        const paidPct   = totalVal > 0 ? Math.round(paidVal/totalVal*100) : 0;
-        const pendingPct= totalVal > 0 ? Math.round(pendingVal/totalVal*100) : 0;
-
-        return (
-          <div className="fade-up" style={{
-            background: T.card,
-            border: `1px solid ${T.border}`,
-            borderRadius: 16,
-            boxShadow: "0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",
-            padding: "20px 24px",
-            marginBottom: 16,
-            animationDelay: ".32s",
-          }}>
-            {/* Title row */}
-            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18, flexWrap:"wrap", gap:10}}>
-              <div style={{display:"flex", alignItems:"center", gap:10}}>
-                <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🧾</div>
+      {/* ── Main dashboard layout ── */}
+      <div style={{display:"grid",gap:18,marginBottom:18}}>
+        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",animationDelay:".32s"}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:18,flexWrap:"wrap"}}>
+            <div style={{minWidth:240,flex:"0 1 320px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                <div style={{width:46,height:46,borderRadius:12,background:T.greenDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🧾</div>
                 <div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text}}>INVOICE FINANCIALS</div>
-                  <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>{allInvs.length} invoice{allInvs.length!==1?"s":""} across all projects</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>INVOICE FINANCIALS</div>
+                  <div style={{fontSize:13,color:T.textMuted}}>{invoiceCount} invoice{invoiceCount!==1?"s":""} across all projects</div>
                 </div>
               </div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(20px,2.5vw,30px)",color:T.green}}>
-                {formatSarCompact(totalVal)}
-              </div>
-            </div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(30px,4vw,46px)",lineHeight:1,color:T.green,marginBottom:8}}>{formatSarCompact(totalInvoiced)}</div>
+              <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>Total invoiced value</div>
 
-            {/* KPI row */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:18}}>
-
-              {/* Total */}
-              <div style={{background:T.bg,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.border}`}}>
-                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:"1px",marginBottom:6}}>TOTAL INVOICED</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.green,lineHeight:1}}>
-                  {formatSarCompact(totalVal)}
-                </div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{allInvs.length} invoices</div>
-              </div>
-
-              {/* Received */}
-              <div style={{background:T.greenDim,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.green}33`}}>
-                <div style={{fontSize:10,fontWeight:700,color:T.green,letterSpacing:"1px",marginBottom:6}}>✓ RECEIVED</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.green,lineHeight:1}}>
-                  {formatSarCompact(paidVal)}
-                </div>
-                <div style={{fontSize:12,color:T.green,marginTop:4,fontWeight:600}}>{paidPct}% of total</div>
-              </div>
-
-              {/* Pending */}
-              <div style={{background:T.redDim,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.red}44`}}>
-                <div style={{fontSize:10,fontWeight:700,color:T.red,letterSpacing:"1px",marginBottom:6}}>⏳ PENDING</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.red,lineHeight:1}}>
-                  {formatSarCompact(pendingVal)}
-                </div>
-                <div style={{fontSize:12,color:T.red,marginTop:4,fontWeight:600}}>{pendingPct}% of total</div>
-              </div>
-
-              {/* Partial */}
-              {partialVal > 0 && (
-                <div style={{background:T.goldDim,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.gold}33`}}>
-                  <div style={{fontSize:10,fontWeight:700,color:T.gold,letterSpacing:"1px",marginBottom:6}}>½ PARTIAL</div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.gold,lineHeight:1}}>
-                    {formatSarCompact(partialVal)}
-                  </div>
-                  <div style={{fontSize:12,color:T.gold,marginTop:4,fontWeight:600}}>
-                    {totalVal > 0 ? Math.round(partialVal/totalVal*100) : 0}% of total
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Stacked progress bar */}
-            <div style={{marginBottom:10}}>
-              <div style={{display:"flex", justifyContent:"space-between", fontSize:11, color:T.textMuted, marginBottom:6, fontWeight:600}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".06em",marginBottom:8}}>
                 <span>COLLECTION PROGRESS</span>
-                <span>{paidPct}% collected</span>
+                <span>{receivedPct}% collected</span>
               </div>
-              <div style={{height:10, background:T.border, borderRadius:999, overflow:"hidden", display:"flex"}}>
-                {/* Paid segment */}
-                {paidPct > 0 && (
-                  <div style={{
-                    width: `${paidPct}%`,
-                    background: `linear-gradient(90deg, ${T.green}, #059669)`,
-                    transition: "width 1.2s cubic-bezier(0.22,1,0.36,1)",
-                    flexShrink: 0,
-                  }}/>
-                )}
-                {/* Partial segment */}
-                {partialVal > 0 && totalVal > 0 && (
-                  <div style={{
-                    width: `${Math.round(partialVal/totalVal*100)}%`,
-                    background: `linear-gradient(90deg, ${T.gold}, #d97706)`,
-                    transition: "width 1.2s cubic-bezier(0.22,1,0.36,1)",
-                    flexShrink: 0,
-                  }}/>
-                )}
+              <div style={{height:12,background:T.border,borderRadius:999,overflow:"hidden",display:"flex"}}>
+                {receivedPct > 0 && <div style={{width:`${receivedPct}%`,background:T.green,height:"100%"}}/>}
+                {partialPct > 0 && <div style={{width:`${partialPct}%`,background:T.gold,height:"100%"}}/>}
               </div>
-              <div style={{display:"flex", gap:16, marginTop:8, fontSize:11, flexWrap:"wrap"}}>
-                <span style={{display:"flex",alignItems:"center",gap:5}}>
-                  <span style={{width:10,height:10,borderRadius:2,background:T.green,display:"inline-block"}}/>
-                  <span style={{color:T.textMuted}}>Paid ({allInvs.filter(d=>d.paymentStatus==="Paid").length})</span>
-                </span>
-                {partialVal > 0 && (
-                  <span style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{width:10,height:10,borderRadius:2,background:T.gold,display:"inline-block"}}/>
-                    <span style={{color:T.textMuted}}>Partial ({allInvs.filter(d=>d.paymentStatus==="Partial").length})</span>
-                  </span>
-                )}
-                <span style={{display:"flex",alignItems:"center",gap:5}}>
-                  <span style={{width:10,height:10,borderRadius:2,background:T.border,display:"inline-block"}}/>
-                  <span style={{color:T.textMuted}}>Pending ({allInvs.filter(d=>(d.paymentStatus||"Pending")==="Pending").length})</span>
-                </span>
+              <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:10,fontSize:11,color:T.textMuted}}>
+                <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:T.green,display:"inline-block"}}/>Received</span>
+                {partialAmount > 0 && <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:T.gold,display:"inline-block"}}/>Partial</span>}
+                <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:T.borderLight,display:"inline-block"}}/>Pending</span>
               </div>
             </div>
 
-            {/* Per-project breakdown */}
-            {(data.projects||[]).length > 0 && (()=>{
-              const projRows = (data.projects||[])
-                .map(p => {
-                  const pinvs = allInvs.filter(d=>d.project===p);
-                  if (!pinvs.length) return null;
-                  const ptotal   = pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-                  const ppaid    = pinvs.filter(d=>d.paymentStatus==="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-                  const ppending = pinvs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-                  const ppct     = ptotal > 0 ? Math.round(ppaid/ptotal*100) : 0;
-                  return {p, pinvs, ptotal, ppaid, ppending, ppct};
-                })
-                .filter(Boolean);
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,flex:"1 1 620px",minWidth:"min(100%,420px)"}}>
+              <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px"}}>
+                <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:8}}>TOTAL INVOICED</div>
+                <div style={{fontSize:28,fontWeight:800,color:T.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(totalInvoiced)}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{invoiceCount} invoice{invoiceCount!==1?"s":""}</div>
+              </div>
 
-              if (!projRows.length) return null;
+              <div style={{background:T.greenDim,border:`1px solid ${T.green}44`,borderRadius:14,padding:"14px 16px"}}>
+                <div style={{fontSize:11,color:T.green,fontWeight:700,letterSpacing:".08em",marginBottom:8}}>RECEIVED</div>
+                <div style={{fontSize:26,fontWeight:800,color:T.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(receivedAmount)}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{receivedPct}% of total</div>
+              </div>
 
-              return (
-                <div style={{marginTop:16, borderTop:`1px solid ${T.border}`, paddingTop:14}}>
-                  <div style={{fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:"1px",marginBottom:10}}>BY PROJECT</div>
-                  <div style={{display:"grid", gap:8}}>
-                    {projRows.map(({p, pinvs, ptotal, ppaid, ppending, ppct}) => (
-                      <div key={p} style={{display:"flex", alignItems:"center", gap:12, padding:"10px 12px", background:T.bg, borderRadius:9, border:`1px solid ${T.border}`}}>
-                        <div style={{flex:1, minWidth:0}}>
-                          <div style={{fontSize:13, fontWeight:600, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:5}}>{p}</div>
-                          <div style={{height:5, background:T.border, borderRadius:999, overflow:"hidden"}}>
-                            <div style={{
-                              height:"100%",
-                              width:`${ppct}%`,
-                              background:`linear-gradient(90deg,${T.green},#059669)`,
-                              transition:"width 1s ease",
-                              borderRadius:999,
-                            }}/>
-                          </div>
-                        </div>
-                        <div style={{display:"flex", gap:12, flexShrink:0, textAlign:"right"}}>
-                          <div>
-                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.green}}>{formatSarCompact(ppaid)}</div>
-                            <div style={{fontSize:9,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>RECEIVED</div>
-                          </div>
-                          <div>
-                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.red}}>{formatSarCompact(ppending)}</div>
-                            <div style={{fontSize:9,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>PENDING</div>
-                          </div>
-                          <div style={{background:T.border,width:1,height:"100%"}}/>
-                          <div>
-                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.textSub}}>{pinvs.length}</div>
-                            <div style={{fontSize:9,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>INVOICES</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+              <div style={{background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:14,padding:"14px 16px"}}>
+                <div style={{fontSize:11,color:T.red,fontWeight:700,letterSpacing:".08em",marginBottom:8}}>PENDING</div>
+                <div style={{fontSize:26,fontWeight:800,color:T.red,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(pendingAmount)}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{pendingPct}% of total</div>
+              </div>
+
+              <div style={{background:T.goldDim,border:`1px solid ${T.gold}44`,borderRadius:14,padding:"14px 16px"}}>
+                <div style={{fontSize:11,color:T.gold,fontWeight:700,letterSpacing:".08em",marginBottom:8}}>PARTIAL</div>
+                <div style={{fontSize:26,fontWeight:800,color:T.gold,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(partialAmount)}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{partialPct}% of total</div>
+              </div>
+            </div>
+          </div>
+
+          {invoiceProjects.length > 0 && (
+            <div style={{marginTop:18,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
+              <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>BY PROJECT</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+                {invoiceProjects.map((row) => (
+                  <div key={row.project} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:8}}>
+                      <div style={{fontSize:13,fontWeight:700,color:T.text,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.project}</div>
+                      <div style={{fontSize:11,color:T.textMuted,flexShrink:0}}>{row.count} inv</div>
+                    </div>
+                    <div style={{height:6,background:T.border,borderRadius:999,overflow:"hidden",marginBottom:8}}>
+                      <div style={{width:`${row.pctReceived}%`,height:"100%",background:T.green,borderRadius:999}}/>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:12}}>
+                      <span style={{color:T.green,fontWeight:700}}>{formatSarCompact(row.received)}</span>
+                      <span style={{color:T.red,fontWeight:700}}>{formatSarCompact(row.pending)}</span>
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
-          </div>
-        );
-      })()}
-
-        {/* Scorpion Documents */}
-        <div className="fade-up card-hover" onClick={()=>go("scorpion")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".35s",transition:"border-color .2s,transform .2s"}}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.transform="translateY(-2px)";}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <div style={{width:38,height:38,background:T.blueDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.blue}}>◉</div>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>SCORPION DOCUMENTS</div>
-              <div style={{fontSize:12,color:T.textSub}}>CR, insurance, licenses, contracts</div>
-            </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-            {[["Total Docs",data.scorpionDocs.length,T.blue],["Expiring",scorpionExp,scorpionExp>0?T.red:T.textMuted],["Due in 30d",scorpionExp30,scorpionExp30>0?T.gold:T.textMuted],["Categories",(data.scorpionDocCats||[]).length,T.blue]].map(([l,v,c])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div style={{fontSize:12,color:T.blue,fontWeight:600,textAlign:"right"}}>Open Documents →</div>
+            </div>
+          )}
         </div>
 
-        {/* Project Docs */}
-        <div className="fade-up card-hover" onClick={()=>go("projects")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".40s",transition:"border-color .2s,transform .2s"}}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.teal;e.currentTarget.style.transform="translateY(-2px)";}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <div style={{width:38,height:38,background:T.tealDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.teal}}>◆</div>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>PROJECT DOCS</div>
-              <div style={{fontSize:12,color:T.textSub}}>Invoices, completion certs & work orders</div>
-            </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-            {(() => {
-              const _invs = (data.projectDocs || []).filter((d) => d.subTab === "invoices");
-              const _pendingInvs = _invs.filter((d) => (d.paymentStatus || "Pending") !== "Paid").length;
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
+          <DashboardMiniCard
+            title="SCORPION DOCUMENTS"
+            sub="CR, insurance, licenses, contracts"
+            icon="◉"
+            color={T.blue}
+            stats={[
+              {label:"Total Docs", value:data.scorpionDocs.length},
+              {label:"Expiring", value:scorpionExp},
+              {label:"Due in 30d", value:scorpionExp30},
+              {label:"Categories", value:(data.scorpionDocCats||[]).length},
+            ]}
+            actionLabel="Open Documents →"
+            onClick={() => go("scorpion")}
+          />
 
-              return [
-                ["Total", (data.projectDocs || []).length, T.teal],
-                ["Invoices", _invs.length, T.green],
-                ["Pending Inv", _pendingInvs, _pendingInvs > 0 ? T.red : T.textMuted],
-                ["Job Certs", (data.projectDocs || []).filter((d) => d.subTab === "certificates").length, T.blue],
-              ].map(([l,v,c]) => (
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
-              </div>
-              ));
-            })()}
-          </div>
-          <div style={{fontSize:12,color:T.teal,fontWeight:600,textAlign:"right"}}>Open Project Docs →</div>
-        </div>
+          <DashboardMiniCard
+            title="PROJECT DOCS"
+            sub="Invoices, completion certs & work orders"
+            icon="◆"
+            color={T.teal}
+            stats={[
+              {label:"Total", value:(data.projectDocs || []).length},
+              {label:"Invoices", value:invoiceDocs.length},
+              {label:"Pending Inv", value:invoiceDocs.filter(d => String(d.paymentStatus || "Pending") !== "Paid").length},
+              {label:"Job Certs", value:(data.projectDocs || []).filter(d => d.subTab === "certificates").length},
+            ]}
+            actionLabel="Open Project Docs →"
+            onClick={() => go("projects")}
+          />
 
-        {/* Manpower */}
-        <div className="fade-up card-hover" onClick={()=>go("manpower")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".42s",transition:"border-color .2s,transform .2s"}}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.green}}>◈</div>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>MANPOWER</div>
-              <div style={{fontSize:12,color:T.textSub}}>Staff, documents & certifications</div>
-            </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-            {[["People",mpPeople,T.green],["Categories",mpCats,T.green],["Doc Alerts",mpDocAlerts,mpDocAlerts>0?T.red:T.textMuted],["Certs",data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0),T.green]].map(([l,v,c])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
-              </div>
-            ))}
-          </div>
-          {/* Category breakdown */}
-          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
-            {(data.manpowerCats||[]).map(c=>(
-              <span key={c} style={{background:T.greenDim,color:T.green,borderRadius:5,padding:"2px 8px",fontSize:10,fontWeight:600}}>
-                {c} ({data.manpower.filter(p=>p.category===c).length})
-              </span>
-            ))}
-          </div>
-          <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>Open Manpower →</div>
-        </div>
+          <DashboardMiniCard
+            title="MANPOWER"
+            sub="Staff, documents & certifications"
+            icon="◈"
+            color={T.green}
+            stats={[
+              {label:"People", value:mpPeople},
+              {label:"Categories", value:mpCats},
+              {label:"Doc Alerts", value:mpDocAlerts},
+              {label:"Certs", value:data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0)},
+            ]}
+            footer={(data.manpowerCats||[]).slice(0,4).map(c => `${c} (${data.manpower.filter(p=>p.category===c).length})`).join("   •   ")}
+            actionLabel="Open Manpower →"
+            onClick={() => go("manpower")}
+          />
 
-        {/* Equipment */}
-        <div className="fade-up card-hover" onClick={()=>go("equipment")}
-          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".49s",transition:"border-color .2s,transform .2s"}}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.gold;e.currentTarget.style.transform="translateY(-2px)";}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <div style={{width:38,height:38,background:T.goldDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.gold}}>◎</div>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>EQUIPMENT</div>
-              <div style={{fontSize:12,color:T.textSub}}>Assets, certs, invoices & permits</div>
-            </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-            {[["Total Assets",eqTotal,T.gold],["Active",eqActive,T.green],["Maintenance",eqMaint,eqMaint>0?T.gold:T.textMuted],["Exp. Alerts",eqExp,eqExp>0?T.red:T.textMuted]].map(([l,v,c])=>(
-              <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
-            {[["📜 Certs",data.equipment.reduce((n,e)=>n+(e.certifications||[]).length,0)],["🧾 Invoices",data.equipment.reduce((n,e)=>n+(e.invoices||[]).length,0)],["🛡 Insurance",data.equipment.reduce((n,e)=>n+(e.insurance||[]).length,0)],["⬡ Permits",data.equipment.reduce((n,e)=>n+(e.permits||[]).length,0)]].map(([l,v])=>(
-              <span key={l} style={{background:T.goldDim,color:T.gold,borderRadius:5,padding:"2px 8px",fontSize:10,fontWeight:600}}>{l}: {v}</span>
-            ))}
-          </div>
-          <div style={{fontSize:12,color:T.gold,fontWeight:600,textAlign:"right"}}>Open Equipment →</div>
+          <DashboardMiniCard
+            title="EQUIPMENT"
+            sub="Assets, certs, invoices & permits"
+            icon="◎"
+            color={T.gold}
+            stats={[
+              {label:"Total Assets", value:eqTotal},
+              {label:"Active", value:eqActive},
+              {label:"Maintenance", value:eqMaint},
+              {label:"Exp. Alerts", value:eqExp},
+            ]}
+            footer={`Certs: ${data.equipment.reduce((n,e)=>n+(e.certifications||[]).length,0)}   •   Invoices: ${data.equipment.reduce((n,e)=>n+(e.invoices||[]).length,0)}   •   Insurance: ${data.equipment.reduce((n,e)=>n+(e.insurance||[]).length,0)}   •   Permits: ${data.equipment.reduce((n,e)=>n+(e.permits||[]).length,0)}`}
+            actionLabel="Open Equipment →"
+            onClick={() => go("equipment")}
+          />
         </div>
       </div>
 
       {/* ── Alerts split into 2 columns ── */}
       {alerts.length>0 ? (
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-          {/* Overdue */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14}}>
           <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".55s"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
               <div style={{width:3,height:18,borderRadius:2,background:T.red}}/>
@@ -1402,7 +1283,6 @@ function Dashboard({data,alerts,go}) {
             }
           </div>
 
-          {/* Expiring soon */}
           <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".62s"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
               <div style={{width:3,height:18,borderRadius:2,background:T.gold}}/>
@@ -1425,6 +1305,55 @@ function Dashboard({data,alerts,go}) {
           <div style={{fontSize:13,color:T.textMuted}}>No expiring or overdue items — everything is up to date.</div>
         </div>
       )}
+    </div>
+  );
+}
+
+function DashboardMiniCard({ title, sub, icon, color, stats, actionLabel, onClick, footer }) {
+  return (
+    <div
+      className="fade-up card-hover"
+      onClick={onClick}
+      style={{
+        background:T.card,
+        border:`1px solid ${T.border}`,
+        borderRadius:18,
+        boxShadow:T.shadow,
+        padding:"18px 18px 16px",
+        minHeight:230,
+        display:"flex",
+        flexDirection:"column",
+        cursor:"pointer",
+      }}
+    >
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+        <div style={{width:42,height:42,borderRadius:12,background:`${color}22`,color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800}}>
+          {icon}
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text,lineHeight:1}}>{title}</div>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{sub}</div>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0,1fr))",gap:10,marginBottom:14}}>
+        {stats.map((s) => (
+          <div key={s.label} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 12px 10px"}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color}}>{s.value}</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {footer && (
+        <div style={{fontSize:11,color:T.textMuted,lineHeight:1.5,marginBottom:14}}>{footer}</div>
+      )}
+
+      <div style={{marginTop:"auto",display:"flex",justifyContent:"flex-end"}}>
+        <button onClick={e=>{e.stopPropagation(); onClick?.();}} style={{background:"transparent",border:"none",color,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+          {actionLabel}
+        </button>
+      </div>
     </div>
   );
 }
