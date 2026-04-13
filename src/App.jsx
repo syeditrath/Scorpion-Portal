@@ -1303,7 +1303,7 @@ function Dashboard({data,alerts,go}) {
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-            {[
+            
              const _invs        = (data.projectDocs||[]).filter(d=>d.subTab==="invoices");
   const _pendingInvs = _invs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").length;
 
