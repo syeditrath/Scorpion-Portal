@@ -1086,6 +1086,186 @@ function Dashboard({data,alerts,go}) {
 
       {/* ── 3 section cards ── */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12,marginBottom:16}}>
+        {/* ── Invoice Financials strip ── */}
+      {(()=>{
+        const allInvs   = (data.projectDocs||[]).filter(d=>d.subTab==="invoices");
+        const totalVal  = allInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+        const paidVal   = allInvs.filter(d=>d.paymentStatus==="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+        const pendingVal= allInvs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+        const partialVal= allInvs.filter(d=>d.paymentStatus==="Partial").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+        const paidPct   = totalVal > 0 ? Math.round(paidVal/totalVal*100) : 0;
+        const pendingPct= totalVal > 0 ? Math.round(pendingVal/totalVal*100) : 0;
+
+        return (
+          <div className="fade-up" style={{
+            background: T.card,
+            border: `1px solid ${T.border}`,
+            borderRadius: 16,
+            boxShadow: "0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",
+            padding: "20px 24px",
+            marginBottom: 16,
+            animationDelay: ".32s",
+          }}>
+            {/* Title row */}
+            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18, flexWrap:"wrap", gap:10}}>
+              <div style={{display:"flex", alignItems:"center", gap:10}}>
+                <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🧾</div>
+                <div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text}}>INVOICE FINANCIALS</div>
+                  <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>{allInvs.length} invoice{allInvs.length!==1?"s":""} across all projects</div>
+                </div>
+              </div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(20px,2.5vw,30px)",color:T.green}}>
+                {formatSarCompact(totalVal)}
+              </div>
+            </div>
+
+            {/* KPI row */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:18}}>
+
+              {/* Total */}
+              <div style={{background:T.bg,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.border}`}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:"1px",marginBottom:6}}>TOTAL INVOICED</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.green,lineHeight:1}}>
+                  {formatSarCompact(totalVal)}
+                </div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{allInvs.length} invoices</div>
+              </div>
+
+              {/* Received */}
+              <div style={{background:T.greenDim,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.green}33`}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.green,letterSpacing:"1px",marginBottom:6}}>✓ RECEIVED</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.green,lineHeight:1}}>
+                  {formatSarCompact(paidVal)}
+                </div>
+                <div style={{fontSize:12,color:T.green,marginTop:4,fontWeight:600}}>{paidPct}% of total</div>
+              </div>
+
+              {/* Pending */}
+              <div style={{background:T.redDim,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.red}44`}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.red,letterSpacing:"1px",marginBottom:6}}>⏳ PENDING</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.red,lineHeight:1}}>
+                  {formatSarCompact(pendingVal)}
+                </div>
+                <div style={{fontSize:12,color:T.red,marginTop:4,fontWeight:600}}>{pendingPct}% of total</div>
+              </div>
+
+              {/* Partial */}
+              {partialVal > 0 && (
+                <div style={{background:T.goldDim,borderRadius:10,padding:"14px 16px",border:`1px solid ${T.gold}33`}}>
+                  <div style={{fontSize:10,fontWeight:700,color:T.gold,letterSpacing:"1px",marginBottom:6}}>½ PARTIAL</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2vw,28px)",fontWeight:800,color:T.gold,lineHeight:1}}>
+                    {formatSarCompact(partialVal)}
+                  </div>
+                  <div style={{fontSize:12,color:T.gold,marginTop:4,fontWeight:600}}>
+                    {totalVal > 0 ? Math.round(partialVal/totalVal*100) : 0}% of total
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Stacked progress bar */}
+            <div style={{marginBottom:10}}>
+              <div style={{display:"flex", justifyContent:"space-between", fontSize:11, color:T.textMuted, marginBottom:6, fontWeight:600}}>
+                <span>COLLECTION PROGRESS</span>
+                <span>{paidPct}% collected</span>
+              </div>
+              <div style={{height:10, background:T.border, borderRadius:999, overflow:"hidden", display:"flex"}}>
+                {/* Paid segment */}
+                {paidPct > 0 && (
+                  <div style={{
+                    width: `${paidPct}%`,
+                    background: `linear-gradient(90deg, ${T.green}, #059669)`,
+                    transition: "width 1.2s cubic-bezier(0.22,1,0.36,1)",
+                    flexShrink: 0,
+                  }}/>
+                )}
+                {/* Partial segment */}
+                {partialVal > 0 && totalVal > 0 && (
+                  <div style={{
+                    width: `${Math.round(partialVal/totalVal*100)}%`,
+                    background: `linear-gradient(90deg, ${T.gold}, #d97706)`,
+                    transition: "width 1.2s cubic-bezier(0.22,1,0.36,1)",
+                    flexShrink: 0,
+                  }}/>
+                )}
+              </div>
+              <div style={{display:"flex", gap:16, marginTop:8, fontSize:11, flexWrap:"wrap"}}>
+                <span style={{display:"flex",alignItems:"center",gap:5}}>
+                  <span style={{width:10,height:10,borderRadius:2,background:T.green,display:"inline-block"}}/>
+                  <span style={{color:T.textMuted}}>Paid ({allInvs.filter(d=>d.paymentStatus==="Paid").length})</span>
+                </span>
+                {partialVal > 0 && (
+                  <span style={{display:"flex",alignItems:"center",gap:5}}>
+                    <span style={{width:10,height:10,borderRadius:2,background:T.gold,display:"inline-block"}}/>
+                    <span style={{color:T.textMuted}}>Partial ({allInvs.filter(d=>d.paymentStatus==="Partial").length})</span>
+                  </span>
+                )}
+                <span style={{display:"flex",alignItems:"center",gap:5}}>
+                  <span style={{width:10,height:10,borderRadius:2,background:T.border,display:"inline-block"}}/>
+                  <span style={{color:T.textMuted}}>Pending ({allInvs.filter(d=>(d.paymentStatus||"Pending")==="Pending").length})</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Per-project breakdown */}
+            {(data.projects||[]).length > 0 && (()=>{
+              const projRows = (data.projects||[])
+                .map(p => {
+                  const pinvs = allInvs.filter(d=>d.project===p);
+                  if (!pinvs.length) return null;
+                  const ptotal   = pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+                  const ppaid    = pinvs.filter(d=>d.paymentStatus==="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+                  const ppending = pinvs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+                  const ppct     = ptotal > 0 ? Math.round(ppaid/ptotal*100) : 0;
+                  return {p, pinvs, ptotal, ppaid, ppending, ppct};
+                })
+                .filter(Boolean);
+
+              if (!projRows.length) return null;
+
+              return (
+                <div style={{marginTop:16, borderTop:`1px solid ${T.border}`, paddingTop:14}}>
+                  <div style={{fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:"1px",marginBottom:10}}>BY PROJECT</div>
+                  <div style={{display:"grid", gap:8}}>
+                    {projRows.map(({p, pinvs, ptotal, ppaid, ppending, ppct}) => (
+                      <div key={p} style={{display:"flex", alignItems:"center", gap:12, padding:"10px 12px", background:T.bg, borderRadius:9, border:`1px solid ${T.border}`}}>
+                        <div style={{flex:1, minWidth:0}}>
+                          <div style={{fontSize:13, fontWeight:600, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:5}}>{p}</div>
+                          <div style={{height:5, background:T.border, borderRadius:999, overflow:"hidden"}}>
+                            <div style={{
+                              height:"100%",
+                              width:`${ppct}%`,
+                              background:`linear-gradient(90deg,${T.green},#059669)`,
+                              transition:"width 1s ease",
+                              borderRadius:999,
+                            }}/>
+                          </div>
+                        </div>
+                        <div style={{display:"flex", gap:12, flexShrink:0, textAlign:"right"}}>
+                          <div>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.green}}>{formatSarCompact(ppaid)}</div>
+                            <div style={{fontSize:9,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>RECEIVED</div>
+                          </div>
+                          <div>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.red}}>{formatSarCompact(ppending)}</div>
+                            <div style={{fontSize:9,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>PENDING</div>
+                          </div>
+                          <div style={{background:T.border,width:1,height:"100%"}}/>
+                          <div>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.textSub}}>{pinvs.length}</div>
+                            <div style={{fontSize:9,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>INVOICES</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        );
+      })()}
 
         {/* Scorpion Documents */}
         <div className="fade-up card-hover" onClick={()=>go("scorpion")}
@@ -1124,10 +1304,15 @@ function Dashboard({data,alerts,go}) {
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
             {[
-              ["Total",(data.projectDocs||[]).length,T.teal],
-              ["Invoices",(data.projectDocs||[]).filter(d=>d.subTab==="invoices").length,T.green],
-              ["Job Certs",(data.projectDocs||[]).filter(d=>d.subTab==="certificates").length,T.blue],
-              ["Work Orders",(data.projectDocs||[]).filter(d=>d.subTab==="workorders").length,T.purple],
+             const _invs        = (data.projectDocs||[]).filter(d=>d.subTab==="invoices");
+  const _pendingInvs = _invs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").length;
+
+  [
+    ["Total",(data.projectDocs||[]).length,T.teal],
+    ["Invoices",_invs.length,T.green],
+    ["Pending Inv",_pendingInvs,_pendingInvs>0?T.red:T.textMuted],
+    ["Job Certs",(data.projectDocs||[]).filter(d=>d.subTab==="certificates").length,T.blue],
+  ]
             ].map(([l,v,c])=>(
               <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
@@ -1379,17 +1564,38 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
                           <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
                         </div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"0.8fr 1.4fr",gap:8,marginBottom:10}}>
-  <div style={{background:T.bg,borderRadius:8,padding:"8px 10px",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:56}}>
-    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
-    <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:800}}>Total Invoices</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+
+    <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>
+        {pinvs.length}
+      </div>
+      <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:700}}>Total Invoices</div>
+    </div>
+
+    <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>
+        {formatSarCompact(total)}
+      </div>
+      <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:700}}>Total Value</div>
+    </div>
+
+    <div style={{background:T.redDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.red}33`}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.red,lineHeight:1}}>
+        {formatSarCompact(pinvs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0))}
+      </div>
+      <div style={{fontSize:11,color:T.red,marginTop:4,fontWeight:700}}>⏳ Pending</div>
+    </div>
+
+    <div style={{background:T.greenDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.green}33`}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>
+        {formatSarCompact(pinvs.filter(d=>d.paymentStatus==="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0))}
+      </div>
+      <div style={{fontSize:11,color:T.green,marginTop:4,fontWeight:700}}>✓ Received</div>
+    </div>
+
   </div>
 
-  <div style={{background:T.bg,borderRadius:8,padding:"12px 12px",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:56}}>
-    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(total)}</div>
-    <div style={{fontSize:12,color:T.textSub,marginTop:4,fontWeight:800}}>Total Value</div>
-  </div>
-</div>
                       
                       <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>View Invoices →</div>
                     </div>
@@ -1698,6 +1904,11 @@ function InvoiceCard({doc,delay,onEdit,onDel}) {
           {doc.client&&<Chip>Client: {doc.client}</Chip>}
           {doc.dueDate&&<Chip color={ds.color}>Due: {fmtDate(doc.dueDate)}</Chip>}
           {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
+          {(()=>{
+            const ps = doc.paymentStatus || "Pending";
+            const c  = ps==="Paid" ? T.green : ps==="Partial" ? T.gold : T.red;
+            return <Tag color={c}>{ps==="Paid"?"✓ Paid":ps==="Partial"?"½ Partial":"⏳ Pending"}</Tag>;
+          })()}
           {doc.fileLink&&<FileLink href={doc.fileLink}/>}
         </div>
         {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
@@ -1727,6 +1938,47 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
       <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
+      <FieldRow label="Payment Status">
+        <div style={{display:"flex", gap:8}}>
+          {["Pending","Paid","Partial"].map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => set("paymentStatus")(s)}
+              style={{
+                flex: 1,
+                padding: "9px 0",
+                borderRadius: 8,
+                border: `1px solid ${
+                  f.paymentStatus === s
+                    ? s === "Paid"    ? T.green
+                    : s === "Partial" ? T.gold
+                    :                  T.red
+                    : T.border
+                }`,
+                background:
+                  f.paymentStatus === s
+                    ? s === "Paid"    ? T.greenDim
+                    : s === "Partial" ? T.goldDim
+                    :                  T.redDim
+                    : "transparent",
+                color:
+                  f.paymentStatus === s
+                    ? s === "Paid"    ? T.green
+                    : s === "Partial" ? T.gold
+                    :                  T.red
+                    : T.textMuted,
+                fontSize: 13,
+                fontWeight: f.paymentStatus === s ? 700 : 500,
+                cursor: "pointer",
+                transition: "all .15s",
+              }}
+            >
+              {s === "Paid" ? "✓ Paid" : s === "Partial" ? "½ Partial" : "⏳ Pending"}
+            </button>
+          ))}
+        </div>
+      </FieldRow>
       <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
     </FormModal>
