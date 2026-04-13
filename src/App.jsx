@@ -177,6 +177,26 @@ function formatSarCompact(value) {
 
   return `SAR ${num.toLocaleString()}`;
 }
+
+function getInvoiceRemainingAmount(doc) {
+  const total = parseFloat(doc?.amount) || 0;
+  const status = String(doc?.paymentStatus || doc?.status || "").toLowerCase();
+
+  if (status === "paid" || status === "received") return 0;
+  if (status === "partial") {
+    const remaining = parseFloat(doc?.remainingAmount);
+    if (Number.isFinite(remaining)) {
+      return Math.max(0, Math.min(total, remaining));
+    }
+    return total;
+  }
+  return total;
+}
+
+function getInvoiceCollectedAmount(doc) {
+  const total = parseFloat(doc?.amount) || 0;
+  return Math.max(0, total - getInvoiceRemainingAmount(doc));
+}
 /* ─── Active theme (module-level, updated by App) ───────────────────────── */
 let T = LIGHT; // default to light, App.setTheme() updates this
 function setTheme(dark) { T = dark ? DARK : LIGHT; }
@@ -1051,33 +1071,45 @@ function Dashboard({data,alerts,go}) {
   const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
   const invoiceCount = invoiceDocs.length;
   const totalInvoiced = invoiceDocs.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-  const receivedAmount = invoiceDocs
-    .filter(d => {
-      const status = String(d.paymentStatus || d.status || "").toLowerCase();
-      return status === "paid" || status === "received";
-    })
-    .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-  const partialAmount = invoiceDocs
+  const receivedAmount = invoiceDocs.reduce((sum, d) => {
+    const status = String(d.paymentStatus || d.status || "").toLowerCase();
+    if (status === "paid" || status === "received") return sum + (parseFloat(d.amount) || 0);
+    return sum;
+  }, 0);
+  const partialCollectedAmount = invoiceDocs
     .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() === "partial")
-    .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-  const pendingAmount = Math.max(0, totalInvoiced - receivedAmount - partialAmount);
-  const receivedPct = totalInvoiced ? Math.round((receivedAmount / totalInvoiced) * 100) : 0;
-  const partialPct = totalInvoiced ? Math.round((partialAmount / totalInvoiced) * 100) : 0;
-  const pendingPct = Math.max(0, 100 - receivedPct - partialPct);
+    .reduce((sum, d) => sum + getInvoiceCollectedAmount(d), 0);
+  const partialRemainingAmount = invoiceDocs
+    .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() === "partial")
+    .reduce((sum, d) => sum + getInvoiceRemainingAmount(d), 0);
+  const pendingAmount = invoiceDocs
+    .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() !== "paid" && String(d.paymentStatus || d.status || "").toLowerCase() !== "received")
+    .reduce((sum, d) => sum + getInvoiceRemainingAmount(d), 0);
+  const collectedAmount = receivedAmount + partialCollectedAmount;
+  const collectedPct = totalInvoiced ? Math.round((collectedAmount / totalInvoiced) * 100) : 0;
+  const partialPct = totalInvoiced ? Math.round((partialRemainingAmount / totalInvoiced) * 100) : 0;
+  const pendingPct = totalInvoiced ? Math.round((pendingAmount / totalInvoiced) * 100) : 0;
   const invoiceProjects = (data.projects || [])
     .map(project => {
       const docs = invoiceDocs.filter(d => d.project === project);
       if (!docs.length) return null;
       const total = docs.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-      const received = docs
-        .filter(d => {
-          const status = String(d.paymentStatus || d.status || "").toLowerCase();
-          return status === "paid" || status === "received";
-        })
-        .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-      const projectPending = Math.max(0, total - received);
-      const pctReceived = total ? Math.round((received / total) * 100) : 0;
-      return { project, count: docs.length, total, received, pending: projectPending, pctReceived };
+      const received = docs.reduce((sum, d) => {
+        const status = String(d.paymentStatus || d.status || "").toLowerCase();
+        if (status === "paid" || status === "received") return sum + (parseFloat(d.amount) || 0);
+        return sum;
+      }, 0);
+      const partialCollected = docs
+        .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() === "partial")
+        .reduce((sum, d) => sum + getInvoiceCollectedAmount(d), 0);
+      const partialRemaining = docs
+        .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() === "partial")
+        .reduce((sum, d) => sum + getInvoiceRemainingAmount(d), 0);
+      const projectPending = docs
+        .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() !== "paid" && String(d.paymentStatus || d.status || "").toLowerCase() !== "received")
+        .reduce((sum, d) => sum + getInvoiceRemainingAmount(d), 0);
+      const pctReceived = total ? Math.round(((received + partialCollected) / total) * 100) : 0;
+      return { project, count: docs.length, total, received: received + partialCollected, pending: projectPending, partialRemaining, pctReceived };
     })
     .filter(Boolean)
     .sort((a,b) => b.total - a.total)
@@ -1136,15 +1168,15 @@ function Dashboard({data,alerts,go}) {
 
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".06em",marginBottom:8}}>
                 <span>COLLECTION PROGRESS</span>
-                <span>{receivedPct}% collected</span>
+                <span>{collectedPct}% collected</span>
               </div>
               <div style={{height:12,background:T.border,borderRadius:999,overflow:"hidden",display:"flex"}}>
-                {receivedPct > 0 && <div style={{width:`${receivedPct}%`,background:T.green,height:"100%"}}/>}
+                {collectedPct > 0 && <div style={{width:`${collectedPct}%`,background:T.green,height:"100%"}}/>}
                 {partialPct > 0 && <div style={{width:`${partialPct}%`,background:T.gold,height:"100%"}}/>}
               </div>
               <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:10,fontSize:11,color:T.textMuted}}>
                 <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:T.green,display:"inline-block"}}/>Received</span>
-                {partialAmount > 0 && <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:T.gold,display:"inline-block"}}/>Partial</span>}
+                {partialRemainingAmount > 0 && <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:T.gold,display:"inline-block"}}/>Partial Remaining</span>}
                 <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:T.borderLight,display:"inline-block"}}/>Pending</span>
               </div>
             </div>
@@ -1158,8 +1190,8 @@ function Dashboard({data,alerts,go}) {
 
               <div style={{background:T.greenDim,border:`1px solid ${T.green}44`,borderRadius:14,padding:"14px 16px"}}>
                 <div style={{fontSize:11,color:T.green,fontWeight:700,letterSpacing:".08em",marginBottom:8}}>RECEIVED</div>
-                <div style={{fontSize:26,fontWeight:800,color:T.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(receivedAmount)}</div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{receivedPct}% of total</div>
+                <div style={{fontSize:26,fontWeight:800,color:T.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(collectedAmount)}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{collectedPct}% of total</div>
               </div>
 
               <div style={{background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:14,padding:"14px 16px"}}>
@@ -1169,8 +1201,8 @@ function Dashboard({data,alerts,go}) {
               </div>
 
               <div style={{background:T.goldDim,border:`1px solid ${T.gold}44`,borderRadius:14,padding:"14px 16px"}}>
-                <div style={{fontSize:11,color:T.gold,fontWeight:700,letterSpacing:".08em",marginBottom:8}}>PARTIAL</div>
-                <div style={{fontSize:26,fontWeight:800,color:T.gold,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(partialAmount)}</div>
+                <div style={{fontSize:11,color:T.gold,fontWeight:700,letterSpacing:".08em",marginBottom:8}}>PARTIAL REMAINING</div>
+                <div style={{fontSize:26,fontWeight:800,color:T.gold,fontFamily:"'Barlow Condensed',sans-serif"}}>{formatSarCompact(partialRemainingAmount)}</div>
                 <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{partialPct}% of total</div>
               </div>
             </div>
@@ -1224,7 +1256,7 @@ function Dashboard({data,alerts,go}) {
             stats={[
               {label:"Total", value:(data.projectDocs || []).length},
               {label:"Invoices", value:invoiceDocs.length},
-              {label:"Pending Inv", value:invoiceDocs.filter(d => String(d.paymentStatus || "Pending") !== "Paid").length},
+              {label:"Pending Inv", value:invoiceDocs.filter(d => String(d.paymentStatus || "Pending").toLowerCase() !== "paid" && String(d.paymentStatus || "Pending").toLowerCase() !== "received").length},
               {label:"Job Certs", value:(data.projectDocs || []).filter(d => d.subTab === "certificates").length},
             ]}
             actionLabel="Open Project Docs →"
@@ -1511,16 +1543,16 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
 
     <div style={{background:T.redDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.red}33`}}>
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.red,lineHeight:1}}>
-        {formatSarCompact(pinvs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0))}
+        {formatSarCompact(pinvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0))}
       </div>
-      <div style={{fontSize:11,color:T.red,marginTop:4,fontWeight:700}}>⏳ Pending</div>
+      <div style={{fontSize:11,color:T.red,marginTop:4,fontWeight:700}}>⏳ Remaining</div>
     </div>
 
     <div style={{background:T.greenDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.green}33`}}>
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>
-        {formatSarCompact(pinvs.filter(d=>d.paymentStatus==="Paid").reduce((s,d)=>s+(parseFloat(d.amount)||0),0))}
+        {formatSarCompact(pinvs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0))}
       </div>
-      <div style={{fontSize:11,color:T.green,marginTop:4,fontWeight:700}}>✓ Received</div>
+      <div style={{fontSize:11,color:T.green,marginTop:4,fontWeight:700}}>✓ Collected</div>
     </div>
 
   </div>
@@ -1833,6 +1865,9 @@ function InvoiceCard({doc,delay,onEdit,onDel}) {
           {doc.client&&<Chip>Client: {doc.client}</Chip>}
           {doc.dueDate&&<Chip color={ds.color}>Due: {fmtDate(doc.dueDate)}</Chip>}
           {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
+          {String(doc.paymentStatus || "").toLowerCase() === "partial" && (
+            <Chip color={T.gold}>Remaining: SAR {(parseFloat(doc.remainingAmount) || 0).toLocaleString()}</Chip>
+          )}
           {(()=>{
             const ps = doc.paymentStatus || "Pending";
             const c  = ps==="Paid" ? T.green : ps==="Partial" ? T.gold : T.red;
@@ -1908,6 +1943,16 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
           ))}
         </div>
       </FieldRow>
+      {f.paymentStatus === "Partial" && (
+        <FieldRow label="Remaining Amount (SAR)">
+          <div>
+            <FInput type="number" value={f.remainingAmount || ""} onChange={set("remainingAmount")} color={T.gold}/>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:6}}>
+              Enter the exact amount still remaining for this invoice.
+            </div>
+          </div>
+        </FieldRow>
+      )}
       <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
     </FormModal>
