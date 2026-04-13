@@ -1303,22 +1303,22 @@ function Dashboard({data,alerts,go}) {
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-            
-             const _invs        = (data.projectDocs||[]).filter(d=>d.subTab==="invoices");
-  const _pendingInvs = _invs.filter(d=>(d.paymentStatus||"Pending")!=="Paid").length;
+            {(() => {
+              const _invs = (data.projectDocs || []).filter((d) => d.subTab === "invoices");
+              const _pendingInvs = _invs.filter((d) => (d.paymentStatus || "Pending") !== "Paid").length;
 
-  [
-    ["Total",(data.projectDocs||[]).length,T.teal],
-    ["Invoices",_invs.length,T.green],
-    ["Pending Inv",_pendingInvs,_pendingInvs>0?T.red:T.textMuted],
-    ["Job Certs",(data.projectDocs||[]).filter(d=>d.subTab==="certificates").length,T.blue],
-  ]
-            ].map(([l,v,c])=>(
+              return [
+                ["Total", (data.projectDocs || []).length, T.teal],
+                ["Invoices", _invs.length, T.green],
+                ["Pending Inv", _pendingInvs, _pendingInvs > 0 ? T.red : T.textMuted],
+                ["Job Certs", (data.projectDocs || []).filter((d) => d.subTab === "certificates").length, T.blue],
+              ].map(([l,v,c]) => (
               <div key={l} style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2vw,26px)",fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>{l}</div>
               </div>
-            ))}
+              ));
+            })()}
           </div>
           <div style={{fontSize:12,color:T.teal,fontWeight:600,textAlign:"right"}}>Open Project Docs →</div>
         </div>
