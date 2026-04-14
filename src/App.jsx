@@ -820,7 +820,7 @@ export default function App() {
             <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"2px",color:"#f59e0b",textTransform:"uppercase"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT PORTAL</div>
+              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
               {/* Global search */}
@@ -905,7 +905,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
         </div>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:"1px",lineHeight:1.1,background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 8s linear infinite",filter:"drop-shadow(0 0 8px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
-            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>PORTAL</div>
+            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
           </div>
         </div>
       </div>
@@ -1033,7 +1033,6 @@ function ProjectsModal({projects,onSave,onClose}) {
    DASHBOARD
 ════════════════════════════════════════════════════════════════════════════ */
 function Dashboard({data,alerts,go}) {
-  const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All Years");
   /* ── computed stats ── */
   const scorpionExp = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=90; }).length;
   const scorpionExp30 = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=30; }).length;
@@ -1069,49 +1068,30 @@ function Dashboard({data,alerts,go}) {
   const expired  = alerts.filter(a=>a.days<0).sort((a,b)=>a.days-b.days);
   const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
 
-  const allInvoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
-  const availableInvoiceYears = Array.from(
-    new Set(
-      allInvoiceDocs
-        .map(doc => (doc.dueDate ? String(new Date(doc.dueDate).getFullYear()) : "No Year"))
-    )
-  ).sort((a, b) => {
-    if (a === "No Year") return 1;
-    if (b === "No Year") return -1;
-    return Number(b) - Number(a);
-  });
-
-  const filteredInvoiceDocs = selectedInvoiceYear === "All Years"
-    ? allInvoiceDocs
-    : allInvoiceDocs.filter(doc => {
-        const year = doc.dueDate ? String(new Date(doc.dueDate).getFullYear()) : "No Year";
-        return year === selectedInvoiceYear;
-      });
-
-  const invoiceCount = filteredInvoiceDocs.length;
-  const totalInvoiced = filteredInvoiceDocs.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-  const receivedAmount = filteredInvoiceDocs.reduce((sum, d) => {
+  const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
+  const invoiceCount = invoiceDocs.length;
+  const totalInvoiced = invoiceDocs.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+  const receivedAmount = invoiceDocs.reduce((sum, d) => {
     const status = String(d.paymentStatus || d.status || "").toLowerCase();
     if (status === "paid" || status === "received") return sum + (parseFloat(d.amount) || 0);
     return sum;
   }, 0);
-  const partialCollectedAmount = filteredInvoiceDocs
+  const partialCollectedAmount = invoiceDocs
     .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() === "partial")
     .reduce((sum, d) => sum + getInvoiceCollectedAmount(d), 0);
-  const partialRemainingAmount = filteredInvoiceDocs
+  const partialRemainingAmount = invoiceDocs
     .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() === "partial")
     .reduce((sum, d) => sum + getInvoiceRemainingAmount(d), 0);
-  const pendingAmount = filteredInvoiceDocs
+  const pendingAmount = invoiceDocs
     .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() !== "paid" && String(d.paymentStatus || d.status || "").toLowerCase() !== "received")
     .reduce((sum, d) => sum + getInvoiceRemainingAmount(d), 0);
   const collectedAmount = receivedAmount + partialCollectedAmount;
   const collectedPct = totalInvoiced ? Math.round((collectedAmount / totalInvoiced) * 100) : 0;
   const partialPct = totalInvoiced ? Math.round((partialRemainingAmount / totalInvoiced) * 100) : 0;
   const pendingPct = totalInvoiced ? Math.round((pendingAmount / totalInvoiced) * 100) : 0;
-
   const invoiceProjects = (data.projects || [])
     .map(project => {
-      const docs = filteredInvoiceDocs.filter(d => d.project === project);
+      const docs = invoiceDocs.filter(d => d.project === project);
       if (!docs.length) return null;
       const total = docs.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
       const received = docs.reduce((sum, d) => {
@@ -1135,7 +1115,7 @@ function Dashboard({data,alerts,go}) {
     .sort((a,b) => b.total - a.total)
     .slice(0,4);
 
-  const invoiceByYear = allInvoiceDocs.reduce((acc, doc) => {
+  const invoiceByYear = invoiceDocs.reduce((acc, doc) => {
   const year = doc.dueDate ? new Date(doc.dueDate).getFullYear() : "No Year";
 
   if (!acc[year]) {
@@ -1149,11 +1129,11 @@ function Dashboard({data,alerts,go}) {
   }
 
   const amount = parseFloat(doc.amount) || 0;
-  const status = String(doc.paymentStatus || doc.status || "").toLowerCase();
+
   const remaining =
-    status === "paid" || status === "received"
+    doc.paymentStatus === "Paid"
       ? 0
-      : status === "partial"
+      : doc.paymentStatus === "Partial"
       ? Math.max(0, parseFloat(doc.remainingAmount) || 0)
       : amount;
 
@@ -1167,21 +1147,6 @@ function Dashboard({data,alerts,go}) {
   return acc;
 }, {});
 
-  const pendingInvoiceRows = filteredInvoiceDocs
-    .filter(d => String(d.paymentStatus || d.status || "").toLowerCase() !== "paid" && String(d.paymentStatus || d.status || "").toLowerCase() !== "received")
-    .sort((a, b) => {
-      const ad = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-      const bd = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-      return ad - bd;
-    });
-
-  const recentInvoiceRows = [...filteredInvoiceDocs]
-    .sort((a, b) => {
-      const ad = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-      const bd = b.dueDate ? new Date(b.dueDate).getTime() : 0;
-      return bd - ad;
-    })
-    .slice(0, 6);
 const invoiceYearRows = Object.values(invoiceByYear).sort((a, b) => {
   if (a.year === "No Year") return 1;
   if (b.year === "No Year") return -1;
@@ -1233,22 +1198,8 @@ const invoiceYearRows = Object.values(invoiceByYear).sort((a, b) => {
                 <div style={{width:46,height:46,borderRadius:12,background:T.greenDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🧾</div>
                 <div>
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>INVOICE FINANCIALS</div>
-                  <div style={{fontSize:13,color:T.textMuted}}>{invoiceCount} invoice{invoiceCount!==1?"s":""} for {selectedInvoiceYear === "All Years" ? "all years" : selectedInvoiceYear}</div>
+                  <div style={{fontSize:13,color:T.textMuted}}>{invoiceCount} invoice{invoiceCount!==1?"s":""} across all projects</div>
                 </div>
-              </div>
-
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".08em"}}>FILTER YEAR</div>
-                <select
-                  value={selectedInvoiceYear}
-                  onChange={e=>setSelectedInvoiceYear(e.target.value)}
-                  style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,color:T.text,outline:"none"}}
-                >
-                  <option value="All Years">All Years</option>
-                  {availableInvoiceYears.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
               </div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(30px,4vw,46px)",lineHeight:1,color:T.green,marginBottom:8}}>{formatSarCompact(totalInvoiced)}</div>
               <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>Total invoiced value</div>
@@ -1345,88 +1296,6 @@ const invoiceYearRows = Object.values(invoiceByYear).sort((a, b) => {
               </div>
             </div>
           )}
-
-          <div style={{marginTop:18,paddingTop:16,borderTop:`1px solid ${T.border}`,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14}}>
-            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
-                <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".08em"}}>INVOICES {selectedInvoiceYear === "All Years" ? "(ALL YEARS)" : `(${selectedInvoiceYear})`}</div>
-                <div style={{fontSize:11,color:T.textMuted}}>{filteredInvoiceDocs.length} total</div>
-              </div>
-              {recentInvoiceRows.length === 0 ? (
-                <div style={{fontSize:13,color:T.textMuted,padding:"10px 0"}}>No invoices found for this year.</div>
-              ) : (
-                <div style={{display:"grid",gap:8}}>
-                  {recentInvoiceRows.map((doc) => {
-                    const status = String(doc.paymentStatus || doc.status || "Pending");
-                    const remaining = getInvoiceRemainingAmount(doc);
-                    return (
-                      <div key={doc.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"10px 12px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:4}}>
-                          <div style={{fontSize:13,fontWeight:700,color:T.text,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.name || "Invoice"}</div>
-                          <div style={{fontSize:12,fontWeight:800,color:T.green,flexShrink:0}}>{formatSarCompact(doc.amount)}</div>
-                        </div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:8,fontSize:11,color:T.textMuted}}>
-                          <span>{doc.project || "No Project"}</span>
-                          <span>•</span>
-                          <span>Due: {fmtDate(doc.dueDate)}</span>
-                          <span>•</span>
-                          <span>Status: {status}</span>
-                          {status.toLowerCase() === "partial" && (
-                            <>
-                              <span>•</span>
-                              <span>Remaining: {formatSarCompact(remaining)}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
-                <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".08em"}}>PENDING PAYMENTS {selectedInvoiceYear === "All Years" ? "(ALL YEARS)" : `(${selectedInvoiceYear})`}</div>
-                <div style={{fontSize:11,color:T.textMuted}}>{pendingInvoiceRows.length} open</div>
-              </div>
-              {pendingInvoiceRows.length === 0 ? (
-                <div style={{fontSize:13,color:T.green,padding:"10px 0",fontWeight:700}}>No pending payments for this filter.</div>
-              ) : (
-                <div style={{display:"grid",gap:8}}>
-                  {pendingInvoiceRows.slice(0, 6).map((doc) => {
-                    const remaining = getInvoiceRemainingAmount(doc);
-                    const due = daysUntil(doc.dueDate);
-                    return (
-                      <div key={doc.id} style={{background:T.card,border:`1px solid ${due !== null && due < 0 ? T.red : T.border}`,borderRadius:12,padding:"10px 12px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:4}}>
-                          <div style={{fontSize:13,fontWeight:700,color:T.text,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.name || "Invoice"}</div>
-                          <div style={{fontSize:12,fontWeight:800,color:T.red,flexShrink:0}}>{formatSarCompact(remaining)}</div>
-                        </div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:8,fontSize:11,color:T.textMuted}}>
-                          <span>{doc.project || "No Project"}</span>
-                          <span>•</span>
-                          <span>Due: {fmtDate(doc.dueDate)}</span>
-                          {due !== null && due < 0 && (
-                            <>
-                              <span>•</span>
-                              <span style={{color:T.red,fontWeight:700}}>{Math.abs(due)}d overdue</span>
-                            </>
-                          )}
-                          {String(doc.paymentStatus || doc.status || "").toLowerCase() === "partial" && (
-                            <>
-                              <span>•</span>
-                              <span>Partial balance</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
@@ -1452,8 +1321,8 @@ const invoiceYearRows = Object.values(invoiceByYear).sort((a, b) => {
             color={T.teal}
             stats={[
               {label:"Total", value:(data.projectDocs || []).length},
-              {label:"Invoices", value:allInvoiceDocs.length},
-              {label:"Pending Inv", value:allInvoiceDocs.filter(d => String(d.paymentStatus || "Pending").toLowerCase() !== "paid" && String(d.paymentStatus || "Pending").toLowerCase() !== "received").length},
+              {label:"Invoices", value:invoiceDocs.length},
+              {label:"Pending Inv", value:invoiceDocs.filter(d => String(d.paymentStatus || "Pending").toLowerCase() !== "paid" && String(d.paymentStatus || "Pending").toLowerCase() !== "received").length},
               {label:"Job Certs", value:(data.projectDocs || []).filter(d => d.subTab === "certificates").length},
             ]}
             actionLabel="Open Project Docs →"
