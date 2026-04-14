@@ -1246,11 +1246,11 @@ const invoiceYearRows = Object.values(invoiceByYear).sort((a, b) => {
             </div>
           </div>
 
-          {invoiceYears.length > 0 && (
+          {invoiceYearRows.length > 0 && (
             <div style={{marginTop:18,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
               <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>INVOICE VALUE BY YEAR</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
-                {invoiceYears.map((row) => {
+                {invoiceYearRows.map((row) => {
                   const yearCollectedPct = row.total ? Math.round((row.collected / row.total) * 100) : 0;
                   return (
                     <div key={row.year} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}>
