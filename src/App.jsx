@@ -1905,36 +1905,102 @@ function SubTabBar({tabs,active,counts,onChange}) {
 }
 
 /* ── Invoice card ────────────────────────────────────────────────────────── */
-function InvoiceCard({doc,delay,onEdit,onDel}) {
+function InvoiceCard({ doc, delay, onEdit, onDel }) {
   const due = daysUntil(doc.dueDate);
-  const ds  = getStatus(due);
+  const paymentStatus = doc.paymentStatus || "Pending";
+  const isPaid = paymentStatus === "Paid";
+  const isPartial = paymentStatus === "Partial";
+
+  // Only show overdue / due-soon logic for unpaid or partial invoices
+  const showDueAlert = !isPaid && doc.dueDate && due !== null && due <= 30;
+  const dueStatus = isPaid
+    ? { color: T.green, bg: T.greenDim, label: "Paid" }
+    : getStatus(due);
+
   return (
-    <div className="fade-up" style={{background:T.card,border:`1px solid ${due!==null&&due<=30?ds.color+"44":T.border}`,borderLeft:"4px solid "+T.green,borderRadius:12,padding:"16px 18px",animationDelay:`${delay}s`,display:"flex",alignItems:"flex-start",gap:14}}>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
-          {doc.refNo&&<Tag color={T.green}>#{doc.refNo}</Tag>}
-          {doc.dueDate&&due!==null&&due<=30&&<Tag color={ds.color}>{due<0?`${Math.abs(due)}d overdue`:`Due in ${due}d`}</Tag>}
-        </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {doc.client&&<Chip>Client: {doc.client}</Chip>}
-          {doc.dueDate&&<Chip color={ds.color}>Due: {fmtDate(doc.dueDate)}</Chip>}
-          {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
-          {String(doc.paymentStatus || "").toLowerCase() === "partial" && (
-            <Chip color={T.gold}>Remaining: SAR {(parseFloat(doc.remainingAmount) || 0).toLocaleString()}</Chip>
+    <div
+      className="fade-up"
+      style={{
+        background: T.card,
+        border: `1px solid ${showDueAlert ? dueStatus.color + "44" : T.border}`,
+        borderLeft: `4px solid ${isPaid ? T.green : isPartial ? T.gold : T.green}`,
+        borderRadius: 12,
+        padding: "16px 18px",
+        animationDelay: `${delay}s`,
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 14,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontFamily: "'Barlow Condensed',sans-serif",
+              fontWeight: 800,
+              fontSize: "clamp(14px,1.1vw,17px)",
+              color: T.text,
+            }}
+          >
+            {doc.name}
+          </span>
+
+          {doc.refNo && <Tag color={T.green}>#{doc.refNo}</Tag>}
+
+          {showDueAlert && (
+            <Tag color={dueStatus.color}>
+              {due < 0 ? `${Math.abs(due)}d overdue` : `Due in ${due}d`}
+            </Tag>
           )}
-          {(()=>{
-            const ps = doc.paymentStatus || "Pending";
-            const c  = ps==="Paid" ? T.green : ps==="Partial" ? T.gold : T.red;
-            return <Tag color={c}>{ps==="Paid"?"✓ Paid":ps==="Partial"?"½ Partial":"⏳ Pending"}</Tag>;
-          })()}
-          {doc.fileLink&&<FileLink href={doc.fileLink}/>}
         </div>
-        {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {doc.client && <Chip>Client: {doc.client}</Chip>}
+
+          {doc.dueDate && (
+            <Chip color={isPaid ? T.green : dueStatus.color}>
+              Due: {fmtDate(doc.dueDate)}
+            </Chip>
+          )}
+
+          {doc.amount && (
+            <Chip color={T.green}>
+              SAR {Number(doc.amount).toLocaleString()}
+            </Chip>
+          )}
+
+          {(() => {
+            const c =
+              paymentStatus === "Paid"
+                ? T.green
+                : paymentStatus === "Partial"
+                ? T.gold
+                : T.red;
+
+            return (
+              <Tag color={c}>
+                {paymentStatus === "Paid"
+                  ? "✓ Paid"
+                  : paymentStatus === "Partial"
+                  ? "½ Partial"
+                  : "⏳ Pending"}
+              </Tag>
+            );
+          })()}
+
+          {doc.fileLink && <FileLink href={doc.fileLink} />}
+        </div>
+
+        {doc.notes && (
+          <div style={{ marginTop: 6, fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>
+            {doc.notes}
+          </div>
+        )}
       </div>
-      <div style={{display:"flex",gap:6,flexShrink:0}}>
+
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>
-        <ABtn color={T.red}  onClick={onDel}>✕</ABtn>
+        <ABtn color={T.red} onClick={onDel}>✕</ABtn>
       </div>
     </div>
   );
