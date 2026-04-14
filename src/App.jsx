@@ -1115,6 +1115,33 @@ function Dashboard({data,alerts,go}) {
     .sort((a,b) => b.total - a.total)
     .slice(0,4);
 
+  const invoiceYears = Object.values(
+    invoiceDocs.reduce((acc, doc) => {
+      const rawDate = doc.date || doc.invoiceDate || doc.issueDate || "";
+      const parsed = rawDate ? new Date(rawDate) : null;
+      const year = parsed && !isNaN(parsed) ? String(parsed.getFullYear()) : "No Year";
+      if (!acc[year]) {
+        acc[year] = {
+          year,
+          count: 0,
+          total: 0,
+          collected: 0,
+          remaining: 0,
+        };
+      }
+      acc[year].count += 1;
+      acc[year].total += parseFloat(doc.amount) || 0;
+      acc[year].collected += getInvoiceCollectedAmount(doc);
+      acc[year].remaining += getInvoiceRemainingAmount(doc);
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => {
+      if (a.year === "No Year") return 1;
+      if (b.year === "No Year") return -1;
+      return Number(b.year) - Number(a.year);
+    });
+
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
 
@@ -1207,6 +1234,34 @@ function Dashboard({data,alerts,go}) {
               </div>
             </div>
           </div>
+
+          {invoiceYears.length > 0 && (
+            <div style={{marginTop:18,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
+              <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>INVOICE VALUE BY YEAR</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+                {invoiceYears.map((row) => {
+                  const yearCollectedPct = row.total ? Math.round((row.collected / row.total) * 100) : 0;
+                  return (
+                    <div key={row.year} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:8,alignItems:"center"}}>
+                        <div style={{fontSize:15,fontWeight:800,color:T.text,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:".04em"}}>{row.year}</div>
+                        <div style={{fontSize:11,color:T.textMuted,flexShrink:0}}>{row.count} inv</div>
+                      </div>
+                      <div style={{fontSize:24,fontWeight:800,color:T.green,fontFamily:"'Barlow Condensed',sans-serif",lineHeight:1}}>{formatSarCompact(row.total)}</div>
+                      <div style={{height:6,background:T.border,borderRadius:999,overflow:"hidden",margin:"10px 0 8px"}}>
+                        <div style={{width:`${yearCollectedPct}%`,height:"100%",background:T.green,borderRadius:999}}/>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:12,marginBottom:5}}>
+                        <span style={{color:T.green,fontWeight:700}}>Collected {formatSarCompact(row.collected)}</span>
+                        <span style={{color:T.red,fontWeight:700}}>Remaining {formatSarCompact(row.remaining)}</span>
+                      </div>
+                      <div style={{fontSize:11,color:T.textMuted}}>{yearCollectedPct}% collected</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {invoiceProjects.length > 0 && (
             <div style={{marginTop:18,paddingTop:16,borderTop:`1px solid ${T.border}`}}>
