@@ -1115,32 +1115,43 @@ function Dashboard({data,alerts,go}) {
     .sort((a,b) => b.total - a.total)
     .slice(0,4);
 
-  const invoiceYears = Object.values(
-    invoiceDocs.reduce((acc, doc) => {
-      const rawDate = doc.date || doc.invoiceDate || doc.issueDate || "";
-      const parsed = rawDate ? new Date(rawDate) : null;
-      const year = parsed && !isNaN(parsed) ? String(parsed.getFullYear()) : "No Year";
-      if (!acc[year]) {
-        acc[year] = {
-          year,
-          count: 0,
-          total: 0,
-          collected: 0,
-          remaining: 0,
-        };
-      }
-      acc[year].count += 1;
-      acc[year].total += parseFloat(doc.amount) || 0;
-      acc[year].collected += getInvoiceCollectedAmount(doc);
-      acc[year].remaining += getInvoiceRemainingAmount(doc);
-      return acc;
-    }, {})
-  )
-    .sort((a, b) => {
-      if (a.year === "No Year") return 1;
-      if (b.year === "No Year") return -1;
-      return Number(b.year) - Number(a.year);
-    });
+  const invoiceByYear = invoiceDocs.reduce((acc, doc) => {
+  const year = doc.dueDate ? new Date(doc.dueDate).getFullYear() : "No Year";
+
+  if (!acc[year]) {
+    acc[year] = {
+      year,
+      total: 0,
+      collected: 0,
+      remaining: 0,
+      count: 0,
+    };
+  }
+
+  const amount = parseFloat(doc.amount) || 0;
+
+  const remaining =
+    doc.paymentStatus === "Paid"
+      ? 0
+      : doc.paymentStatus === "Partial"
+      ? Math.max(0, parseFloat(doc.remainingAmount) || 0)
+      : amount;
+
+  const collected = Math.max(0, amount - remaining);
+
+  acc[year].total += amount;
+  acc[year].collected += collected;
+  acc[year].remaining += remaining;
+  acc[year].count += 1;
+
+  return acc;
+}, {});
+
+const invoiceYearRows = Object.values(invoiceByYear).sort((a, b) => {
+  if (a.year === "No Year") return 1;
+  if (b.year === "No Year") return -1;
+  return Number(b.year) - Number(a.year);
+});
 
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
