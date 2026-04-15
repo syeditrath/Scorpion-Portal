@@ -99,13 +99,13 @@ const GLOBAL_CSS = `
   .search-match { background: rgba(251,191,36,0.3); border-radius:3px; }
 
   /* Mobile responsive */
-  @media (max-width:768px) {
-    .hide-mobile { display:none !important; }
-    .mobile-full { width:100% !important; }
-  }
-  @media (min-width:769px) {
-    .show-mobile-only { display:none !important; }
-  }
+  @media (max-width:1200px) {
+  .hide-mobile { display:none !important; }
+  .mobile-full { width:100% !important; }
+}
+@media (min-width:1201px) {
+  .show-mobile-only { display:none !important; }
+}
 
   /* Export button pulse */
   @keyframes exportPulse { 0%,100%{opacity:1;}50%{opacity:0.6;} }
@@ -818,7 +818,27 @@ export default function App() {
         {/* ── Top bar ── */}
         <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:"0 20px",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
           <div style={{display:"flex",alignItems:"center",height:56,position:"relative"}}>
-            <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
+            {window.innerWidth < 1200 && (
+  <button
+    onClick={() => setSideOpen(true)}
+    style={{
+      background:"rgba(255,255,255,0.08)",
+      border:"1px solid rgba(255,255,255,0.15)",
+      color:"#ffffff",
+      borderRadius:8,
+      width:40,
+      height:40,
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"center",
+      fontSize:18,
+      flexShrink:0,
+      zIndex:1
+    }}
+  >
+    ☰
+  </button>
+)}
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"2px",color:"#f59e0b",textTransform:"uppercase"}}>SCORPION ARABIA</div>
               <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
@@ -883,7 +903,7 @@ export default function App() {
    SIDEBAR
 ════════════════════════════════════════════════════════════════════════════ */
 function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggleDark,onLogout}) {
-  const isMobile = window.innerWidth < 900;
+  const isMobile = window.innerWidth < 1200;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
