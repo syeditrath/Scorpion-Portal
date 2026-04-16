@@ -251,9 +251,26 @@ const DEFAULT_MANPOWER_CATS = [
 // Expected columns: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
 // (flexible - tries multiple common header names)
 const MP_CERT_MAP = {
-  // Exact headers from TUV_Manpower_Tracker.xlsx (headers on row 4)
-  "NAME":"name","EMPLOYEE NAME":"name","EMPLOYEE":"name",
+  // Flexible manpower import map: identity fields + optional certification fields
+  "NAME":"name","EMPLOYEE NAME":"name","EMPLOYEE":"name","FULL NAME":"name",
   "ID":"idNo","EMPLOYEE ID":"idNo","EMPLOYEE NO":"idNo","EMP ID":"idNo","EMP NO":"idNo","ID NO":"idNo","ID NUMBER":"idNo","STAFF ID":"idNo",
+  "CATEGORY":"category","GROUP":"category",
+  "PROJECT":"project","PROJECT NAME":"project",
+  "NATIONALITY":"nationality",
+  "DESIGNATION":"designation","POSITION":"designation","JOB TITLE":"designation",
+
+  "PASSPORT NO":"passportNo","PASSPORT NUMBER":"passportNo","PASSPORT":"passportNo",
+  "PASSPORT EXPIRY":"passportExpiry","PASSPORT EXP DATE":"passportExpiry","PASSPORT EXPIRY DATE":"passportExpiry",
+
+  "VISA NO":"visaNo","VISA NUMBER":"visaNo","VISA":"visaNo",
+  "VISA EXPIRY":"visaExpiry","VISA EXP DATE":"visaExpiry","VISA EXPIRY DATE":"visaExpiry",
+
+  "IQAMA NO":"iqamaNo","IQAMA NUMBER":"iqamaNo","IQAMA":"iqamaNo",
+  "IQAMA EXPIRY":"iqamaExpiry","IQAMA EXP DATE":"iqamaExpiry","IQAMA EXPIRY DATE":"iqamaExpiry",
+
+  "MUQEEM NO":"muqeemNo","MUQEEM NUMBER":"muqeemNo","MUQEEM":"muqeemNo",
+  "MUQEEM EXPIRY":"muqeemExpiry","MUQEEM EXP DATE":"muqeemExpiry","MUQEEM EXPIRY DATE":"muqeemExpiry",
+
   "CERTIFICATE":"certName","CERTIFICATE TYPE":"certName","CERT TYPE":"certName","CERTIFICATION":"certName",
   "ISSUED BY":"issuedBy","ISSUING BODY":"issuedBy","ISSUING AUTHORITY":"issuedBy",
   "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NO.":"certNo","CERTIFICATE NUMBER":"certNo",
@@ -414,7 +431,7 @@ function isAuthenticated() {
 const EMPTY_DATA = {
   scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLink, notes }
   manpowerCats: DEFAULT_MANPOWER_CATS,
-  manpower: [],       // { id, category, name, project, idNo, nationality, designation,
+  manpower: [],       // { id, category, name, idNo, nationality, designation,
                       //   passportNo, passportExpiry, visaNo, visaExpiry,
                       //   iqamaNo, iqamaExpiry, muqeemNo, muqeemExpiry,
                       //   certs: [{id,name,certNo,issueDate,expiryDate,fileLink}],
@@ -2313,7 +2330,6 @@ function ManpowerPage({data,setData,showToast}) {
 
   const people  = data.manpower || [];
   const cats    = data.manpowerCats || DEFAULT_MANPOWER_CATS;
-  const projects = data.projects || [];
   const visible = selCat==="All" ? people : people.filter(p=>p.category===selCat);
 
   const savePerson = (p,mode) => {
@@ -2355,46 +2371,115 @@ function ManpowerPage({data,setData,showToast}) {
     setPerson(updated);
   };
 
-  // Import manpower certifications from Excel
-  // Each row: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
-  // Finds matching person by name and appends certs; creates person if not found
+  // Import manpower master data + optional certifications from Excel
   const importMpCerts = (file, defaultCat) => {
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        // Headers are on row 4 in TUV_Manpower_Tracker.xlsx
-        const parsed=parseExcelWithHeaderRow(e.target.result, MP_CERT_MAP, MP_HEADER_ROW);
-        if(!parsed.length){showToast("No valid rows found","del");return;}
+        const parsed = parseExcelWithHeaderRow(e.target.result, MP_CERT_MAP, MP_HEADER_ROW);
+        if (!parsed.length) { showToast("No valid rows found", "del"); return; }
 
-        setData(prev=>{
-          const manpower=[...prev.manpower];
-          let added=0, updated=0;
-          parsed.forEach(row=>{
-            const personName=(row.name||"").trim();
-            if(!personName) return;
-            const certName=row.certName||"Certification";
-            const cert={id:uid(),name:certName,certNo:row.certNo||"",issueDate:row.issueDate||"",expiryDate:row.expiryDate||"",issuedBy:row.issuedBy||"",fileLink:""};
-            const idx=manpower.findIndex(p=>p.name.toLowerCase()===personName.toLowerCase());
-            if(idx>=0){
-              if(row.idNo&&!manpower[idx].idNo) manpower[idx]={...manpower[idx],idNo:row.idNo};
-              // Skip duplicate: same cert name + same expiry date already exists
-              const alreadyExists=(manpower[idx].certs||[]).some(c=>
-                c.name.toLowerCase()===certName.toLowerCase()&&c.expiryDate===cert.expiryDate
-              );
-              if(!alreadyExists){
-                manpower[idx]={...manpower[idx],certs:[...(manpower[idx].certs||[]),cert]};
-                updated++;
+        setData(prev => {
+          const manpower = [...prev.manpower];
+          let added = 0;
+          let updated = 0;
+          let certsAdded = 0;
+
+          const mergeImportedFields = (base, row) => ({
+            ...base,
+            name: row.name || base.name || "",
+            idNo: row.idNo || base.idNo || "",
+            category: row.category || base.category || defaultCat || "",
+            project: row.project || base.project || "",
+            nationality: row.nationality || base.nationality || "",
+            designation: row.designation || base.designation || "",
+            passportNo: row.passportNo || base.passportNo || "",
+            passportExpiry: row.passportExpiry || base.passportExpiry || "",
+            visaNo: row.visaNo || base.visaNo || "",
+            visaExpiry: row.visaExpiry || base.visaExpiry || "",
+            iqamaNo: row.iqamaNo || base.iqamaNo || "",
+            iqamaExpiry: row.iqamaExpiry || base.iqamaExpiry || "",
+            muqeemNo: row.muqeemNo || base.muqeemNo || "",
+            muqeemExpiry: row.muqeemExpiry || base.muqeemExpiry || "",
+            certs: base.certs || [],
+            docs: base.docs || [],
+          });
+
+          parsed.forEach(row => {
+            const personName = (row.name || "").trim();
+            const personIdNo = (row.idNo || "").trim();
+            if (!personName && !personIdNo) return;
+
+            const idx = manpower.findIndex(p => {
+              const sameId = personIdNo && (p.idNo || "").trim().toLowerCase() === personIdNo.toLowerCase();
+              const sameName = personName && (p.name || "").trim().toLowerCase() === personName.toLowerCase();
+              return sameId || sameName;
+            });
+
+            const hasCertData = Boolean(
+              row.certName || row.certNo || row.issueDate || row.expiryDate || row.issuedBy
+            );
+
+            let cert = null;
+            if (hasCertData) {
+              cert = {
+                id: uid(),
+                name: row.certName || "Certification",
+                certNo: row.certNo || "",
+                issueDate: row.issueDate || "",
+                expiryDate: row.expiryDate || "",
+                issuedBy: row.issuedBy || "",
+                fileLink: "",
+              };
+            }
+
+            if (idx >= 0) {
+              let nextPerson = mergeImportedFields(manpower[idx], row);
+              if (cert) {
+                const alreadyExists = (nextPerson.certs || []).some(c =>
+                  (c.name || "").toLowerCase() === (cert.name || "").toLowerCase() &&
+                  (c.certNo || "") === cert.certNo &&
+                  (c.expiryDate || "") === cert.expiryDate
+                );
+                if (!alreadyExists) {
+                  nextPerson = { ...nextPerson, certs: [...(nextPerson.certs || []), cert] };
+                  certsAdded++;
+                }
               }
+              manpower[idx] = nextPerson;
+              updated++;
             } else {
-              manpower.push({id:uid(),name:personName,idNo:row.idNo||"",category:defaultCat||"",project:"",certs:[cert],docs:[]});
+              manpower.push({
+                id: uid(),
+                name: personName || "Unnamed",
+                idNo: personIdNo || "",
+                category: row.category || defaultCat || "",
+                project: row.project || "",
+                nationality: row.nationality || "",
+                designation: row.designation || "",
+                passportNo: row.passportNo || "",
+                passportExpiry: row.passportExpiry || "",
+                visaNo: row.visaNo || "",
+                visaExpiry: row.visaExpiry || "",
+                iqamaNo: row.iqamaNo || "",
+                iqamaExpiry: row.iqamaExpiry || "",
+                muqeemNo: row.muqeemNo || "",
+                muqeemExpiry: row.muqeemExpiry || "",
+                certs: cert ? [cert] : [],
+                docs: [],
+              });
+              if (cert) certsAdded++;
               added++;
             }
           });
-          showToast(`✓ ${parsed.length} certs imported (${added} new people, ${updated} updated)`);
-          return{...prev,manpower};
+
+          showToast(`✓ ${parsed.length} rows imported (${added} new people, ${updated} updated, ${certsAdded} certs added)`);
+          return { ...prev, manpower };
         });
         setImpModal(false);
-      } catch(err){ showToast("Failed to read Excel file","del"); }
+      } catch (err) {
+        showToast("Failed to read Excel file", "del");
+      }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -2405,7 +2490,7 @@ function ManpowerPage({data,setData,showToast}) {
     <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
       {/* Show PersonDetail when a person is selected */}
       {personFresh && (
-        <PersonDetail person={personFresh} cats={cats} projects={projects}
+        <PersonDetail person={personFresh} cats={cats}
           onBack={()=>setPerson(null)}
           onUpdate={updatePerson}
           onDelete={()=>delPerson(personFresh.id)}
@@ -2417,7 +2502,7 @@ function ManpowerPage({data,setData,showToast}) {
       <PageHeader title="MANPOWER" sub="Staff profiles, documents & certifications" color={T.green}>
         <Btn color={T.green} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
         <Btn color={T.gold}  onClick={()=>setImpModal(true)}>⬆ Import Excel</Btn>
-        <ExportBtn data={people.map(p=>({Name:p.name,ID:p.idNo,Category:p.category,Designation:p.designation,Nationality:p.nationality,"Project":p.project,"Passport No":p.passportNo,"Passport Expiry":p.passportExpiry,"Visa No":p.visaNo,"Visa Expiry":p.visaExpiry,"Iqama No":p.iqamaNo,"Iqama Expiry":p.iqamaExpiry,"Muqeem No":p.muqeemNo,"Muqeem Expiry":p.muqeemExpiry}))} filename="Manpower_List"/>
+        <ExportBtn data={people.map(p=>({Name:p.name,ID:p.idNo,Category:p.category,Designation:p.designation,Nationality:p.nationality,"Passport No":p.passportNo,"Passport Expiry":p.passportExpiry,"Visa No":p.visaNo,"Visa Expiry":p.visaExpiry,"Iqama No":p.iqamaNo,"Iqama Expiry":p.iqamaExpiry,"Muqeem No":p.muqeemNo,"Muqeem Expiry":p.muqeemExpiry}))} filename="Manpower_List"/>
         <Btn color={T.green} solid onClick={()=>setAddModal({mode:"add"})}>+ Add Person</Btn>
       </PageHeader>
 
@@ -2425,7 +2510,7 @@ function ManpowerPage({data,setData,showToast}) {
       <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
-          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, CERTIFICATE, ISSUED BY, ISSUE DATE, EXPIRY DATE</strong> (headers auto-detected from row 4) — matches people by name, creates new if not found</div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, PASSPORT NO, PASSPORT EXPIRY, VISA NO, VISA EXPIRY, IQAMA NO, IQAMA EXPIRY, MUQEEM NO, MUQEEM EXPIRY</strong> + optional certification columns. Headers are auto-detected from row 4.</div>
         </div>
         <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
         <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
@@ -2453,10 +2538,7 @@ function ManpowerPage({data,setData,showToast}) {
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=critical>0?T.gold:T.border;e.currentTarget.style.transform="none";}}>
                 <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
                   <div>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.name}</div>
-                      {p.project&&<Tag color={T.blue}>{p.project}</Tag>}
-                    </div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.name}</div>
                     <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.designation||"—"} · {p.nationality||""}</div>
                   </div>
                   {critical>0&&<span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"2px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>{critical} alerts</span>}
@@ -2490,7 +2572,7 @@ function ManpowerPage({data,setData,showToast}) {
         </div>
       }
 
-      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats} projects={projects}
+      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats}
         onClose={()=>{
           setAddModal(false);
           if(editingFrom){setPerson(editingFrom);setEditingFrom(null);}
@@ -2520,7 +2602,7 @@ function MpImportModal({file,cats,onClose,onImport}) {
           </select>
         </div>
         <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:10,padding:"12px 14px",marginBottom:18,fontSize:12,color:T.blue}}>
-          ℹ Existing people are matched by name. New certs are <strong>added</strong> to their profile — existing certs are not deleted.
+          ℹ Existing people are matched by <strong>ID first</strong>, then by name. Identity fields are updated if present, and new certs are <strong>added</strong> without deleting existing certs.
         </div>
         <div style={{display:"flex",gap:10}}>
           <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px",fontSize:13,fontWeight:600}}>Cancel</button>
@@ -2532,7 +2614,7 @@ function MpImportModal({file,cats,onClose,onImport}) {
 }
 
 /* ─── Person Detail view ─────────────────────────────────────────────────── */
-function PersonDetail({person,cats,projects,onBack,onUpdate,onDelete,onEdit,showToast}) {
+function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
   const [certModal, setCertModal] = useState(null);
   const [activeTab, setActiveTab] = useState("profile");
 
@@ -2557,7 +2639,7 @@ function PersonDetail({person,cats,projects,onBack,onUpdate,onDelete,onEdit,show
 
   const PROFILE_ROWS=[
     ["Full Name",person.name],["ID No.",person.idNo],["Nationality",person.nationality],
-    ["Designation",person.designation],["Category",person.category],["Project",person.project],
+    ["Designation",person.designation],["Category",person.category],
     ["Passport No.",person.passportNo],["Passport Expiry",fmtDate(person.passportExpiry)],
     ["Visa No.",person.visaNo],["Visa Expiry",fmtDate(person.visaExpiry)],
     ["Iqama No.",person.iqamaNo],["Iqama Expiry",fmtDate(person.iqamaExpiry)],
@@ -2570,7 +2652,7 @@ function PersonDetail({person,cats,projects,onBack,onUpdate,onDelete,onEdit,show
         <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>← Back</button>
         <div style={{flex:1}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{person.name}</div>
-          <div style={{fontSize:12,color:T.textMuted}}>{person.designation} · {person.category}{person.project?` · ${person.project}`:""}</div>
+          <div style={{fontSize:12,color:T.textMuted}}>{person.designation} · {person.category}</div>
         </div>
         <Btn color={T.blue}  onClick={onEdit}>✎ Edit</Btn>
         <Btn color={T.red}   onClick={()=>{ if(window.confirm("Delete this person?")) onDelete(); }}>✕ Delete</Btn>
@@ -2657,7 +2739,7 @@ function PersonDetail({person,cats,projects,onBack,onUpdate,onDelete,onEdit,show
   );
 }
 
-function PersonModal({mode,person,cats,projects,onClose,onSave}) {
+function PersonModal({mode,person,cats,onClose,onSave}) {
   const [f,setF]=useState(person||{});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
   return (
@@ -2668,12 +2750,6 @@ function PersonModal({mode,person,cats,projects,onClose,onSave}) {
         <FSelect value={f.category||""} onChange={set("category")} color={T.green}>
           <option value="">Select…</option>
           {cats.map(c=><option key={c} value={c}>{c}</option>)}
-        </FSelect>
-      </FieldRow>
-      <FieldRow label="Project">
-        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
-          <option value="">Select project…</option>
-          {(projects||[]).map(p=><option key={p} value={p}>{p}</option>)}
         </FSelect>
       </FieldRow>
       <FieldRow label="ID No."><FInput value={f.idNo||""} onChange={set("idNo")} color={T.green}/></FieldRow>
