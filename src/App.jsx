@@ -414,7 +414,7 @@ function isAuthenticated() {
 const EMPTY_DATA = {
   scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLink, notes }
   manpowerCats: DEFAULT_MANPOWER_CATS,
-  manpower: [],       // { id, category, name, idNo, nationality, designation,
+  manpower: [],       // { id, category, name, project, idNo, nationality, designation,
                       //   passportNo, passportExpiry, visaNo, visaExpiry,
                       //   iqamaNo, iqamaExpiry, muqeemNo, muqeemExpiry,
                       //   certs: [{id,name,certNo,issueDate,expiryDate,fileLink}],
@@ -2313,6 +2313,7 @@ function ManpowerPage({data,setData,showToast}) {
 
   const people  = data.manpower || [];
   const cats    = data.manpowerCats || DEFAULT_MANPOWER_CATS;
+  const projects = data.projects || [];
   const visible = selCat==="All" ? people : people.filter(p=>p.category===selCat);
 
   const savePerson = (p,mode) => {
@@ -2385,7 +2386,7 @@ function ManpowerPage({data,setData,showToast}) {
                 updated++;
               }
             } else {
-              manpower.push({id:uid(),name:personName,idNo:row.idNo||"",category:defaultCat||"",certs:[cert],docs:[]});
+              manpower.push({id:uid(),name:personName,idNo:row.idNo||"",category:defaultCat||"",project:"",certs:[cert],docs:[]});
               added++;
             }
           });
@@ -2404,7 +2405,7 @@ function ManpowerPage({data,setData,showToast}) {
     <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
       {/* Show PersonDetail when a person is selected */}
       {personFresh && (
-        <PersonDetail person={personFresh} cats={cats}
+        <PersonDetail person={personFresh} cats={cats} projects={projects}
           onBack={()=>setPerson(null)}
           onUpdate={updatePerson}
           onDelete={()=>delPerson(personFresh.id)}
@@ -2416,7 +2417,7 @@ function ManpowerPage({data,setData,showToast}) {
       <PageHeader title="MANPOWER" sub="Staff profiles, documents & certifications" color={T.green}>
         <Btn color={T.green} onClick={()=>setCatModal(true)}>⊕ Categories</Btn>
         <Btn color={T.gold}  onClick={()=>setImpModal(true)}>⬆ Import Excel</Btn>
-        <ExportBtn data={people.map(p=>({Name:p.name,ID:p.idNo,Category:p.category,Designation:p.designation,Nationality:p.nationality,"Passport No":p.passportNo,"Passport Expiry":p.passportExpiry,"Visa No":p.visaNo,"Visa Expiry":p.visaExpiry,"Iqama No":p.iqamaNo,"Iqama Expiry":p.iqamaExpiry,"Muqeem No":p.muqeemNo,"Muqeem Expiry":p.muqeemExpiry}))} filename="Manpower_List"/>
+        <ExportBtn data={people.map(p=>({Name:p.name,ID:p.idNo,Category:p.category,Designation:p.designation,Nationality:p.nationality,"Project":p.project,"Passport No":p.passportNo,"Passport Expiry":p.passportExpiry,"Visa No":p.visaNo,"Visa Expiry":p.visaExpiry,"Iqama No":p.iqamaNo,"Iqama Expiry":p.iqamaExpiry,"Muqeem No":p.muqeemNo,"Muqeem Expiry":p.muqeemExpiry}))} filename="Manpower_List"/>
         <Btn color={T.green} solid onClick={()=>setAddModal({mode:"add"})}>+ Add Person</Btn>
       </PageHeader>
 
@@ -2452,7 +2453,10 @@ function ManpowerPage({data,setData,showToast}) {
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=critical>0?T.gold:T.border;e.currentTarget.style.transform="none";}}>
                 <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
                   <div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.name}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.name}</div>
+                      {p.project&&<Tag color={T.blue}>{p.project}</Tag>}
+                    </div>
                     <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.designation||"—"} · {p.nationality||""}</div>
                   </div>
                   {critical>0&&<span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"2px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>{critical} alerts</span>}
@@ -2486,7 +2490,7 @@ function ManpowerPage({data,setData,showToast}) {
         </div>
       }
 
-      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats}
+      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats} projects={projects}
         onClose={()=>{
           setAddModal(false);
           if(editingFrom){setPerson(editingFrom);setEditingFrom(null);}
@@ -2528,7 +2532,7 @@ function MpImportModal({file,cats,onClose,onImport}) {
 }
 
 /* ─── Person Detail view ─────────────────────────────────────────────────── */
-function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
+function PersonDetail({person,cats,projects,onBack,onUpdate,onDelete,onEdit,showToast}) {
   const [certModal, setCertModal] = useState(null);
   const [activeTab, setActiveTab] = useState("profile");
 
@@ -2553,7 +2557,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
 
   const PROFILE_ROWS=[
     ["Full Name",person.name],["ID No.",person.idNo],["Nationality",person.nationality],
-    ["Designation",person.designation],["Category",person.category],
+    ["Designation",person.designation],["Category",person.category],["Project",person.project],
     ["Passport No.",person.passportNo],["Passport Expiry",fmtDate(person.passportExpiry)],
     ["Visa No.",person.visaNo],["Visa Expiry",fmtDate(person.visaExpiry)],
     ["Iqama No.",person.iqamaNo],["Iqama Expiry",fmtDate(person.iqamaExpiry)],
@@ -2566,7 +2570,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
         <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>← Back</button>
         <div style={{flex:1}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{person.name}</div>
-          <div style={{fontSize:12,color:T.textMuted}}>{person.designation} · {person.category}</div>
+          <div style={{fontSize:12,color:T.textMuted}}>{person.designation} · {person.category}{person.project?` · ${person.project}`:""}</div>
         </div>
         <Btn color={T.blue}  onClick={onEdit}>✎ Edit</Btn>
         <Btn color={T.red}   onClick={()=>{ if(window.confirm("Delete this person?")) onDelete(); }}>✕ Delete</Btn>
@@ -2653,7 +2657,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
   );
 }
 
-function PersonModal({mode,person,cats,onClose,onSave}) {
+function PersonModal({mode,person,cats,projects,onClose,onSave}) {
   const [f,setF]=useState(person||{});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
   return (
@@ -2664,6 +2668,12 @@ function PersonModal({mode,person,cats,onClose,onSave}) {
         <FSelect value={f.category||""} onChange={set("category")} color={T.green}>
           <option value="">Select…</option>
           {cats.map(c=><option key={c} value={c}>{c}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Project">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
+          <option value="">Select project…</option>
+          {(projects||[]).map(p=><option key={p} value={p}>{p}</option>)}
         </FSelect>
       </FieldRow>
       <FieldRow label="ID No."><FInput value={f.idNo||""} onChange={set("idNo")} color={T.green}/></FieldRow>
