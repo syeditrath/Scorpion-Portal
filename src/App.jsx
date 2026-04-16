@@ -197,6 +197,19 @@ function getInvoiceCollectedAmount(doc) {
   const total = parseFloat(doc?.amount) || 0;
   return Math.max(0, total - getInvoiceRemainingAmount(doc));
 }
+
+function getInvoiceStream(doc) {
+  const explicit = String(doc?.invoiceType || "").trim().toLowerCase();
+  if (explicit === "advance") return "advance";
+  if (explicit === "income") return "income";
+
+  const raw = [doc?.type, doc?.category, doc?.kind, doc?.notes, doc?.name, doc?.refNo]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return /advance|mobilization|mobilisation/.test(raw) ? 'advance' : 'income';
+}
 /* ─── Active theme (module-level, updated by App) ───────────────────────── */
 let T = LIGHT; // default to light, App.setTheme() updates this
 function setTheme(dark) { T = dark ? DARK : LIGHT; }
@@ -251,26 +264,9 @@ const DEFAULT_MANPOWER_CATS = [
 // Expected columns: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
 // (flexible - tries multiple common header names)
 const MP_CERT_MAP = {
-  // Flexible manpower import map: identity fields + optional certification fields
-  "NAME":"name","EMPLOYEE NAME":"name","EMPLOYEE":"name","FULL NAME":"name",
+  // Exact headers from TUV_Manpower_Tracker.xlsx (headers on row 4)
+  "NAME":"name","EMPLOYEE NAME":"name","EMPLOYEE":"name",
   "ID":"idNo","EMPLOYEE ID":"idNo","EMPLOYEE NO":"idNo","EMP ID":"idNo","EMP NO":"idNo","ID NO":"idNo","ID NUMBER":"idNo","STAFF ID":"idNo",
-  "CATEGORY":"category","GROUP":"category",
-  "PROJECT":"project","PROJECT NAME":"project",
-  "NATIONALITY":"nationality",
-  "DESIGNATION":"designation","POSITION":"designation","JOB TITLE":"designation",
-
-  "PASSPORT NO":"passportNo","PASSPORT NUMBER":"passportNo","PASSPORT":"passportNo",
-  "PASSPORT EXPIRY":"passportExpiry","PASSPORT EXP DATE":"passportExpiry","PASSPORT EXPIRY DATE":"passportExpiry",
-
-  "VISA NO":"visaNo","VISA NUMBER":"visaNo","VISA":"visaNo",
-  "VISA EXPIRY":"visaExpiry","VISA EXP DATE":"visaExpiry","VISA EXPIRY DATE":"visaExpiry",
-
-  "IQAMA NO":"iqamaNo","IQAMA NUMBER":"iqamaNo","IQAMA":"iqamaNo",
-  "IQAMA EXPIRY":"iqamaExpiry","IQAMA EXP DATE":"iqamaExpiry","IQAMA EXPIRY DATE":"iqamaExpiry",
-
-  "MUQEEM NO":"muqeemNo","MUQEEM NUMBER":"muqeemNo","MUQEEM":"muqeemNo",
-  "MUQEEM EXPIRY":"muqeemExpiry","MUQEEM EXP DATE":"muqeemExpiry","MUQEEM EXPIRY DATE":"muqeemExpiry",
-
   "CERTIFICATE":"certName","CERTIFICATE TYPE":"certName","CERT TYPE":"certName","CERTIFICATION":"certName",
   "ISSUED BY":"issuedBy","ISSUING BODY":"issuedBy","ISSUING AUTHORITY":"issuedBy",
   "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NO.":"certNo","CERTIFICATE NUMBER":"certNo",
@@ -1142,6 +1138,18 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
     0
   );
 
+  const incomeInvoicesForYear = filteredInvoiceDocs.filter((doc) => getInvoiceStream(doc) === "income");
+  const advanceInvoicesForYear = filteredInvoiceDocs.filter((doc) => getInvoiceStream(doc) === "advance");
+
+  const incomeInvoicedForYear = incomeInvoicesForYear.reduce((sum, doc) => sum + (parseFloat(doc.amount) || 0), 0);
+  const advanceInvoicedForYear = advanceInvoicesForYear.reduce((sum, doc) => sum + (parseFloat(doc.amount) || 0), 0);
+
+  const receivedFromIncomeForYear = incomeInvoicesForYear.reduce((sum, doc) => sum + getInvoiceCollectedAmount(doc), 0);
+  const receivedFromAdvanceForYear = advanceInvoicesForYear.reduce((sum, doc) => sum + getInvoiceCollectedAmount(doc), 0);
+
+  const dueFromIncomeForYear = incomeInvoicesForYear.reduce((sum, doc) => sum + getInvoiceRemainingAmount(doc), 0);
+  const dueFromAdvanceForYear = advanceInvoicesForYear.reduce((sum, doc) => sum + getInvoiceRemainingAmount(doc), 0);
+
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
 
@@ -1214,7 +1222,7 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
             </select>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16,marginTop:22}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,marginTop:22}}>
             <InvoiceMetricCard
               title="TOTAL INVOICE VALUE"
               amount={formatSarCompact(totalInvoiceValueForYear)}
@@ -1222,7 +1230,21 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
                 ? `Across ${filteredInvoiceDocs.length} invoices`
                 : `For ${selectedInvoiceYear} across ${filteredInvoiceDocs.length} invoices`}
               color={T.green}
-              onClick={() => setInvoiceDetailView("all")}
+              onClick={() => setInvoiceDetailView({ mode: "all", stream: "all" })}
+              miniCards={[
+                {
+                  title: "INCOME INVOICED",
+                  amount: formatSarCompact(incomeInvoicedForYear),
+                  color: T.green,
+                  onClick: () => setInvoiceDetailView({ mode: "all", stream: "income" }),
+                },
+                {
+                  title: "ADVANCE INVOICED",
+                  amount: formatSarCompact(advanceInvoicedForYear),
+                  color: T.gold,
+                  onClick: () => setInvoiceDetailView({ mode: "all", stream: "advance" }),
+                },
+              ]}
             />
             <InvoiceMetricCard
               title="AMOUNT RECEIVED"
@@ -1231,7 +1253,21 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
                 ? "Collected across all visible invoices"
                 : `Collected for ${selectedInvoiceYear}`}
               color={T.blue}
-              onClick={() => setInvoiceDetailView("received")}
+              onClick={() => setInvoiceDetailView({ mode: "received", stream: "all" })}
+              miniCards={[
+                {
+                  title: "RECEIVED FROM INCOME",
+                  amount: formatSarCompact(receivedFromIncomeForYear),
+                  color: T.blue,
+                  onClick: () => setInvoiceDetailView({ mode: "received", stream: "income" }),
+                },
+                {
+                  title: "RECEIVED FROM ADVANCE",
+                  amount: formatSarCompact(receivedFromAdvanceForYear),
+                  color: T.teal,
+                  onClick: () => setInvoiceDetailView({ mode: "received", stream: "advance" }),
+                },
+              ]}
             />
             <InvoiceMetricCard
               title="AMOUNT DUE"
@@ -1240,7 +1276,21 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
                 ? "Pending and partial balances"
                 : `Outstanding for ${selectedInvoiceYear}`}
               color={T.red}
-              onClick={() => setInvoiceDetailView("due")}
+              onClick={() => setInvoiceDetailView({ mode: "due", stream: "all" })}
+              miniCards={[
+                {
+                  title: "DUE FROM INCOME",
+                  amount: formatSarCompact(dueFromIncomeForYear),
+                  color: T.red,
+                  onClick: () => setInvoiceDetailView({ mode: "due", stream: "income" }),
+                },
+                {
+                  title: "DUE FROM ADVANCE",
+                  amount: formatSarCompact(dueFromAdvanceForYear),
+                  color: T.orange,
+                  onClick: () => setInvoiceDetailView({ mode: "due", stream: "advance" }),
+                },
+              ]}
             />
           </div>
         </div>
@@ -1412,37 +1462,83 @@ function DashboardMiniCard({ title, sub, icon, color, stats, actionLabel, onClic
   );
 }
 
-function InvoiceMetricCard({ title, amount, sub, color, onClick }) {
+function InvoiceMetricCard({ title, amount, sub, color, onClick, miniCards = [] }) {
   return (
-    <button
-      onClick={onClick}
+    <div
       className="card-hover"
       style={{
         background:T.bg,
         border:`1px solid ${T.border}`,
         borderRadius:16,
         padding:"18px 18px 16px",
-        textAlign:"left",
-        cursor:"pointer",
       }}
     >
-      <div style={{fontSize:12,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>{title}</div>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(28px,4vw,44px)",color,lineHeight:1}}>{amount}</div>
-      <div style={{fontSize:13,color:T.textMuted,marginTop:10}}>{sub}</div>
-      <div style={{fontSize:12,color:color,marginTop:10,fontWeight:700}}>Click to view details →</div>
-    </button>
+      <button
+        onClick={onClick}
+        style={{
+          background:"transparent",
+          border:"none",
+          padding:0,
+          margin:0,
+          width:"100%",
+          textAlign:"left",
+          cursor:"pointer",
+        }}
+      >
+        <div style={{fontSize:12,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>{title}</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(28px,4vw,44px)",color,lineHeight:1}}>{amount}</div>
+        <div style={{fontSize:13,color:T.textMuted,marginTop:10}}>{sub}</div>
+        <div style={{fontSize:12,color:color,marginTop:10,fontWeight:700}}>Click to view details →</div>
+      </button>
+
+      {miniCards.length > 0 && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:14}}>
+          {miniCards.map((card) => (
+            <button
+              key={card.title}
+              onClick={card.onClick}
+              style={{
+                background:"rgba(255,255,255,0.02)",
+                border:`1px solid ${card.color}44`,
+                borderRadius:12,
+                padding:"12px 12px 10px",
+                textAlign:"left",
+                cursor:"pointer",
+              }}
+            >
+              <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".06em",lineHeight:1.3}}>{card.title}</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:card.color,marginTop:8,lineHeight:1}}>{card.amount}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
 function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
-  const normalizedView = view === "received" ? "received" : view === "due" ? "due" : "all";
+  const rawMode = typeof view === "string" ? view : view?.mode;
+  const rawStream = typeof view === "object" && view?.stream ? view.stream : "all";
+  const normalizedView = rawMode === "received" ? "received" : rawMode === "due" ? "due" : "all";
+  const normalizedStream = rawStream === "income" ? "income" : rawStream === "advance" ? "advance" : "all";
+
+  const streamLabel = normalizedStream === "income"
+    ? "Income"
+    : normalizedStream === "advance"
+    ? "Advance"
+    : "All";
+
   const title = normalizedView === "received"
-    ? "Amount Received Details"
+    ? normalizedStream === "all" ? "Amount Received Details" : `Received from ${streamLabel} Details`
     : normalizedView === "due"
-    ? "Amount Due Details"
-    : "Invoice Details";
+    ? normalizedStream === "all" ? "Amount Due Details" : `Due from ${streamLabel} Details`
+    : normalizedStream === "all"
+    ? "Invoice Details"
+    : `${streamLabel} Invoice Details`;
 
   const rows = invoices.filter((doc) => {
+    const matchesStream = normalizedStream === "all" ? true : getInvoiceStream(doc) === normalizedStream;
+    if (!matchesStream) return false;
     if (normalizedView === "received") return getInvoiceCollectedAmount(doc) > 0;
     if (normalizedView === "due") return getInvoiceRemainingAmount(doc) > 0;
     return true;
@@ -1489,6 +1585,7 @@ function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
                 const due = getInvoiceRemainingAmount(doc);
                 const status = String(doc.paymentStatus || doc.status || "Pending");
                 const statusColor = /paid|received/i.test(status) ? T.green : /partial/i.test(status) ? T.gold : T.red;
+                const stream = getInvoiceStream(doc);
                 return (
                   <div key={doc.id} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
@@ -1497,6 +1594,7 @@ function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>{doc.name || "Invoice"}</div>
                           {doc.refNo && <Tag color={T.green}>#{doc.refNo}</Tag>}
                           {doc.project && <Tag color={T.blue}>{doc.project}</Tag>}
+                          <Tag color={stream === "advance" ? T.gold : T.teal}>{stream === "advance" ? "Advance" : "Income"}</Tag>
                           <Tag color={statusColor}>{status}</Tag>
                         </div>
                         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
@@ -2043,6 +2141,10 @@ function InvoiceCard({ doc, delay, onEdit, onDel }) {
             </Chip>
           )}
 
+          <Chip color={getInvoiceStream(doc) === "advance" ? T.purple : T.blue}>
+            {getInvoiceStream(doc) === "advance" ? "Advance" : "Income"}
+          </Chip>
+
           {(() => {
             const c =
               paymentStatus === "Paid"
@@ -2082,11 +2184,11 @@ function InvoiceCard({ doc, delay, onEdit, onDel }) {
 
 /* ── Invoice modal ───────────────────────────────────────────────────────── */
 function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
-  const [f,setF]=useState(doc||{project:defaultProject||""});
+  const [f,setF]=useState(doc||{project:defaultProject||"", invoiceType:"Income", paymentStatus:"Pending"});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} INVOICE`} color={T.green} onClose={onClose}
-      onSave={()=>{if(!f.name){alert("Invoice title required");return;}onSave(f,mode);}}>
+      onSave={()=>{if(!f.name){alert("Invoice title required");return;}onSave({...f, invoiceType: f.invoiceType || "Income"},mode);}}>
       <FieldRow label="Invoice Title *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
       <FieldRow label="Project *">
         <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
@@ -2097,6 +2199,36 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
       <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
+      <FieldRow label="Invoice Type">
+        <div style={{display:"flex", gap:8}}>
+          {["Income","Advance"].map(s => {
+            const active = (f.invoiceType || "Income") === s;
+            const tone = s === "Income" ? T.blue : T.purple;
+            const bg = s === "Income" ? T.blueDim : T.purpleDim;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => set("invoiceType")(s)}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: 8,
+                  border: `1px solid ${active ? tone : T.border}`,
+                  background: active ? bg : "transparent",
+                  color: active ? tone : T.textMuted,
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  cursor: "pointer",
+                  transition: "all .15s",
+                }}
+              >
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      </FieldRow>
       <FieldRow label="Payment Status">
         <div style={{display:"flex", gap:8}}>
           {["Pending","Paid","Partial"].map(s => (
@@ -2371,115 +2503,46 @@ function ManpowerPage({data,setData,showToast}) {
     setPerson(updated);
   };
 
-  // Import manpower master data + optional certifications from Excel
+  // Import manpower certifications from Excel
+  // Each row: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
+  // Finds matching person by name and appends certs; creates person if not found
   const importMpCerts = (file, defaultCat) => {
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        const parsed = parseExcelWithHeaderRow(e.target.result, MP_CERT_MAP, MP_HEADER_ROW);
-        if (!parsed.length) { showToast("No valid rows found", "del"); return; }
+        // Headers are on row 4 in TUV_Manpower_Tracker.xlsx
+        const parsed=parseExcelWithHeaderRow(e.target.result, MP_CERT_MAP, MP_HEADER_ROW);
+        if(!parsed.length){showToast("No valid rows found","del");return;}
 
-        setData(prev => {
-          const manpower = [...prev.manpower];
-          let added = 0;
-          let updated = 0;
-          let certsAdded = 0;
-
-          const mergeImportedFields = (base, row) => ({
-            ...base,
-            name: row.name || base.name || "",
-            idNo: row.idNo || base.idNo || "",
-            category: row.category || base.category || defaultCat || "",
-            project: row.project || base.project || "",
-            nationality: row.nationality || base.nationality || "",
-            designation: row.designation || base.designation || "",
-            passportNo: row.passportNo || base.passportNo || "",
-            passportExpiry: row.passportExpiry || base.passportExpiry || "",
-            visaNo: row.visaNo || base.visaNo || "",
-            visaExpiry: row.visaExpiry || base.visaExpiry || "",
-            iqamaNo: row.iqamaNo || base.iqamaNo || "",
-            iqamaExpiry: row.iqamaExpiry || base.iqamaExpiry || "",
-            muqeemNo: row.muqeemNo || base.muqeemNo || "",
-            muqeemExpiry: row.muqeemExpiry || base.muqeemExpiry || "",
-            certs: base.certs || [],
-            docs: base.docs || [],
-          });
-
-          parsed.forEach(row => {
-            const personName = (row.name || "").trim();
-            const personIdNo = (row.idNo || "").trim();
-            if (!personName && !personIdNo) return;
-
-            const idx = manpower.findIndex(p => {
-              const sameId = personIdNo && (p.idNo || "").trim().toLowerCase() === personIdNo.toLowerCase();
-              const sameName = personName && (p.name || "").trim().toLowerCase() === personName.toLowerCase();
-              return sameId || sameName;
-            });
-
-            const hasCertData = Boolean(
-              row.certName || row.certNo || row.issueDate || row.expiryDate || row.issuedBy
-            );
-
-            let cert = null;
-            if (hasCertData) {
-              cert = {
-                id: uid(),
-                name: row.certName || "Certification",
-                certNo: row.certNo || "",
-                issueDate: row.issueDate || "",
-                expiryDate: row.expiryDate || "",
-                issuedBy: row.issuedBy || "",
-                fileLink: "",
-              };
-            }
-
-            if (idx >= 0) {
-              let nextPerson = mergeImportedFields(manpower[idx], row);
-              if (cert) {
-                const alreadyExists = (nextPerson.certs || []).some(c =>
-                  (c.name || "").toLowerCase() === (cert.name || "").toLowerCase() &&
-                  (c.certNo || "") === cert.certNo &&
-                  (c.expiryDate || "") === cert.expiryDate
-                );
-                if (!alreadyExists) {
-                  nextPerson = { ...nextPerson, certs: [...(nextPerson.certs || []), cert] };
-                  certsAdded++;
-                }
+        setData(prev=>{
+          const manpower=[...prev.manpower];
+          let added=0, updated=0;
+          parsed.forEach(row=>{
+            const personName=(row.name||"").trim();
+            if(!personName) return;
+            const certName=row.certName||"Certification";
+            const cert={id:uid(),name:certName,certNo:row.certNo||"",issueDate:row.issueDate||"",expiryDate:row.expiryDate||"",issuedBy:row.issuedBy||"",fileLink:""};
+            const idx=manpower.findIndex(p=>p.name.toLowerCase()===personName.toLowerCase());
+            if(idx>=0){
+              if(row.idNo&&!manpower[idx].idNo) manpower[idx]={...manpower[idx],idNo:row.idNo};
+              // Skip duplicate: same cert name + same expiry date already exists
+              const alreadyExists=(manpower[idx].certs||[]).some(c=>
+                c.name.toLowerCase()===certName.toLowerCase()&&c.expiryDate===cert.expiryDate
+              );
+              if(!alreadyExists){
+                manpower[idx]={...manpower[idx],certs:[...(manpower[idx].certs||[]),cert]};
+                updated++;
               }
-              manpower[idx] = nextPerson;
-              updated++;
             } else {
-              manpower.push({
-                id: uid(),
-                name: personName || "Unnamed",
-                idNo: personIdNo || "",
-                category: row.category || defaultCat || "",
-                project: row.project || "",
-                nationality: row.nationality || "",
-                designation: row.designation || "",
-                passportNo: row.passportNo || "",
-                passportExpiry: row.passportExpiry || "",
-                visaNo: row.visaNo || "",
-                visaExpiry: row.visaExpiry || "",
-                iqamaNo: row.iqamaNo || "",
-                iqamaExpiry: row.iqamaExpiry || "",
-                muqeemNo: row.muqeemNo || "",
-                muqeemExpiry: row.muqeemExpiry || "",
-                certs: cert ? [cert] : [],
-                docs: [],
-              });
-              if (cert) certsAdded++;
+              manpower.push({id:uid(),name:personName,idNo:row.idNo||"",category:defaultCat||"",certs:[cert],docs:[]});
               added++;
             }
           });
-
-          showToast(`✓ ${parsed.length} rows imported (${added} new people, ${updated} updated, ${certsAdded} certs added)`);
-          return { ...prev, manpower };
+          showToast(`✓ ${parsed.length} certs imported (${added} new people, ${updated} updated)`);
+          return{...prev,manpower};
         });
         setImpModal(false);
-      } catch (err) {
-        showToast("Failed to read Excel file", "del");
-      }
+      } catch(err){ showToast("Failed to read Excel file","del"); }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -2510,7 +2573,7 @@ function ManpowerPage({data,setData,showToast}) {
       <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
-          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, PASSPORT NO, PASSPORT EXPIRY, VISA NO, VISA EXPIRY, IQAMA NO, IQAMA EXPIRY, MUQEEM NO, MUQEEM EXPIRY</strong> + optional certification columns. Headers are auto-detected from row 4.</div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, CERTIFICATE, ISSUED BY, ISSUE DATE, EXPIRY DATE</strong> (headers auto-detected from row 4) — matches people by name, creates new if not found</div>
         </div>
         <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
         <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
@@ -2602,7 +2665,7 @@ function MpImportModal({file,cats,onClose,onImport}) {
           </select>
         </div>
         <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:10,padding:"12px 14px",marginBottom:18,fontSize:12,color:T.blue}}>
-          ℹ Existing people are matched by <strong>ID first</strong>, then by name. Identity fields are updated if present, and new certs are <strong>added</strong> without deleting existing certs.
+          ℹ Existing people are matched by name. New certs are <strong>added</strong> to their profile — existing certs are not deleted.
         </div>
         <div style={{display:"flex",gap:10}}>
           <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px",fontSize:13,fontWeight:600}}>Cancel</button>
@@ -3638,12 +3701,15 @@ function BulkUploadModal({ subTab, projects, onClose, onImport }) {
 
   const FIELD_DEFS = {
     invoices:     [
-      {key:"name",     label:"Invoice Title *", required:true},
-      {key:"project",  label:"Project"},
-      {key:"refNo",    label:"Invoice No."},
-      {key:"dueDate",  label:"Due Date"},
-      {key:"amount",   label:"Amount (SAR)"},
-      {key:"notes",    label:"Notes"},
+      {key:"name",           label:"Invoice Title *", required:true},
+      {key:"project",        label:"Project"},
+      {key:"invoiceType",    label:"Invoice Type (Income / Advance)"},
+      {key:"refNo",          label:"Invoice No."},
+      {key:"dueDate",        label:"Due Date"},
+      {key:"amount",         label:"Amount (SAR)"},
+      {key:"paymentStatus",  label:"Payment Status"},
+      {key:"remainingAmount",label:"Remaining Amount (SAR)"},
+      {key:"notes",          label:"Notes"},
     ],
     certificates: [
       {key:"project",        label:"Project"},
