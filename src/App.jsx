@@ -214,6 +214,32 @@ function getInvoiceStream(doc) {
 let T = LIGHT; // default to light, App.setTheme() updates this
 function setTheme(dark) { T = dark ? DARK : LIGHT; }
 
+function useViewport() {
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1440,
+    height: typeof window !== 'undefined' ? window.innerHeight : 900,
+  }));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    onResize();
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, []);
+
+  return viewport;
+}
+
 /* ─── Export utilities ───────────────────────────────────────────────────── */
 function exportToExcel(rows, filename) {
   if(!rows||!rows.length) return;
@@ -714,6 +740,7 @@ export default function App() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
+  const { width: viewportWidth } = useViewport();
 
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
@@ -825,13 +852,13 @@ export default function App() {
       {authed && showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
-      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout}/>
+      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
         <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:"0 20px",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
           <div style={{display:"flex",alignItems:"center",height:56,position:"relative"}}>
-            {window.innerWidth < 1200 && (
+            {viewportWidth < 1200 && (
   <button
     onClick={() => setSideOpen(true)}
     style={{
@@ -915,8 +942,8 @@ export default function App() {
 /* ════════════════════════════════════════════════════════════════════════════
    SIDEBAR
 ════════════════════════════════════════════════════════════════════════════ */
-function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggleDark,onLogout}) {
-  const isMobile = window.innerWidth < 1200;
+function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,darkMode,onToggleDark,onLogout}) {
+  const isMobile = viewportWidth < 1200;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
@@ -1550,7 +1577,7 @@ function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
 
   return (
     <Overlay onClose={onClose}>
-      <div className="slide-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"min(1100px,96vw)",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:T.shadow}}>
+      <div className="slide-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"min(1100px, calc(100vw - 24px))",maxWidth:"calc(100vw - 24px)",maxHeight:"calc(100vh - 24px)",display:"flex",flexDirection:"column",boxShadow:T.shadow}}>
         <div style={{padding:"18px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexShrink:0}}>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{title}</div>
@@ -3299,10 +3326,10 @@ function Empty({icon,label,sub,color,onAdd}) {
 }
 
 function Overlay({ children, onClose }) {
-  const vh = window.innerHeight;
+  const { height: viewportHeight } = useViewport();
 
   // Smart centering logic
-  const isShortScreen = vh < 700;
+  const isShortScreen = viewportHeight < 700;
 
   return (
     <div
