@@ -1721,6 +1721,7 @@ const PD_TABS = [
 ════════════════════════════════════════════════════════════════════════════ */
 function ProjectDocs({data,setData,showToast}) {
   // ALL hooks must be at the top — never after a conditional return
+  const [selectedProject, setSelectedProject] = useState(null);
   const [subTab,  setSubTab]  = useState("invoices");
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
