@@ -1262,7 +1262,7 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
                 {
                   title: "INCOME INVOICED",
                   amount: formatSarCompact(incomeInvoicedForYear),
-                  color: T.green,
+                  color: T.blue,
                   onClick: () => setInvoiceDetailView({ mode: "all", stream: "income" }),
                 },
                 {
@@ -1291,7 +1291,7 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
                 {
                   title: "RECEIVED FROM ADVANCE",
                   amount: formatSarCompact(receivedFromAdvanceForYear),
-                  color: T.teal,
+                  color: T.gold,
                   onClick: () => setInvoiceDetailView({ mode: "received", stream: "advance" }),
                 },
               ]}
@@ -1308,13 +1308,13 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
                 {
                   title: "DUE FROM INCOME",
                   amount: formatSarCompact(dueFromIncomeForYear),
-                  color: T.red,
+                  color: T.blue,
                   onClick: () => setInvoiceDetailView({ mode: "due", stream: "income" }),
                 },
                 {
                   title: "DUE FROM ADVANCE",
                   amount: formatSarCompact(dueFromAdvanceForYear),
-                  color: T.orange,
+                  color: T.gold,
                   onClick: () => setInvoiceDetailView({ mode: "due", stream: "advance" }),
                 },
               ]}
@@ -1525,13 +1525,26 @@ function InvoiceMetricCard({ title, amount, sub, color, onClick, miniCards = [] 
               key={card.title}
               onClick={card.onClick}
               style={{
-                background:`${card.color}12`,
+                background: `${card.color}12`,
                 border:`1px solid ${card.color}44`,
+                boxShadow:`inset 0 0 0 1px ${card.color}14`,
                 borderRadius:12,
                 padding:"12px 12px 10px",
                 textAlign:"left",
                 cursor:"pointer",
-                boxShadow:`inset 0 0 0 1px ${card.color}10`,
+                transition:"transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease",
+              }}
+              onMouseEnter={e=>{
+                e.currentTarget.style.transform="translateY(-2px)";
+                e.currentTarget.style.boxShadow=`0 10px 22px ${card.color}1c, inset 0 0 0 1px ${card.color}22`;
+                e.currentTarget.style.borderColor=`${card.color}66`;
+                e.currentTarget.style.background=`${card.color}18`;
+              }}
+              onMouseLeave={e=>{
+                e.currentTarget.style.transform="none";
+                e.currentTarget.style.boxShadow=`inset 0 0 0 1px ${card.color}14`;
+                e.currentTarget.style.borderColor=`${card.color}44`;
+                e.currentTarget.style.background=`${card.color}12`;
               }}
             >
               <div style={{fontSize:11,color:card.color,fontWeight:800,letterSpacing:".06em",lineHeight:1.3}}>{card.title}</div>
