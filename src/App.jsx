@@ -1733,7 +1733,19 @@ function ProjectDocs({data,setData,showToast}) {
   const cur      = PD_TABS.find(t=>t.id===subTab);
   const counts   = Object.fromEntries(PD_TABS.map(t=>[t.id, docs.filter(d=>d.subTab===t.id).length]));
 
-  const changeTab = t => { setSubTab(t); setSelProj(null); setFProj(""); };
+  const openProject = (project) => {
+    setSelectedProject(project);
+    setSelProj(project);
+    setFProj(project);
+  };
+
+  const backToProjects = () => {
+    setSelectedProject(null);
+    setSelProj(null);
+    setFProj("");
+  };
+
+  const changeTab = t => { setSubTab(t); if (selectedProject) { setSelProj(selectedProject); setFProj(selectedProject); } else { setSelProj(null); setFProj(""); } };
 
   const saveDoc = (doc, mode) => {
     const st = subTab; // capture before any state changes
@@ -1766,8 +1778,107 @@ const projCerts = selProj ? certAll.filter(d=>d.project===selProj) : [];
 const woAll     = docs.filter(d=>d.subTab==="workorders");
 const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
 const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
+
+  if (!selectedProject) {
+    return (
+      <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text}}>PROJECTS</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Select a project to view invoices, job completion certificates, and work orders</div>
+          </div>
+        </div>
+
+        {projects.length===0
+          ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={()=>{}}/>
+          : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
+              {projects.map((project,i)=>{
+                const projectDocs = docs.filter(d=>d.project===project);
+                const projectInvoices = projectDocs.filter(d=>d.subTab==="invoices");
+                const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
+                const projectWos = projectDocs.filter(d=>d.subTab==="workorders");
+                const projectTotal = projectInvoices.reduce((sum,d)=>sum+(parseFloat(d.amount)||0),0);
+                const projectCollected = projectInvoices.reduce((sum,d)=>sum+getInvoiceCollectedAmount(d),0);
+                const projectRemaining = projectInvoices.reduce((sum,d)=>sum+getInvoiceRemainingAmount(d),0);
+
+                return (
+                  <button
+                    key={project}
+                    type="button"
+                    onClick={()=>openProject(project)}
+                    className="fade-up card-hover"
+                    style={{
+                      background:T.card,
+                      border:`1px solid ${T.border}`,
+                      borderRadius:18,
+                      boxShadow:T.shadow,
+                      padding:"18px",
+                      textAlign:"left",
+                      cursor:"pointer",
+                      animationDelay:`${i*.04}s`
+                    }}
+                  >
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
+                      <div style={{minWidth:0}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{project}</div>
+                        <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>Project documents overview</div>
+                      </div>
+                      <div style={{width:42,height:42,borderRadius:12,background:T.blueDim,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue,fontSize:18,fontWeight:800,flexShrink:0}}>◆</div>
+                    </div>
+
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(projectTotal)}</div>
+                        <div style={{fontSize:11,color:T.textMuted,marginTop:6,fontWeight:700}}>Total Invoice Value</div>
+                      </div>
+                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.blue,lineHeight:1}}>{projectDocs.length}</div>
+                        <div style={{fontSize:11,color:T.textMuted,marginTop:6,fontWeight:700}}>Total Documents</div>
+                      </div>
+                      <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:12,padding:"12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(projectCollected)}</div>
+                        <div style={{fontSize:11,color:T.green,marginTop:6,fontWeight:700}}>Amount Collected</div>
+                      </div>
+                      <div style={{background:T.redDim,border:`1px solid ${T.red}33`,borderRadius:12,padding:"12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.red,lineHeight:1}}>{formatSarCompact(projectRemaining)}</div>
+                        <div style={{fontSize:11,color:T.red,marginTop:6,fontWeight:700}}>Amount Remaining</div>
+                      </div>
+                    </div>
+
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginTop:12}}>
+                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.green,lineHeight:1}}>{projectInvoices.length}</div>
+                        <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:700}}>Invoices</div>
+                      </div>
+                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.gold,lineHeight:1}}>{projectCerts.length}</div>
+                        <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:700}}>Certificates</div>
+                      </div>
+                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.blue,lineHeight:1}}>{projectWos.length}</div>
+                        <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:700}}>Work Orders</div>
+                      </div>
+                    </div>
+
+                    <div style={{marginTop:14,fontSize:12,color:T.blue,fontWeight:700,textAlign:"right"}}>Open Project →</div>
+                  </button>
+                );
+              })}
+            </div>
+        }
+      </div>
+    );
+  }
+
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:16}}>
+        <div>
+          <button onClick={backToProjects} style={{background:"transparent",border:"none",color:T.blue,fontWeight:700,cursor:"pointer",marginBottom:6,padding:0}}>← Back to Projects</button>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:3}}>Project dashboard and document records</div>
+        </div>
+      </div>
       <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={changeTab}/>
 
       {/* ══ INVOICES ════════════════════════════════════════════════════ */}
@@ -1776,9 +1887,9 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
           /* Project detail — invoice list */
           <div>
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-              <button onClick={()=>setSelProj(null)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
+              <button onClick={backToProjects} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
               <div style={{flex:1}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selProj}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
                 <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>
                   {projInvs.length} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {totalAmt.toLocaleString()}</span>
                 </div>
@@ -1809,7 +1920,7 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
                   const pinvs=invDocs.filter(d=>d.project===p);
                   const total=pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
                   return (
-                    <div key={p} className="fade-up" onClick={()=>setSelProj(p)}
+                    <div key={p} className="fade-up" onClick={()=>openProject(p)}
                       style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:`${i*.05}s`,transition:"border-color .2s,transform .2s"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
@@ -1869,7 +1980,7 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
     <div>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
         <button
-          onClick={()=>setSelProj(null)}
+          onClick={backToProjects}
           style={{
             background:T.card,
             border:`1px solid ${T.border}`,
@@ -1885,7 +1996,7 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
 
         <div style={{flex:1}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>
-            {selProj}
+            {selectedProject}
           </div>
           <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>
             {projCerts.length} certificate{projCerts.length!==1?"s":""}
@@ -1994,7 +2105,7 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
                 <div
                   key={p}
                   className="fade-up"
-                  onClick={()=>setSelProj(p)}
+                  onClick={()=>openProject(p)}
                   style={{
                     background:T.card,
                     border:`1px solid ${T.border}`,
@@ -2105,7 +2216,7 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
-      {modal && subTab==="invoices"     && <InvoiceModal     mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selProj} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="invoices"     && <InvoiceModal     mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="certificates" && <CertificateModal mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="workorders"   && <WorkOrderModal   mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
@@ -4486,7 +4597,7 @@ function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
             <div style={{flex:1, minWidth:200}}>
               <label style={{display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:".5px"}}>PROJECT *</label>
               <select
-                value={selProj}
+                value={selectedProject}
                 onChange={e => setSelProj(e.target.value)}
                 style={{width:"100%", background:T.inputBg, border:`1px solid ${selProj ? T.blue+"66" : T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:selProj ? T.text : T.textMuted, outline:"none", colorScheme:"light"}}
               >
