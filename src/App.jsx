@@ -1525,15 +1525,16 @@ function InvoiceMetricCard({ title, amount, sub, color, onClick, miniCards = [] 
               key={card.title}
               onClick={card.onClick}
               style={{
-                background:"rgba(255,255,255,0.02)",
+                background:`${card.color}12`,
                 border:`1px solid ${card.color}44`,
                 borderRadius:12,
                 padding:"12px 12px 10px",
                 textAlign:"left",
                 cursor:"pointer",
+                boxShadow:`inset 0 0 0 1px ${card.color}10`,
               }}
             >
-              <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:".06em",lineHeight:1.3}}>{card.title}</div>
+              <div style={{fontSize:11,color:card.color,fontWeight:800,letterSpacing:".06em",lineHeight:1.3}}>{card.title}</div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:card.color,marginTop:8,lineHeight:1}}>{card.amount}</div>
             </button>
           ))}
