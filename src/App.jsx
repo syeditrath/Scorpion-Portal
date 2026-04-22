@@ -476,6 +476,8 @@ const EMPTY_DATA = {
   scorpionDocCats: DEFAULT_SCORPION_CATS,
   projects: ["NEOM Phase 1","NEOM Phase 2","Riyadh Metro"],
   projectDocs: [],  // { id, project, subTab, name, refNo, date, expiryDate, amount, fileLink, notes }
+  projectAnalysis: [], // { id, project, poValue, poNumber, quotationRef, startDate, estEndDate,
+                       //   progress, status, description, dailyReports:[{id,date,weather,activities,manpower,equipment,issues,notes}] }
 };
 
 
@@ -733,6 +735,426 @@ function WelcomeScreen({onEnter}) {
   );
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   PROJECT ANALYSIS PAGE
+   Fields per project: PO Value, PO Number, Quotation Ref, Start Date,
+   Est. End Date, Progress %, Status, Description
+   Daily Reports: Date, Weather, Activities, Manpower count, Equipment,
+                  Issues, Notes
+════════════════════════════════════════════════════════════════════════════ */
+
+/* ── helpers ── */
+function progressColor(p) {
+  const n = parseInt(p) || 0;
+  if (n >= 80) return T.green;
+  if (n >= 40) return T.blue;
+  if (n >= 20) return T.gold;
+  return T.red;
+}
+function durationDays(start, end) {
+  if (!start || !end) return null;
+  const d = Math.ceil((new Date(end) - new Date(start)) / 86400000);
+  return d > 0 ? d : null;
+}
+function calendarDaysLeft(end) {
+  if (!end) return null;
+  return Math.ceil((new Date(end) - new Date()) / 86400000);
+}
+
+/* ── Daily Report Form Modal ── */
+function DailyReportModal({ report, onSave, onClose }) {
+  const blank = { id: uid(), date: new Date().toISOString().slice(0,10), weather: "", activities: "", manpower: "", equipment: "", issues: "", notes: "" };
+  const [form, setForm] = useState(report ? { ...report } : blank);
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const iStyle = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
+  const lStyle = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:560,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+        <div style={{padding:"20px 24px 14px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:T.card,zIndex:1,borderRadius:"18px 18px 0 0"}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{report ? "✎ Edit Daily Report" : "+ New Daily Report"}</div>
+          <button onClick={onClose} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><label style={lStyle}>DATE</label><input type="date" value={form.date} onChange={e=>upd("date",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={lStyle}>WEATHER</label><input value={form.weather} onChange={e=>upd("weather",e.target.value)} placeholder="e.g. Sunny, 38°C" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          </div>
+          <div><label style={lStyle}>ACTIVITIES / WORK DONE</label><textarea value={form.activities} onChange={e=>upd("activities",e.target.value)} rows={3} placeholder="Describe the work carried out today…" style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><label style={lStyle}>MANPOWER COUNT</label><input type="number" min="0" value={form.manpower} onChange={e=>upd("manpower",e.target.value)} placeholder="e.g. 12" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={lStyle}>EQUIPMENT USED</label><input value={form.equipment} onChange={e=>upd("equipment",e.target.value)} placeholder="e.g. Excavator, 2× Trucks" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          </div>
+          <div><label style={lStyle}>ISSUES / DELAYS</label><textarea value={form.issues} onChange={e=>upd("issues",e.target.value)} rows={2} placeholder="Any problems, delays, or safety incidents…" style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          <div><label style={lStyle}>ADDITIONAL NOTES</label><textarea value={form.notes} onChange={e=>upd("notes",e.target.value)} rows={2} placeholder="Inspector remarks, client feedback, etc." style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+        </div>
+        <div style={{padding:"12px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          <button onClick={()=>onSave(form)} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Report</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Project Analysis Form Modal ── */
+function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
+  const blank = { id: uid(), project:"", poValue:"", poNumber:"", quotationRef:"", startDate:"", estEndDate:"", progress:"0", status:"In Progress", description:"", dailyReports:[] };
+  const [form, setForm] = useState(proj ? { dailyReports:[], ...proj } : blank);
+  const upd = (k,v) => setForm(f=>({...f,[k]:v}));
+  const iStyle = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
+  const lStyle = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
+  const prog = Math.min(100, Math.max(0, parseInt(form.progress)||0));
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:600,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+        <div style={{padding:"20px 24px 14px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:T.card,zIndex:1,borderRadius:"18px 18px 0 0"}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{proj?"✎ Edit Project Analysis":"+ New Project Analysis"}</div>
+          <button onClick={onClose} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:14}}>
+          {/* Project selector */}
+          <div><label style={lStyle}>PROJECT</label>
+            <select value={form.project} onChange={e=>upd("project",e.target.value)} style={{...iStyle,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
+              <option value="">— Select project —</option>
+              {projectNames.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          {/* PO info row */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><label style={lStyle}>PO NUMBER</label><input value={form.poNumber} onChange={e=>upd("poNumber",e.target.value)} placeholder="e.g. PO-2025-001" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={lStyle}>PO VALUE (SAR)</label><input type="number" value={form.poValue} onChange={e=>upd("poValue",e.target.value)} placeholder="0.00" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          </div>
+          {/* Quotation */}
+          <div><label style={lStyle}>QUOTATION REF</label><input value={form.quotationRef} onChange={e=>upd("quotationRef",e.target.value)} placeholder="e.g. QT-2024-089" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          {/* Dates */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><label style={lStyle}>START DATE</label><input type="date" value={form.startDate} onChange={e=>upd("startDate",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={lStyle}>ESTIMATED END DATE</label><input type="date" value={form.estEndDate} onChange={e=>upd("estEndDate",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          </div>
+          {/* Progress + Status */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <label style={lStyle}>PROGRESS (%)</label>
+              <input type="number" min="0" max="100" value={form.progress} onChange={e=>upd("progress",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
+              <div style={{marginTop:8,height:6,background:T.border,borderRadius:999}}>
+                <div style={{height:"100%",width:`${prog}%`,borderRadius:999,background:`linear-gradient(90deg,${progressColor(prog)},${progressColor(prog)}cc)`,transition:"width .4s"}}/>
+              </div>
+            </div>
+            <div><label style={lStyle}>STATUS</label>
+              <select value={form.status} onChange={e=>upd("status",e.target.value)} style={{...iStyle,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
+                {["Not Started","In Progress","On Hold","Completed","Cancelled"].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          {/* Description */}
+          <div><label style={lStyle}>DESCRIPTION / SCOPE OF WORK</label><textarea value={form.description} onChange={e=>upd("description",e.target.value)} rows={3} placeholder="Brief scope of work or project description…" style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+        </div>
+        <div style={{padding:"12px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          <button onClick={()=>{ if(!form.project){return;} onSave(form); }} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Project</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Project Analysis Detail View ── */
+function ProjectAnalysisDetail({ proj, projectNames, onUpdate, onBack }) {
+  const [editProj, setEditProj]       = useState(false);
+  const [drModal, setDrModal]         = useState(null); // null | "new" | report-obj
+  const [expandedDr, setExpandedDr]   = useState(null);
+  const reports = (proj.dailyReports || []).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const prog = Math.min(100, Math.max(0, parseInt(proj.progress)||0));
+  const daysLeft = calendarDaysLeft(proj.estEndDate);
+  const duration = durationDays(proj.startDate, proj.estEndDate);
+  const statusColors = { "Not Started":T.textMuted, "In Progress":T.blue, "On Hold":T.gold, "Completed":T.green, "Cancelled":T.red };
+  const stColor = statusColors[proj.status] || T.textMuted;
+
+  const saveReport = (r) => {
+    const existing = (proj.dailyReports||[]).find(x=>x.id===r.id);
+    const updated = existing
+      ? (proj.dailyReports||[]).map(x=>x.id===r.id?r:x)
+      : [...(proj.dailyReports||[]), r];
+    onUpdate({ ...proj, dailyReports: updated });
+    setDrModal(null);
+  };
+  const delReport = (id) => onUpdate({ ...proj, dailyReports: (proj.dailyReports||[]).filter(r=>r.id!==id) });
+
+  return (
+    <div style={{maxWidth:"min(1100px,98vw)",margin:"0 auto"}}>
+      {/* Back bar */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+        <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>← Back</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,flex:1}}>{proj.project}</div>
+        <button onClick={()=>setEditProj(true)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✎ Edit</button>
+      </div>
+
+      {/* Status + progress hero */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"22px 26px",marginBottom:16,boxShadow:T.shadow}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:16,alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
+          <div>
+            <span style={{background:`${stColor}18`,border:`1px solid ${stColor}44`,color:stColor,borderRadius:20,padding:"4px 14px",fontSize:12,fontWeight:700}}>{proj.status||"—"}</span>
+            {proj.description && <div style={{fontSize:13,color:T.textSub,marginTop:10,maxWidth:560,lineHeight:1.6}}>{proj.description}</div>}
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:48,fontWeight:800,color:progressColor(prog),lineHeight:1}}>{prog}%</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>PROGRESS</div>
+          </div>
+        </div>
+        <div style={{height:12,background:T.border,borderRadius:999,overflow:"hidden",marginBottom:10}}>
+          <div style={{height:"100%",width:`${prog}%`,borderRadius:999,background:`linear-gradient(90deg,${progressColor(prog)},${progressColor(prog)}bb)`,transition:"width 1s ease",animation:"shimmer 3s linear infinite",backgroundSize:"200%"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:T.textMuted}}>
+          <span>{proj.startDate ? `Started ${fmtDate(proj.startDate)}` : "No start date"}</span>
+          <span>{daysLeft !== null ? (daysLeft >= 0 ? `${daysLeft} days remaining` : `${Math.abs(daysLeft)} days overdue`) : "No end date set"}</span>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:18}}>
+        {[
+          {label:"PO VALUE",    v:proj.poValue?formatSarCompact(proj.poValue):"—",     color:T.gold,   icon:"💰"},
+          {label:"PO NUMBER",   v:proj.poNumber||"—",                                   color:T.blue,   icon:"📋"},
+          {label:"QUOTATION",   v:proj.quotationRef||"—",                               color:T.purple, icon:"📄"},
+          {label:"DURATION",    v:duration?`${duration} days`:"—",                     color:T.teal,   icon:"📅"},
+          {label:"END DATE",    v:proj.estEndDate?fmtDate(proj.estEndDate):"—",         color:daysLeft!==null&&daysLeft<0?T.red:T.green, icon:"🏁"},
+          {label:"DAILY REPORTS",v:reports.length,                                      color:T.orange, icon:"📝"},
+        ].map((k,i)=>(
+          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:13,padding:"16px 18px",boxShadow:T.shadow,animationDelay:`${i*.06}s`}}>
+            <div style={{fontSize:20,marginBottom:6}}>{k.icon}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(16px,2vw,22px)",fontWeight:800,color:k.color,lineHeight:1.1,wordBreak:"break-word"}}>{k.v}</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600,letterSpacing:.5}}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Daily Reports section */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📝 DAILY REPORTS</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{reports.length} report{reports.length!==1?"s":""} recorded</div>
+          </div>
+          <button onClick={()=>setDrModal("new")} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>+ Add Report</button>
+        </div>
+
+        {reports.length === 0 && (
+          <div style={{textAlign:"center",padding:"36px 20px",color:T.textMuted,fontSize:14}}>
+            <div style={{fontSize:40,marginBottom:12}}>📋</div>
+            No daily reports yet. Click <strong>+ Add Report</strong> to start.
+          </div>
+        )}
+
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {reports.map(r=>{
+            const isExp = expandedDr === r.id;
+            return (
+              <div key={r.id} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",transition:"all .2s"}}>
+                {/* Header row */}
+                <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:isExp?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandedDr(isExp?null:r.id)}>
+                  <div style={{width:36,height:36,borderRadius:9,background:T.blueDim,border:`1px solid ${T.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📅</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
+                    <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:12,flexWrap:"wrap"}}>
+                      {r.weather&&<span>🌤 {r.weather}</span>}
+                      {r.manpower&&<span>👷 {r.manpower} workers</span>}
+                      {r.equipment&&<span>🚧 {r.equipment}</span>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <button onClick={e=>{e.stopPropagation();setDrModal(r);}} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✎</button>
+                    <button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>
+                    <span style={{color:T.textMuted,fontSize:14,marginLeft:4}}>{isExp?"▲":"▼"}</span>
+                  </div>
+                </div>
+                {/* Expanded detail */}
+                {isExp && (
+                  <div style={{padding:"14px 16px",borderTop:`1px solid ${T.border}`,background:T.card2,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14}}>
+                    {r.activities && <div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:.5}}>ACTIVITIES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.activities}</div></div>}
+                    {r.issues     && <div><div style={{fontSize:10,fontWeight:700,color:T.red,marginBottom:5,letterSpacing:.5}}>ISSUES / DELAYS</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.issues}</div></div>}
+                    {r.notes      && <div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:.5}}>NOTES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.notes}</div></div>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {editProj && <ProjectAnalysisModal proj={proj} projectNames={projectNames} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
+      {drModal && <DailyReportModal report={drModal==="new"?null:drModal} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
+    </div>
+  );
+}
+
+/* ── Main Project Analysis Page ── */
+function ProjectAnalysisPage({ data, setData, showToast }) {
+  const [modal, setModal]       = useState(null); // null | "new" | proj-obj
+  const [detail, setDetail]     = useState(null); // proj id being viewed
+  const [filterProj, setFilterProj] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [search, setSearch]     = useState("");
+  const projects = data.projects || [];
+  const analysis = data.projectAnalysis || [];
+
+  const save = (p) => {
+    const exists = analysis.find(x=>x.id===p.id);
+    const updated = exists ? analysis.map(x=>x.id===p.id?p:x) : [...analysis, p];
+    setData(prev=>({...prev, projectAnalysis: updated}));
+    showToast(exists?"Project analysis updated":"Project analysis added");
+    setModal(null);
+  };
+  const del = (id) => {
+    setData(prev=>({...prev, projectAnalysis: prev.projectAnalysis.filter(x=>x.id!==id)}));
+    showToast("Project deleted","del");
+    setDetail(null);
+  };
+  const update = (p) => {
+    setData(prev=>({...prev, projectAnalysis: (prev.projectAnalysis||[]).map(x=>x.id===p.id?p:x)}));
+    showToast("Saved");
+  };
+
+  // If viewing a detail
+  const detailProj = detail ? analysis.find(x=>x.id===detail) : null;
+  if (detailProj) {
+    return <ProjectAnalysisDetail proj={detailProj} projectNames={projects} onUpdate={p=>{update(p); setDetail(p.id);}} onBack={()=>setDetail(null)}/>;
+  }
+
+  // Filter
+  let visible = analysis;
+  if (filterProj !== "All")   visible = visible.filter(x=>x.project===filterProj);
+  if (filterStatus !== "All") visible = visible.filter(x=>x.status===filterStatus);
+  if (search.trim())          visible = visible.filter(x=>
+    [x.project,x.poNumber,x.quotationRef,x.description,x.status].some(v=>String(v||"").toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const totalPO = analysis.reduce((s,x)=>s+(parseFloat(x.poValue)||0),0);
+  const statuses = ["Not Started","In Progress","On Hold","Completed","Cancelled"];
+
+  return (
+    <div style={{maxWidth:"min(1300px,98vw)",margin:"0 auto"}}>
+      {/* Page header */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(22px,3vw,32px)",color:T.text,letterSpacing:1}}>PROJECT ANALYSIS</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>{analysis.length} project{analysis.length!==1?"s":""} · Total PO: {formatSarCompact(totalPO)}</div>
+        </div>
+        <button onClick={()=>setModal("new")} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:11,padding:"11px 22px",fontSize:14,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:8,boxShadow:`0 4px 14px ${T.gold}44`}}>+ New Project</button>
+      </div>
+
+      {/* Summary KPI strip */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:18}}>
+        {[
+          {label:"Total Projects", v:analysis.length,                                              color:T.blue},
+          {label:"In Progress",    v:analysis.filter(x=>x.status==="In Progress").length,          color:T.blue},
+          {label:"Completed",      v:analysis.filter(x=>x.status==="Completed").length,            color:T.green},
+          {label:"On Hold",        v:analysis.filter(x=>x.status==="On Hold").length,              color:T.gold},
+          {label:"Total PO Value", v:formatSarCompact(totalPO),                                    color:T.gold},
+          {label:"Daily Reports",  v:analysis.reduce((s,x)=>s+(x.dailyReports||[]).length,0),     color:T.orange},
+        ].map((k,i)=>(
+          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",boxShadow:T.shadow,animationDelay:`${i*.05}s`}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2.5vw,28px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600}}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,alignItems:"center"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search projects…"
+          style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:9,padding:"8px 13px",fontSize:13,color:T.text,outline:"none",width:200}}
+          onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
+        <select value={filterProj} onChange={e=>setFilterProj(e.target.value)}
+          style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:9,padding:"8px 13px",fontSize:13,color:T.text,outline:"none"}}>
+          <option value="All">All Projects</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
+          style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:9,padding:"8px 13px",fontSize:13,color:T.text,outline:"none"}}>
+          <option value="All">All Statuses</option>
+          {statuses.map(s=><option key={s}>{s}</option>)}
+        </select>
+        {(filterProj!=="All"||filterStatus!=="All"||search) && (
+          <button onClick={()=>{setFilterProj("All");setFilterStatus("All");setSearch("");}}
+            style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:9,padding:"8px 13px",fontSize:12,fontWeight:600,cursor:"pointer"}}>✕ Clear</button>
+        )}
+        <div style={{marginLeft:"auto",fontSize:12,color:T.textMuted}}>{visible.length} result{visible.length!==1?"s":""}</div>
+      </div>
+
+      {/* Project cards grid */}
+      {visible.length === 0 ? (
+        <div style={{textAlign:"center",padding:"60px 20px",background:T.card,border:`1px solid ${T.border}`,borderRadius:18}}>
+          <div style={{fontSize:48,marginBottom:16}}>📊</div>
+          <div style={{fontSize:16,color:T.textMuted,fontWeight:600}}>
+            {analysis.length === 0 ? "No projects yet — click + New Project to get started" : "No projects match the current filters"}
+          </div>
+        </div>
+      ) : (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,360px),1fr))",gap:16}}>
+          {visible.map((p,i)=>{
+            const prog = Math.min(100, Math.max(0, parseInt(p.progress)||0));
+            const stColor = {
+              "Not Started":T.textMuted,"In Progress":T.blue,"On Hold":T.gold,"Completed":T.green,"Cancelled":T.red
+            }[p.status] || T.textMuted;
+            const dLeft = calendarDaysLeft(p.estEndDate);
+            return (
+              <div key={p.id} className="fade-up card-hover" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",boxShadow:T.shadow,animationDelay:`${i*.04}s`,display:"flex",flexDirection:"column",gap:14,cursor:"pointer"}}
+                   onClick={()=>setDetail(p.id)}>
+                {/* Card header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.project||"Unnamed"}</div>
+                    {p.poNumber && <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>PO: {p.poNumber}</div>}
+                  </div>
+                  <div style={{display:"flex",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                    <button onClick={()=>setModal(p)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✎</button>
+                    <button onClick={()=>del(p.id)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✕</button>
+                  </div>
+                </div>
+                {/* Status badge + PO value */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{background:`${stColor}18`,border:`1px solid ${stColor}44`,color:stColor,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700}}>{p.status||"—"}</span>
+                  {p.poValue && <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.gold}}>{formatSarCompact(p.poValue)}</span>}
+                </div>
+                {/* Progress bar */}
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                    <span style={{fontSize:11,color:T.textMuted,fontWeight:600}}>PROGRESS</span>
+                    <span style={{fontSize:12,fontWeight:800,color:progressColor(prog)}}>{prog}%</span>
+                  </div>
+                  <div style={{height:7,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${prog}%`,borderRadius:999,background:`linear-gradient(90deg,${progressColor(prog)},${progressColor(prog)}cc)`,transition:"width 1s"}}/>
+                  </div>
+                </div>
+                {/* Date info */}
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:T.textMuted}}>
+                  <span>{p.startDate?fmtDate(p.startDate):"No start date"}</span>
+                  {dLeft !== null
+                    ? <span style={{color:dLeft<0?T.red:dLeft<30?T.gold:T.green,fontWeight:600}}>{dLeft>=0?`${dLeft}d left`:`${Math.abs(dLeft)}d overdue`}</span>
+                    : <span>{p.estEndDate?fmtDate(p.estEndDate):"No end date"}</span>
+                  }
+                </div>
+                {/* Daily reports count */}
+                {(p.dailyReports||[]).length > 0 && (
+                  <div style={{background:T.orangeDim,border:`1px solid ${T.orange}33`,borderRadius:8,padding:"6px 12px",fontSize:12,color:T.orange,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                    📝 {p.dailyReports.length} daily report{p.dailyReports.length!==1?"s":""}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal */}
+      {modal && <ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} onSave={save} onClose={()=>setModal(null)}/>}
+    </div>
+  );
+}
+
+
 export default function App() {
   const [data, setData] = useState(EMPTY_DATA);
   const [loadingData, setLoadingData] = useState(true);
@@ -741,7 +1163,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [projMod, setProjMod] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
-  const [authed, setAuthed] = useState(isAuthenticated);
+  const [authed, setAuthed] = useState(() => isAuthenticated());
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem("cta_dark") === "true"; }
     catch { return false; }
@@ -763,11 +1185,19 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const cloudData = await fetchAppData();
-        setData(cloudData);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
+          headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows.length && rows[0].data) setData({ ...EMPTY_DATA, ...rows[0].data });
+        }
       } catch (err) {
-        console.error(err);
-        alert("Failed to load shared data from Supabase");
+        console.error("Supabase load failed:", err);
       } finally {
         setLoadingData(false);
       }
@@ -784,16 +1214,13 @@ export default function App() {
     if (loadingData) return;
 
     const t = setTimeout(() => {
-      saveAppData(data).catch(err => {
-        console.error(err);
-        alert("Failed to save shared data");
-      });
+      saveAppData(data).catch(err => { console.error("Save failed:", err); });
     }, 400);
 
     return () => clearTimeout(t);
   }, [data, loadingData]);
 
-  setTheme(darkMode);
+  T = darkMode ? DARK : LIGHT;
 
   if (loadingData) {
     return (
@@ -855,10 +1282,16 @@ export default function App() {
     return results.slice(0,12);
   })() : [];
 
+  if (!authed) {
+    return <LoginPage onLogin={(pw) => {
+      if (pw === COMPANY_PASSWORD) { try{localStorage.setItem(AUTH_KEY,"true");}catch{} setAuthed(true); return true; }
+      return false;
+    }} />;
+  }
+
   return (
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg}}>
-      {!authed && <LoginPage onLogin={(pw)=>{ if(pw===COMPANY_PASSWORD){localStorage.setItem(AUTH_KEY,"true");setAuthed(true);}else{return false;}return true; }}/>}
-      {authed && showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
+      {showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
       <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout}/>
@@ -932,6 +1365,7 @@ export default function App() {
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="analysis"  && <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
         </main>
@@ -957,6 +1391,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
     {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
+    {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO, progress & daily reports"},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
