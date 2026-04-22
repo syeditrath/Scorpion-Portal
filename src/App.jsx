@@ -476,8 +476,9 @@ const EMPTY_DATA = {
   scorpionDocCats: DEFAULT_SCORPION_CATS,
   projects: ["NEOM Phase 1","NEOM Phase 2","Riyadh Metro"],
   projectDocs: [],  // { id, project, subTab, name, refNo, date, expiryDate, amount, fileLink, notes }
-  projectAnalysis: [], // { id, project, poValue, poNumber, quotationRef, startDate, estEndDate,
-                       //   progress, status, description, dailyReports:[{id,date,weather,activities,manpower,equipment,issues,notes}] }
+  projectAnalysis: [], // { id, project, poValue, poNumber, quotationRef, clientName,
+                       //   startDate, estEndDate, status, description,
+                       //   dailyReports: [{id,date,weather,activities,manpower,equipment,issues,notes}] }
 };
 
 
@@ -737,325 +738,472 @@ function WelcomeScreen({onEnter}) {
 
 /* ════════════════════════════════════════════════════════════════════════════
    PROJECT ANALYSIS PAGE
-   Fields per project: PO Value, PO Number, Quotation Ref, Start Date,
-   Est. End Date, Progress %, Status, Description
-   Daily Reports: Date, Weather, Activities, Manpower count, Equipment,
-                  Issues, Notes
+   ─ Progress = totalInvoiced / poValue  (live from projectDocs invoices)
+   ─ Each "Job" = a group of invoices sharing the same jobNo under a project
+   ─ Daily reports are stored per project analysis record
 ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── helpers ── */
-function progressColor(p) {
-  const n = parseInt(p) || 0;
-  if (n >= 80) return T.green;
-  if (n >= 40) return T.blue;
-  if (n >= 20) return T.gold;
+/* ── pure helpers ── */
+function pctColor(p) {
+  if (p >= 80) return T.green;
+  if (p >= 40) return T.blue;
+  if (p >= 20) return T.gold;
   return T.red;
 }
-function durationDays(start, end) {
-  if (!start || !end) return null;
-  const d = Math.ceil((new Date(end) - new Date(start)) / 86400000);
-  return d > 0 ? d : null;
-}
-function calendarDaysLeft(end) {
-  if (!end) return null;
-  return Math.ceil((new Date(end) - new Date()) / 86400000);
+function daysLeft(d) {
+  if (!d) return null;
+  return Math.ceil((new Date(d) - new Date()) / 86400000);
 }
 
-/* ── Daily Report Form Modal ── */
+/* Derive live stats for one project from projectDocs invoices */
+function deriveProjectStats(projectName, projectDocs) {
+  const invs = (projectDocs || []).filter(d => d.subTab === "invoices" && d.project === projectName);
+  const certs = (projectDocs || []).filter(d => d.subTab === "certificates" && d.project === projectName);
+
+  const totalInvoiced  = invs.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
+  const totalCollected = invs.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0);
+  const totalDue       = invs.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0);
+
+  // Group invoices by jobNo — each unique jobNo = one Job/phase
+  const jobMap = {};
+  invs.forEach(d => {
+    const key = d.jobNo || "__no_job__";
+    if (!jobMap[key]) jobMap[key] = { jobNo: d.jobNo || "", invoices: [], certs: [] };
+    jobMap[key].invoices.push(d);
+  });
+  certs.forEach(d => {
+    const key = d.jobNo || "__no_job__";
+    if (!jobMap[key]) jobMap[key] = { jobNo: d.jobNo || "", invoices: [], certs: [] };
+    jobMap[key].certs.push(d);
+  });
+
+  const jobs = Object.values(jobMap).map(j => ({
+    ...j,
+    totalInvoiced:  j.invoices.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
+    totalCollected: j.invoices.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0),
+    totalDue:       j.invoices.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0),
+  })).sort((a, b) => (a.jobNo || "zzz").localeCompare(b.jobNo || "zzz"));
+
+  return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs };
+}
+
+/* ── Daily Report Modal ── */
 function DailyReportModal({ report, onSave, onClose }) {
-  const blank = { id: uid(), date: new Date().toISOString().slice(0,10), weather: "", activities: "", manpower: "", equipment: "", issues: "", notes: "" };
-  const [form, setForm] = useState(report ? { ...report } : blank);
-  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const iStyle = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
-  const lStyle = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
+  const blank = { id: uid(), date: new Date().toISOString().slice(0, 10), weather: "", activities: "", manpower: "", equipment: "", issues: "", notes: "" };
+  const [f, setF] = useState(report ? { ...report } : blank);
+  const upd = (k, v) => setF(p => ({ ...p, [k]: v }));
+  const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
+  const LS = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
   return (
     <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:560,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
         <div style={{padding:"20px 24px 14px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:T.card,zIndex:1,borderRadius:"18px 18px 0 0"}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{report ? "✎ Edit Daily Report" : "+ New Daily Report"}</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{report?"✎ Edit Daily Report":"+ New Daily Report"}</div>
           <button onClick={onClose} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>✕</button>
         </div>
         <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:14}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div><label style={lStyle}>DATE</label><input type="date" value={form.date} onChange={e=>upd("date",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-            <div><label style={lStyle}>WEATHER</label><input value={form.weather} onChange={e=>upd("weather",e.target.value)} placeholder="e.g. Sunny, 38°C" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>DATE</label><input type="date" value={f.date} onChange={e=>upd("date",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>WEATHER</label><input value={f.weather} onChange={e=>upd("weather",e.target.value)} placeholder="e.g. Sunny, 38°C" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
-          <div><label style={lStyle}>ACTIVITIES / WORK DONE</label><textarea value={form.activities} onChange={e=>upd("activities",e.target.value)} rows={3} placeholder="Describe the work carried out today…" style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          <div><label style={LS}>ACTIVITIES / WORK DONE</label><textarea value={f.activities} onChange={e=>upd("activities",e.target.value)} rows={3} placeholder="Describe the work carried out today…" style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div><label style={lStyle}>MANPOWER COUNT</label><input type="number" min="0" value={form.manpower} onChange={e=>upd("manpower",e.target.value)} placeholder="e.g. 12" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-            <div><label style={lStyle}>EQUIPMENT USED</label><input value={form.equipment} onChange={e=>upd("equipment",e.target.value)} placeholder="e.g. Excavator, 2× Trucks" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>MANPOWER COUNT</label><input type="number" min="0" value={f.manpower} onChange={e=>upd("manpower",e.target.value)} placeholder="e.g. 12" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>EQUIPMENT USED</label><input value={f.equipment} onChange={e=>upd("equipment",e.target.value)} placeholder="e.g. Excavator, 2× Trucks" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
-          <div><label style={lStyle}>ISSUES / DELAYS</label><textarea value={form.issues} onChange={e=>upd("issues",e.target.value)} rows={2} placeholder="Any problems, delays, or safety incidents…" style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-          <div><label style={lStyle}>ADDITIONAL NOTES</label><textarea value={form.notes} onChange={e=>upd("notes",e.target.value)} rows={2} placeholder="Inspector remarks, client feedback, etc." style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          <div><label style={LS}>ISSUES / DELAYS</label><textarea value={f.issues} onChange={e=>upd("issues",e.target.value)} rows={2} placeholder="Problems, delays, safety incidents…" style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          <div><label style={LS}>ADDITIONAL NOTES</label><textarea value={f.notes} onChange={e=>upd("notes",e.target.value)} rows={2} placeholder="Inspector remarks, client feedback, etc." style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
         </div>
         <div style={{padding:"12px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
-          <button onClick={()=>onSave(form)} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Report</button>
+          <button onClick={()=>onSave(f)} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Report</button>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Project Analysis Form Modal ── */
+/* ── Project Analysis Form Modal (PO details, dates, etc.) ── */
 function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
-  const blank = { id: uid(), project:"", poValue:"", poNumber:"", quotationRef:"", startDate:"", estEndDate:"", progress:"0", status:"In Progress", description:"", dailyReports:[] };
-  const [form, setForm] = useState(proj ? { dailyReports:[], ...proj } : blank);
-  const upd = (k,v) => setForm(f=>({...f,[k]:v}));
-  const iStyle = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
-  const lStyle = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
-  const prog = Math.min(100, Math.max(0, parseInt(form.progress)||0));
+  const blank = { id: uid(), project:"", poValue:"", poNumber:"", quotationRef:"", clientName:"", startDate:"", estEndDate:"", status:"In Progress", description:"", dailyReports:[] };
+  const [f, setF] = useState(proj ? { dailyReports:[], ...proj } : blank);
+  const upd = (k,v) => setF(p=>({...p,[k]:v}));
+  const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
+  const LS = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
   return (
     <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:600,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
         <div style={{padding:"20px 24px 14px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:T.card,zIndex:1,borderRadius:"18px 18px 0 0"}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{proj?"✎ Edit Project Analysis":"+ New Project Analysis"}</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{proj?"✎ Edit Project":"+ New Project Analysis"}</div>
           <button onClick={onClose} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>✕</button>
         </div>
         <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:14}}>
-          {/* Project selector */}
-          <div><label style={lStyle}>PROJECT</label>
-            <select value={form.project} onChange={e=>upd("project",e.target.value)} style={{...iStyle,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
+          <div style={{background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:10,padding:"10px 14px",fontSize:12,color:T.blue}}>
+            ℹ Progress is calculated automatically from invoices in Project Docs. Just enter the contract PO value here.
+          </div>
+          <div>
+            <label style={LS}>PROJECT *</label>
+            <select value={f.project} onChange={e=>upd("project",e.target.value)} style={{...IS,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
               <option value="">— Select project —</option>
               {projectNames.map(p=><option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-          {/* PO info row */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div><label style={lStyle}>PO NUMBER</label><input value={form.poNumber} onChange={e=>upd("poNumber",e.target.value)} placeholder="e.g. PO-2025-001" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-            <div><label style={lStyle}>PO VALUE (SAR)</label><input type="number" value={form.poValue} onChange={e=>upd("poValue",e.target.value)} placeholder="0.00" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>PO NUMBER</label><input value={f.poNumber} onChange={e=>upd("poNumber",e.target.value)} placeholder="e.g. PO-2025-001" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>PO VALUE (SAR) — Total Contract</label><input type="number" value={f.poValue} onChange={e=>upd("poValue",e.target.value)} placeholder="e.g. 2700000" style={IS} onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
-          {/* Quotation */}
-          <div><label style={lStyle}>QUOTATION REF</label><input value={form.quotationRef} onChange={e=>upd("quotationRef",e.target.value)} placeholder="e.g. QT-2024-089" style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-          {/* Dates */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div><label style={lStyle}>START DATE</label><input type="date" value={form.startDate} onChange={e=>upd("startDate",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-            <div><label style={lStyle}>ESTIMATED END DATE</label><input type="date" value={form.estEndDate} onChange={e=>upd("estEndDate",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>QUOTATION REF</label><input value={f.quotationRef} onChange={e=>upd("quotationRef",e.target.value)} placeholder="e.g. QT-2024-089" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>CLIENT NAME</label><input value={f.clientName} onChange={e=>upd("clientName",e.target.value)} placeholder="e.g. NEOM Company" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
-          {/* Progress + Status */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div>
-              <label style={lStyle}>PROGRESS (%)</label>
-              <input type="number" min="0" max="100" value={form.progress} onChange={e=>upd("progress",e.target.value)} style={iStyle} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
-              <div style={{marginTop:8,height:6,background:T.border,borderRadius:999}}>
-                <div style={{height:"100%",width:`${prog}%`,borderRadius:999,background:`linear-gradient(90deg,${progressColor(prog)},${progressColor(prog)}cc)`,transition:"width .4s"}}/>
-              </div>
-            </div>
-            <div><label style={lStyle}>STATUS</label>
-              <select value={form.status} onChange={e=>upd("status",e.target.value)} style={{...iStyle,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
-                {["Not Started","In Progress","On Hold","Completed","Cancelled"].map(s=><option key={s}>{s}</option>)}
-              </select>
-            </div>
+            <div><label style={LS}>START DATE</label><input type="date" value={f.startDate} onChange={e=>upd("startDate",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+            <div><label style={LS}>ESTIMATED END DATE</label><input type="date" value={f.estEndDate} onChange={e=>upd("estEndDate",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
-          {/* Description */}
-          <div><label style={lStyle}>DESCRIPTION / SCOPE OF WORK</label><textarea value={form.description} onChange={e=>upd("description",e.target.value)} rows={3} placeholder="Brief scope of work or project description…" style={{...iStyle,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          <div>
+            <label style={LS}>STATUS</label>
+            <select value={f.status} onChange={e=>upd("status",e.target.value)} style={{...IS,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
+              {["Not Started","In Progress","On Hold","Completed","Cancelled"].map(s=><option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div><label style={LS}>DESCRIPTION / SCOPE OF WORK</label><textarea value={f.description} onChange={e=>upd("description",e.target.value)} rows={3} placeholder="Brief scope of work…" style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
         </div>
         <div style={{padding:"12px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
-          <button onClick={()=>{ if(!form.project){return;} onSave(form); }} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Project</button>
+          <button onClick={()=>{if(!f.project)return; onSave(f);}} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Project</button>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Project Analysis Detail View ── */
-function ProjectAnalysisDetail({ proj, projectNames, onUpdate, onBack }) {
-  const [editProj, setEditProj]       = useState(false);
-  const [drModal, setDrModal]         = useState(null); // null | "new" | report-obj
-  const [expandedDr, setExpandedDr]   = useState(null);
-  const reports = (proj.dailyReports || []).slice().sort((a,b)=>b.date.localeCompare(a.date));
-  const prog = Math.min(100, Math.max(0, parseInt(proj.progress)||0));
-  const daysLeft = calendarDaysLeft(proj.estEndDate);
-  const duration = durationDays(proj.startDate, proj.estEndDate);
-  const statusColors = { "Not Started":T.textMuted, "In Progress":T.blue, "On Hold":T.gold, "Completed":T.green, "Cancelled":T.red };
-  const stColor = statusColors[proj.status] || T.textMuted;
+/* ── Project Detail view ── */
+function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDelete, onBack, go }) {
+  const [editProj, setEditProj]     = useState(false);
+  const [drModal,  setDrModal]      = useState(null);
+  const [expandDr, setExpandDr]     = useState(null);
+  const [expandJob, setExpandJob]   = useState(null);
 
-  const saveReport = (r) => {
+  const { invs, totalInvoiced, totalCollected, totalDue, jobs } = deriveProjectStats(proj.project, projectDocs);
+  const poValue = parseFloat(proj.poValue) || 0;
+  const pct = poValue > 0 ? Math.min(100, Math.round((totalInvoiced / poValue) * 100)) : 0;
+  const dl = daysLeft(proj.estEndDate);
+  const duration = proj.startDate && proj.estEndDate
+    ? Math.ceil((new Date(proj.estEndDate) - new Date(proj.startDate)) / 86400000)
+    : null;
+  const stColor = { "Not Started":T.textMuted,"In Progress":T.blue,"On Hold":T.gold,"Completed":T.green,"Cancelled":T.red }[proj.status]||T.textMuted;
+  const reports = (proj.dailyReports||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+
+  const saveReport = r => {
     const existing = (proj.dailyReports||[]).find(x=>x.id===r.id);
-    const updated = existing
-      ? (proj.dailyReports||[]).map(x=>x.id===r.id?r:x)
-      : [...(proj.dailyReports||[]), r];
-    onUpdate({ ...proj, dailyReports: updated });
+    const updated  = existing ? (proj.dailyReports||[]).map(x=>x.id===r.id?r:x) : [...(proj.dailyReports||[]),r];
+    onUpdate({...proj,dailyReports:updated});
     setDrModal(null);
   };
-  const delReport = (id) => onUpdate({ ...proj, dailyReports: (proj.dailyReports||[]).filter(r=>r.id!==id) });
+  const delReport = id => onUpdate({...proj,dailyReports:(proj.dailyReports||[]).filter(r=>r.id!==id)});
 
   return (
-    <div style={{maxWidth:"min(1100px,98vw)",margin:"0 auto"}}>
-      {/* Back bar */}
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
-        <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>← Back</button>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,flex:1}}>{proj.project}</div>
+    <div style={{maxWidth:"min(1200px,98vw)",margin:"0 auto"}}>
+      {/* Back + title bar */}
+      <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,marginBottom:20}}>
+        <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Back</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proj.project}</div>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:12,flexWrap:"wrap"}}>
+            {proj.clientName&&<span>Client: {proj.clientName}</span>}
+            {proj.poNumber&&<span>PO: {proj.poNumber}</span>}
+            {proj.quotationRef&&<span>QT: {proj.quotationRef}</span>}
+          </div>
+        </div>
         <button onClick={()=>setEditProj(true)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✎ Edit</button>
+        <button onClick={()=>{if(window.confirm("Delete this project analysis?")) onDelete();}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕ Delete</button>
       </div>
 
-      {/* Status + progress hero */}
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"22px 26px",marginBottom:16,boxShadow:T.shadow}}>
-        <div style={{display:"flex",flexWrap:"wrap",gap:16,alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
-          <div>
-            <span style={{background:`${stColor}18`,border:`1px solid ${stColor}44`,color:stColor,borderRadius:20,padding:"4px 14px",fontSize:12,fontWeight:700}}>{proj.status||"—"}</span>
-            {proj.description && <div style={{fontSize:13,color:T.textSub,marginTop:10,maxWidth:560,lineHeight:1.6}}>{proj.description}</div>}
+      {/* Progress hero */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"24px 28px",marginBottom:16,boxShadow:T.shadow}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:20,alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
+          <div style={{flex:1,minWidth:220}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+              <span style={{background:`${stColor}18`,border:`1px solid ${stColor}44`,color:stColor,borderRadius:20,padding:"4px 14px",fontSize:12,fontWeight:700}}>{proj.status||"—"}</span>
+            </div>
+            {proj.description&&<div style={{fontSize:13,color:T.textSub,lineHeight:1.6,maxWidth:520}}>{proj.description}</div>}
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:48,fontWeight:800,color:progressColor(prog),lineHeight:1}}>{prog}%</div>
-            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>PROGRESS</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:56,fontWeight:800,color:pctColor(pct),lineHeight:1}}>{pct}%</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:2,fontWeight:700}}>INVOICED / CONTRACT</div>
           </div>
         </div>
-        <div style={{height:12,background:T.border,borderRadius:999,overflow:"hidden",marginBottom:10}}>
-          <div style={{height:"100%",width:`${prog}%`,borderRadius:999,background:`linear-gradient(90deg,${progressColor(prog)},${progressColor(prog)}bb)`,transition:"width 1s ease",animation:"shimmer 3s linear infinite",backgroundSize:"200%"}}/>
+        {/* Progress bar */}
+        <div style={{height:14,background:T.border,borderRadius:999,overflow:"hidden",marginBottom:10}}>
+          <div style={{height:"100%",width:`${pct}%`,borderRadius:999,background:`linear-gradient(90deg,${pctColor(pct)},${pctColor(pct)}bb)`,transition:"width 1.2s ease"}}/>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:T.textMuted}}>
-          <span>{proj.startDate ? `Started ${fmtDate(proj.startDate)}` : "No start date"}</span>
-          <span>{daysLeft !== null ? (daysLeft >= 0 ? `${daysLeft} days remaining` : `${Math.abs(daysLeft)} days overdue`) : "No end date set"}</span>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:T.textMuted,flexWrap:"wrap",gap:8}}>
+          <span>{formatSarCompact(totalInvoiced)} invoiced of {poValue>0?formatSarCompact(poValue):"? PO value"}</span>
+          <span>
+            {dl !== null
+              ? dl >= 0 ? `${dl} days remaining` : `${Math.abs(dl)} days overdue`
+              : proj.estEndDate ? fmtDate(proj.estEndDate) : "No end date set"}
+          </span>
         </div>
       </div>
 
-      {/* KPI cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:18}}>
+      {/* KPI strip */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:18}}>
         {[
-          {label:"PO VALUE",    v:proj.poValue?formatSarCompact(proj.poValue):"—",     color:T.gold,   icon:"💰"},
-          {label:"PO NUMBER",   v:proj.poNumber||"—",                                   color:T.blue,   icon:"📋"},
-          {label:"QUOTATION",   v:proj.quotationRef||"—",                               color:T.purple, icon:"📄"},
-          {label:"DURATION",    v:duration?`${duration} days`:"—",                     color:T.teal,   icon:"📅"},
-          {label:"END DATE",    v:proj.estEndDate?fmtDate(proj.estEndDate):"—",         color:daysLeft!==null&&daysLeft<0?T.red:T.green, icon:"🏁"},
-          {label:"DAILY REPORTS",v:reports.length,                                      color:T.orange, icon:"📝"},
+          {icon:"💰",label:"PO VALUE",         v:poValue?formatSarCompact(poValue):"—",          color:T.gold},
+          {icon:"🧾",label:"TOTAL INVOICED",   v:formatSarCompact(totalInvoiced),                color:T.green},
+          {icon:"✓", label:"COLLECTED",        v:formatSarCompact(totalCollected),               color:T.blue},
+          {icon:"⏳",label:"DUE / REMAINING",  v:formatSarCompact(totalDue),                     color:totalDue>0?T.red:T.textMuted},
+          {icon:"📋",label:"JOBS (PHASES)",    v:jobs.filter(j=>j.jobNo).length||invs.length,    color:T.purple},
+          {icon:"📅",label:"DURATION",         v:duration?`${duration} days`:"—",                color:T.teal},
         ].map((k,i)=>(
-          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:13,padding:"16px 18px",boxShadow:T.shadow,animationDelay:`${i*.06}s`}}>
+          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:13,padding:"16px 18px",boxShadow:T.shadow,animationDelay:`${i*.05}s`}}>
             <div style={{fontSize:20,marginBottom:6}}>{k.icon}</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(16px,2vw,22px)",fontWeight:800,color:k.color,lineHeight:1.1,wordBreak:"break-word"}}>{k.v}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(15px,2vw,22px)",fontWeight:800,color:k.color,lineHeight:1.1,wordBreak:"break-word"}}>{k.v}</div>
             <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600,letterSpacing:.5}}>{k.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Daily Reports section */}
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      {/* ── Jobs / Phases (from invoices grouped by jobNo) ── */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",marginBottom:16,boxShadow:T.shadow}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📝 DAILY REPORTS</div>
-            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{reports.length} report{reports.length!==1?"s":""} recorded</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>🏗 JOBS / PHASES</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>
+              {jobs.length} job{jobs.length!==1?"s":""} from Project Docs invoices · Progress = Total Invoiced ÷ PO Value
+            </div>
           </div>
-          <button onClick={()=>setDrModal("new")} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>+ Add Report</button>
+          <button onClick={()=>go("projects")} style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            ➕ Add Invoice in Project Docs →
+          </button>
         </div>
 
-        {reports.length === 0 && (
-          <div style={{textAlign:"center",padding:"36px 20px",color:T.textMuted,fontSize:14}}>
-            <div style={{fontSize:40,marginBottom:12}}>📋</div>
-            No daily reports yet. Click <strong>+ Add Report</strong> to start.
+        {invs.length === 0 ? (
+          <div style={{textAlign:"center",padding:"30px 20px",background:T.card2,borderRadius:12,border:`1px dashed ${T.border}`}}>
+            <div style={{fontSize:32,marginBottom:10}}>🧾</div>
+            <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>No invoices found for this project.</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Add invoices in <strong>Project Docs → Invoices</strong> tab with a Job No. to see them here as phases.</div>
+            <button onClick={()=>go("projects")} style={{marginTop:14,background:`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Go to Project Docs →</button>
+          </div>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {jobs.map(job => {
+              const jobPct = poValue > 0 ? Math.min(100, Math.round((job.totalInvoiced / poValue) * 100)) : 0;
+              const jobKey = job.jobNo || "__no_job__";
+              const isExp  = expandJob === jobKey;
+              const hasCerts = job.certs.length > 0;
+              return (
+                <div key={jobKey} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                  {/* Job header */}
+                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:isExp?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandJob(isExp?null:jobKey)}>
+                    <div style={{width:38,height:38,borderRadius:9,background:T.goldDim,border:`1px solid ${T.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,fontWeight:800,color:T.gold,fontFamily:"'Barlow Condensed',sans-serif"}}>
+                      {job.jobNo?"J":"?"}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:700,color:T.text}}>
+                        {job.jobNo ? `Job ${job.jobNo}` : "Unassigned Invoices"}
+                      </div>
+                      <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:14,flexWrap:"wrap"}}>
+                        <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(job.totalInvoiced)} invoiced</span>
+                        <span style={{color:T.blue}}>{formatSarCompact(job.totalCollected)} collected</span>
+                        {job.totalDue>0&&<span style={{color:T.red}}>{formatSarCompact(job.totalDue)} due</span>}
+                        <span>{job.invoices.length} invoice{job.invoices.length!==1?"s":""}</span>
+                        {hasCerts&&<span style={{color:T.teal}}>📜 {job.certs.length} cert{job.certs.length!==1?"s":""}</span>}
+                      </div>
+                    </div>
+                    {/* Mini progress bar */}
+                    <div style={{width:100,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                      <span style={{fontSize:13,fontWeight:800,color:pctColor(jobPct)}}>{jobPct}%</span>
+                      <div style={{width:"100%",height:5,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${jobPct}%`,borderRadius:999,background:pctColor(jobPct)}}/>
+                      </div>
+                      <span style={{fontSize:10,color:T.textMuted}}>of total PO</span>
+                    </div>
+                    <span style={{color:T.textMuted,fontSize:14}}>{isExp?"▲":"▼"}</span>
+                  </div>
+
+                  {/* Expanded invoice list */}
+                  {isExp && (
+                    <div style={{borderTop:`1px solid ${T.border}`,background:T.card2}}>
+                      {/* Invoices */}
+                      {job.invoices.map(inv=>{
+                        const collected = getInvoiceCollectedAmount(inv);
+                        const due       = getInvoiceRemainingAmount(inv);
+                        const stC       = /paid|received/i.test(inv.paymentStatus||"") ? T.green : /partial/i.test(inv.paymentStatus||"") ? T.gold : T.red;
+                        const stream    = getInvoiceStream(inv);
+                        return (
+                          <div key={inv.id} style={{padding:"12px 16px 12px 62px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                            <div style={{flex:1,minWidth:200}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                                <span style={{fontWeight:700,fontSize:13,color:T.text}}>{inv.name||"Invoice"}</span>
+                                {inv.refNo&&<span style={{background:T.greenDim,color:T.green,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>#{inv.refNo}</span>}
+                                <span style={{background:stream==="advance"?T.goldDim:T.tealDim,color:stream==="advance"?T.gold:T.teal,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{stream==="advance"?"Advance":"Income"}</span>
+                                <span style={{background:`${stC}18`,color:stC,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{inv.paymentStatus||"Pending"}</span>
+                              </div>
+                              <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,color:T.textMuted}}>
+                                <span style={{color:T.green,fontWeight:600}}>SAR {Number(inv.amount||0).toLocaleString()}</span>
+                                {collected>0&&<span style={{color:T.blue}}>✓ {formatSarCompact(collected)}</span>}
+                                {due>0&&<span style={{color:T.red}}>⏳ {formatSarCompact(due)}</span>}
+                                {inv.dueDate&&<span>Due: {fmtDate(inv.dueDate)}</span>}
+                                {inv.fileLink&&<a href={inv.fileLink} target="_blank" rel="noreferrer" style={{color:T.blue,textDecoration:"none",fontWeight:600}}>📎 View</a>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {/* Certs */}
+                      {job.certs.map(cert=>(
+                        <div key={cert.id} style={{padding:"10px 16px 10px 62px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:`${T.teal}08`}}>
+                          <span style={{fontSize:14}}>📜</span>
+                          <span style={{fontWeight:700,fontSize:13,color:T.text}}>{cert.refNo?"Cert #"+cert.refNo:"Job Completion Certificate"}</span>
+                          {cert.completionDate&&<span style={{fontSize:12,color:T.textMuted}}>Completed: {fmtDate(cert.completionDate)}</span>}
+                          {cert.fileLink&&<a href={cert.fileLink} target="_blank" rel="noreferrer" style={{color:T.teal,textDecoration:"none",fontSize:12,fontWeight:600}}>📎 View</a>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
-
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {reports.map(r=>{
-            const isExp = expandedDr === r.id;
-            return (
-              <div key={r.id} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",transition:"all .2s"}}>
-                {/* Header row */}
-                <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:isExp?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandedDr(isExp?null:r.id)}>
-                  <div style={{width:36,height:36,borderRadius:9,background:T.blueDim,border:`1px solid ${T.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📅</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:14,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
-                    <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:12,flexWrap:"wrap"}}>
-                      {r.weather&&<span>🌤 {r.weather}</span>}
-                      {r.manpower&&<span>👷 {r.manpower} workers</span>}
-                      {r.equipment&&<span>🚧 {r.equipment}</span>}
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <button onClick={e=>{e.stopPropagation();setDrModal(r);}} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✎</button>
-                    <button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>
-                    <span style={{color:T.textMuted,fontSize:14,marginLeft:4}}>{isExp?"▲":"▼"}</span>
-                  </div>
-                </div>
-                {/* Expanded detail */}
-                {isExp && (
-                  <div style={{padding:"14px 16px",borderTop:`1px solid ${T.border}`,background:T.card2,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14}}>
-                    {r.activities && <div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:.5}}>ACTIVITIES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.activities}</div></div>}
-                    {r.issues     && <div><div style={{fontSize:10,fontWeight:700,color:T.red,marginBottom:5,letterSpacing:.5}}>ISSUES / DELAYS</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.issues}</div></div>}
-                    {r.notes      && <div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:.5}}>NOTES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.notes}</div></div>}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
       </div>
 
-      {/* Modals */}
-      {editProj && <ProjectAnalysisModal proj={proj} projectNames={projectNames} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
-      {drModal && <DailyReportModal report={drModal==="new"?null:drModal} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
+      {/* ── Daily Reports ── */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📝 DAILY REPORTS</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{reports.length} report{reports.length!==1?"s":""}</div>
+          </div>
+          <button onClick={()=>setDrModal("new")} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Add Report</button>
+        </div>
+        {reports.length===0 ? (
+          <div style={{textAlign:"center",padding:"30px 20px",color:T.textMuted,fontSize:14}}>
+            <div style={{fontSize:36,marginBottom:10}}>📋</div>
+            No daily reports yet. Click <strong>+ Add Report</strong> to start tracking site progress.
+          </div>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {reports.map(r=>{
+              const isE = expandDr===r.id;
+              return (
+                <div key={r.id} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",background:isE?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandDr(isE?null:r.id)}>
+                    <div style={{width:34,height:34,borderRadius:8,background:T.blueDim,border:`1px solid ${T.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>📅</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
+                      <div style={{fontSize:11,color:T.textMuted,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                        {r.weather&&<span>🌤 {r.weather}</span>}
+                        {r.manpower&&<span>👷 {r.manpower} workers</span>}
+                        {r.equipment&&<span>🚧 {r.equipment}</span>}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <button onClick={e=>{e.stopPropagation();setDrModal(r);}} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✎</button>
+                      <button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>
+                      <span style={{color:T.textMuted,fontSize:13,marginLeft:2}}>{isE?"▲":"▼"}</span>
+                    </div>
+                  </div>
+                  {isE&&(
+                    <div style={{padding:"12px 14px 12px 60px",borderTop:`1px solid ${T.border}`,background:T.card2,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+                      {r.activities&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>ACTIVITIES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.activities}</div></div>}
+                      {r.issues&&<div><div style={{fontSize:10,fontWeight:700,color:T.red,marginBottom:4}}>ISSUES / DELAYS</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.issues}</div></div>}
+                      {r.notes&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>NOTES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.notes}</div></div>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
+      {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
     </div>
   );
 }
 
-/* ── Main Project Analysis Page ── */
-function ProjectAnalysisPage({ data, setData, showToast }) {
-  const [modal, setModal]       = useState(null); // null | "new" | proj-obj
-  const [detail, setDetail]     = useState(null); // proj id being viewed
-  const [filterProj, setFilterProj] = useState("All");
-  const [filterStatus, setFilterStatus] = useState("All");
-  const [search, setSearch]     = useState("");
-  const projects = data.projects || [];
-  const analysis = data.projectAnalysis || [];
+/* ── Project Analysis list page ── */
+function ProjectAnalysisPage({ data, setData, showToast, go }) {
+  const [modal,  setModal]  = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [fStat,  setFStat]  = useState("All");
+  const [search, setSearch] = useState("");
 
-  const save = (p) => {
+  const projects  = data.projects || [];
+  const analysis  = data.projectAnalysis || [];
+  const projectDocs = data.projectDocs || [];
+
+  const save = p => {
     const exists = analysis.find(x=>x.id===p.id);
-    const updated = exists ? analysis.map(x=>x.id===p.id?p:x) : [...analysis, p];
-    setData(prev=>({...prev, projectAnalysis: updated}));
-    showToast(exists?"Project analysis updated":"Project analysis added");
+    const updated = exists ? analysis.map(x=>x.id===p.id?p:x) : [...analysis,p];
+    setData(prev=>({...prev,projectAnalysis:updated}));
+    showToast(exists?"Project updated":"Project added");
     setModal(null);
   };
-  const del = (id) => {
-    setData(prev=>({...prev, projectAnalysis: prev.projectAnalysis.filter(x=>x.id!==id)}));
+  const del = id => {
+    setData(prev=>({...prev,projectAnalysis:prev.projectAnalysis.filter(x=>x.id!==id)}));
     showToast("Project deleted","del");
     setDetail(null);
   };
-  const update = (p) => {
-    setData(prev=>({...prev, projectAnalysis: (prev.projectAnalysis||[]).map(x=>x.id===p.id?p:x)}));
+  const update = p => {
+    setData(prev=>({...prev,projectAnalysis:(prev.projectAnalysis||[]).map(x=>x.id===p.id?p:x)}));
     showToast("Saved");
   };
 
-  // If viewing a detail
-  const detailProj = detail ? analysis.find(x=>x.id===detail) : null;
-  if (detailProj) {
-    return <ProjectAnalysisDetail proj={detailProj} projectNames={projects} onUpdate={p=>{update(p); setDetail(p.id);}} onBack={()=>setDetail(null)}/>;
+  const detailRec = detail ? analysis.find(x=>x.id===detail) : null;
+  if (detailRec) {
+    return <ProjectAnalysisDetail
+      proj={detailRec} projectDocs={projectDocs} projectNames={projects}
+      onUpdate={p=>{update(p);setDetail(p.id);}} onDelete={()=>del(detailRec.id)}
+      onBack={()=>setDetail(null)} go={go}/>;
   }
 
-  // Filter
-  let visible = analysis;
-  if (filterProj !== "All")   visible = visible.filter(x=>x.project===filterProj);
-  if (filterStatus !== "All") visible = visible.filter(x=>x.status===filterStatus);
-  if (search.trim())          visible = visible.filter(x=>
-    [x.project,x.poNumber,x.quotationRef,x.description,x.status].some(v=>String(v||"").toLowerCase().includes(search.toLowerCase()))
+  // Enrich each record with live invoice stats
+  const enriched = analysis.map(p => ({
+    ...p,
+    ...deriveProjectStats(p.project, projectDocs),
+  }));
+
+  let visible = enriched;
+  if (fStat !== "All") visible = visible.filter(x=>x.status===fStat);
+  if (search.trim()) visible = visible.filter(x=>
+    [x.project,x.poNumber,x.clientName,x.quotationRef,x.status].some(v=>String(v||"").toLowerCase().includes(search.toLowerCase()))
   );
 
-  const totalPO = analysis.reduce((s,x)=>s+(parseFloat(x.poValue)||0),0);
-  const statuses = ["Not Started","In Progress","On Hold","Completed","Cancelled"];
+  const totalPO        = enriched.reduce((s,x)=>s+(parseFloat(x.poValue)||0),0);
+  const totalInvoiced  = enriched.reduce((s,x)=>s+x.totalInvoiced,0);
+  const totalCollected = enriched.reduce((s,x)=>s+x.totalCollected,0);
+  const totalDue       = enriched.reduce((s,x)=>s+x.totalDue,0);
 
   return (
     <div style={{maxWidth:"min(1300px,98vw)",margin:"0 auto"}}>
-      {/* Page header */}
+      {/* Header */}
       <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
         <div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(22px,3vw,32px)",color:T.text,letterSpacing:1}}>PROJECT ANALYSIS</div>
-          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>{analysis.length} project{analysis.length!==1?"s":""} · Total PO: {formatSarCompact(totalPO)}</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>
+            {analysis.length} project{analysis.length!==1?"s":""} · Progress auto-calculated from Project Docs invoices
+          </div>
         </div>
-        <button onClick={()=>setModal("new")} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:11,padding:"11px 22px",fontSize:14,fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:8,boxShadow:`0 4px 14px ${T.gold}44`}}>+ New Project</button>
+        <button onClick={()=>setModal("new")} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:11,padding:"11px 22px",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:`0 4px 14px ${T.gold}44`}}>+ New Project</button>
       </div>
 
-      {/* Summary KPI strip */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:18}}>
+      {/* Portfolio KPI strip */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
         {[
-          {label:"Total Projects", v:analysis.length,                                              color:T.blue},
-          {label:"In Progress",    v:analysis.filter(x=>x.status==="In Progress").length,          color:T.blue},
-          {label:"Completed",      v:analysis.filter(x=>x.status==="Completed").length,            color:T.green},
-          {label:"On Hold",        v:analysis.filter(x=>x.status==="On Hold").length,              color:T.gold},
-          {label:"Total PO Value", v:formatSarCompact(totalPO),                                    color:T.gold},
-          {label:"Daily Reports",  v:analysis.reduce((s,x)=>s+(x.dailyReports||[]).length,0),     color:T.orange},
+          {label:"Total PO Value",   v:formatSarCompact(totalPO),        color:T.gold},
+          {label:"Total Invoiced",   v:formatSarCompact(totalInvoiced),  color:T.green},
+          {label:"Total Collected",  v:formatSarCompact(totalCollected), color:T.blue},
+          {label:"Total Due",        v:formatSarCompact(totalDue),       color:totalDue>0?T.red:T.textMuted},
+          {label:"In Progress",      v:enriched.filter(x=>x.status==="In Progress").length, color:T.blue},
+          {label:"Completed",        v:enriched.filter(x=>x.status==="Completed").length,   color:T.green},
         ].map((k,i)=>(
           <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",boxShadow:T.shadow,animationDelay:`${i*.05}s`}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2.5vw,28px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(16px,2.5vw,26px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
             <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600}}>{k.label}</div>
           </div>
         ))}
@@ -1066,80 +1214,92 @@ function ProjectAnalysisPage({ data, setData, showToast }) {
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search projects…"
           style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:9,padding:"8px 13px",fontSize:13,color:T.text,outline:"none",width:200}}
           onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
-        <select value={filterProj} onChange={e=>setFilterProj(e.target.value)}
-          style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:9,padding:"8px 13px",fontSize:13,color:T.text,outline:"none"}}>
-          <option value="All">All Projects</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
-        </select>
-        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
+        <select value={fStat} onChange={e=>setFStat(e.target.value)}
           style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:9,padding:"8px 13px",fontSize:13,color:T.text,outline:"none"}}>
           <option value="All">All Statuses</option>
-          {statuses.map(s=><option key={s}>{s}</option>)}
+          {["Not Started","In Progress","On Hold","Completed","Cancelled"].map(s=><option key={s}>{s}</option>)}
         </select>
-        {(filterProj!=="All"||filterStatus!=="All"||search) && (
-          <button onClick={()=>{setFilterProj("All");setFilterStatus("All");setSearch("");}}
-            style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:9,padding:"8px 13px",fontSize:12,fontWeight:600,cursor:"pointer"}}>✕ Clear</button>
+        {(fStat!=="All"||search)&&(
+          <button onClick={()=>{setFStat("All");setSearch("");}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:9,padding:"8px 13px",fontSize:12,fontWeight:600,cursor:"pointer"}}>✕ Clear</button>
         )}
         <div style={{marginLeft:"auto",fontSize:12,color:T.textMuted}}>{visible.length} result{visible.length!==1?"s":""}</div>
       </div>
 
-      {/* Project cards grid */}
-      {visible.length === 0 ? (
+      {/* Project cards */}
+      {visible.length===0 ? (
         <div style={{textAlign:"center",padding:"60px 20px",background:T.card,border:`1px solid ${T.border}`,borderRadius:18}}>
           <div style={{fontSize:48,marginBottom:16}}>📊</div>
           <div style={{fontSize:16,color:T.textMuted,fontWeight:600}}>
-            {analysis.length === 0 ? "No projects yet — click + New Project to get started" : "No projects match the current filters"}
+            {analysis.length===0 ? "No projects yet — click + New Project to get started" : "No projects match the filters"}
           </div>
         </div>
       ) : (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,360px),1fr))",gap:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(min(100%,380px),1fr))",gap:16}}>
           {visible.map((p,i)=>{
-            const prog = Math.min(100, Math.max(0, parseInt(p.progress)||0));
-            const stColor = {
-              "Not Started":T.textMuted,"In Progress":T.blue,"On Hold":T.gold,"Completed":T.green,"Cancelled":T.red
-            }[p.status] || T.textMuted;
-            const dLeft = calendarDaysLeft(p.estEndDate);
+            const poValue = parseFloat(p.poValue)||0;
+            const pct = poValue>0 ? Math.min(100,Math.round((p.totalInvoiced/poValue)*100)) : 0;
+            const dl = daysLeft(p.estEndDate);
+            const stColor = {"Not Started":T.textMuted,"In Progress":T.blue,"On Hold":T.gold,"Completed":T.green,"Cancelled":T.red}[p.status]||T.textMuted;
             return (
-              <div key={p.id} className="fade-up card-hover" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",boxShadow:T.shadow,animationDelay:`${i*.04}s`,display:"flex",flexDirection:"column",gap:14,cursor:"pointer"}}
+              <div key={p.id} className="fade-up card-hover" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",boxShadow:T.shadow,animationDelay:`${i*.04}s`,cursor:"pointer",display:"flex",flexDirection:"column",gap:14}}
                    onClick={()=>setDetail(p.id)}>
-                {/* Card header */}
+                {/* Header */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.project||"Unnamed"}</div>
-                    {p.poNumber && <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>PO: {p.poNumber}</div>}
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.project||"Unnamed"}</div>
+                    <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                      {p.clientName&&<span>{p.clientName}</span>}
+                      {p.poNumber&&<span>PO: {p.poNumber}</span>}
+                    </div>
                   </div>
                   <div style={{display:"flex",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                     <button onClick={()=>setModal(p)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✎</button>
                     <button onClick={()=>del(p.id)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✕</button>
                   </div>
                 </div>
-                {/* Status badge + PO value */}
+                {/* Status + PO value */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{background:`${stColor}18`,border:`1px solid ${stColor}44`,color:stColor,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700}}>{p.status||"—"}</span>
-                  {p.poValue && <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.gold}}>{formatSarCompact(p.poValue)}</span>}
+                  {poValue>0&&<span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.gold}}>{formatSarCompact(poValue)}</span>}
                 </div>
-                {/* Progress bar */}
+                {/* Progress bar — invoiced vs PO */}
                 <div>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                    <span style={{fontSize:11,color:T.textMuted,fontWeight:600}}>PROGRESS</span>
-                    <span style={{fontSize:12,fontWeight:800,color:progressColor(prog)}}>{prog}%</span>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,fontSize:12}}>
+                    <span style={{color:T.textMuted,fontWeight:600}}>INVOICED PROGRESS</span>
+                    <span style={{fontWeight:800,color:pctColor(pct)}}>{pct}%</span>
                   </div>
-                  <div style={{height:7,background:T.border,borderRadius:999,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${prog}%`,borderRadius:999,background:`linear-gradient(90deg,${progressColor(prog)},${progressColor(prog)}cc)`,transition:"width 1s"}}/>
+                  <div style={{height:8,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${pct}%`,borderRadius:999,background:`linear-gradient(90deg,${pctColor(pct)},${pctColor(pct)}bb)`,transition:"width 1s"}}/>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,color:T.textMuted}}>
+                    <span>{formatSarCompact(p.totalInvoiced)} invoiced</span>
+                    <span>{poValue>0?formatSarCompact(poValue)+" total":invs+" invoices"}</span>
                   </div>
                 </div>
-                {/* Date info */}
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:T.textMuted}}>
+                {/* Collected / Due */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:9,padding:"8px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.green}}>{formatSarCompact(p.totalCollected)}</div>
+                    <div style={{fontSize:10,color:T.green,marginTop:2,fontWeight:700}}>✓ COLLECTED</div>
+                  </div>
+                  <div style={{background:p.totalDue>0?T.redDim:T.greenDim,border:`1px solid ${p.totalDue>0?T.red:T.green}33`,borderRadius:9,padding:"8px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:p.totalDue>0?T.red:T.green}}>{formatSarCompact(p.totalDue)}</div>
+                    <div style={{fontSize:10,color:p.totalDue>0?T.red:T.green,marginTop:2,fontWeight:700}}>⏳ DUE</div>
+                  </div>
+                </div>
+                {/* Date row */}
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted}}>
                   <span>{p.startDate?fmtDate(p.startDate):"No start date"}</span>
-                  {dLeft !== null
-                    ? <span style={{color:dLeft<0?T.red:dLeft<30?T.gold:T.green,fontWeight:600}}>{dLeft>=0?`${dLeft}d left`:`${Math.abs(dLeft)}d overdue`}</span>
+                  {dl!==null
+                    ? <span style={{color:dl<0?T.red:dl<30?T.gold:T.green,fontWeight:600}}>{dl>=0?`${dl}d left`:`${Math.abs(dl)}d overdue`}</span>
                     : <span>{p.estEndDate?fmtDate(p.estEndDate):"No end date"}</span>
                   }
                 </div>
-                {/* Daily reports count */}
-                {(p.dailyReports||[]).length > 0 && (
-                  <div style={{background:T.orangeDim,border:`1px solid ${T.orange}33`,borderRadius:8,padding:"6px 12px",fontSize:12,color:T.orange,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
-                    📝 {p.dailyReports.length} daily report{p.dailyReports.length!==1?"s":""}
+                {/* Jobs count */}
+                {p.jobs.filter(j=>j.jobNo).length>0&&(
+                  <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:8,padding:"6px 12px",fontSize:12,color:T.gold,fontWeight:600}}>
+                    🏗 {p.jobs.filter(j=>j.jobNo).length} Job{p.jobs.filter(j=>j.jobNo).length!==1?"s":""} · {p.invs.length} Invoice{p.invs.length!==1?"s":""}
+                    {(proj?.dailyReports?.length||p.dailyReports?.length)>0&&<span style={{marginLeft:10,color:T.orange}}>📝 {proj?.dailyReports?.length||p.dailyReports?.length} reports</span>}
                   </div>
                 )}
               </div>
@@ -1148,8 +1308,7 @@ function ProjectAnalysisPage({ data, setData, showToast }) {
         </div>
       )}
 
-      {/* Modal */}
-      {modal && <ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} onSave={save} onClose={()=>setModal(null)}/>}
+      {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} onSave={save} onClose={()=>setModal(null)}/>}
     </div>
   );
 }
@@ -1365,7 +1524,7 @@ export default function App() {
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="analysis"  && <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="analysis"  && <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go}/></div>}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
         </main>
@@ -1391,7 +1550,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
     {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
-    {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO, progress & daily reports"},
+    {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO value, progress & jobs"},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
