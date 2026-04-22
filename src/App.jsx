@@ -1273,7 +1273,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
                   </div>
                   <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,color:T.textMuted}}>
                     <span>{formatSarCompact(p.totalInvoiced)} invoiced</span>
-                    <span>{poValue>0?formatSarCompact(poValue)+" total":invs+" invoices"}</span>
+                    <span>{poValue>0?formatSarCompact(poValue)+" total":p.invs.length+" invoices"}</span>
                   </div>
                 </div>
                 {/* Collected / Due */}
@@ -1299,7 +1299,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
                 {p.jobs.filter(j=>j.jobNo).length>0&&(
                   <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:8,padding:"6px 12px",fontSize:12,color:T.gold,fontWeight:600}}>
                     🏗 {p.jobs.filter(j=>j.jobNo).length} Job{p.jobs.filter(j=>j.jobNo).length!==1?"s":""} · {p.invs.length} Invoice{p.invs.length!==1?"s":""}
-                    {(proj?.dailyReports?.length||p.dailyReports?.length)>0&&<span style={{marginLeft:10,color:T.orange}}>📝 {proj?.dailyReports?.length||p.dailyReports?.length} reports</span>}
+                    {(p.dailyReports?.length||0)>0&&<span style={{marginLeft:10,color:T.orange}}>📝 {p.dailyReports.length} report{p.dailyReports.length!==1?"s":""}</span>}
                   </div>
                 )}
               </div>
