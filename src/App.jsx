@@ -382,7 +382,7 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
 /* ─── Auth ────────────────────────────────────────────────────────────────── */
 const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY = "cta_auth";
-const FINANCE_PASSWORD = "finance2025"; // Change finance access password
+const FINANCE_PASSWORD = "finance2025";
 const FINANCE_AUTH_KEY = "cta_finance_auth";
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
@@ -459,10 +459,6 @@ function getPreviewUrl(url) {
 
 function isAuthenticated() {
   try { return localStorage.getItem(AUTH_KEY) === "true"; } catch { return false; }
-}
-
-function isFinanceAuthenticated() {
-  try { return localStorage.getItem(FINANCE_AUTH_KEY) === "true"; } catch { return false; }
 }
 
 const EMPTY_DATA = {
@@ -1577,6 +1573,10 @@ export default function App() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
+  const [financeAuthed, setFinanceAuthed] = useState(() => {
+    try { return localStorage.getItem(FINANCE_AUTH_KEY) === "true"; }
+    catch { return false; }
+  });
   const { width: viewportWidth } = useViewport();
 
   useEffect(() => {
@@ -1648,8 +1648,6 @@ export default function App() {
 
   const logout = () => {
     try { localStorage.removeItem(AUTH_KEY); } catch {}
-    try { localStorage.removeItem(FINANCE_AUTH_KEY); } catch {}
-    setFinanceAuthed(false);
     setAuthed(false);
   };
 
@@ -1798,9 +1796,9 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
   const isMobile = viewportWidth < 1200;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
-    {id:"finance",   icon:"₹", label:"Finance",            desc:"Invoices & collections"},
+    {id:"finance",   icon:"$", label:"Finance",            desc:"Invoices, receivables & dues"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
-    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Project records"},
+    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
     {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO value, progress & jobs"},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
@@ -1981,24 +1979,19 @@ function Dashboard({ data, alerts, go }) {
   const expired  = alerts.filter(a=>a.days<0).sort((a,b)=>a.days-b.days);
   const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
 
-  const projectDocs = data.projectDocs || [];
-  const projectAnalysis = data.projectAnalysis || [];
-  const projectCards = (data.projects || []).map(project => {
-    const docs = projectDocs.filter(d => d.project === project);
-    const invs = docs.filter(d => d.subTab === "invoices");
-    const certs = docs.filter(d => d.subTab === "certificates");
-    const workOrders = docs.filter(d => d.subTab === "workorders");
-    const analysis = projectAnalysis.find(p => p.project === project);
+  const projectOverviewRows = (data.projects || []).map((project) => {
+    const docs = (data.projectDocs || []).filter((d) => d.project === project);
+    const analysis = (data.projectAnalysis || []).find((p) => p.project === project);
     return {
       project,
-      invoices: invs.length,
-      certificates: certs.length,
-      workOrders: workOrders.length,
-      totalDocs: docs.length,
-      status: analysis?.status || "Not Setup",
-      client: analysis?.clientName || "—",
+      invoices: docs.filter((d) => d.subTab === "invoices").length,
+      certificates: docs.filter((d) => d.subTab === "certificates").length,
+      workOrders: docs.filter((d) => d.subTab === "workorders").length,
+      dailyReports: (analysis?.dailyReports || []).length,
+      status: analysis?.status || "Not Started",
+      clientName: analysis?.clientName || "—",
       startDate: analysis?.startDate || "",
-      endDate: analysis?.estEndDate || "",
+      estEndDate: analysis?.estEndDate || "",
     };
   });
 
@@ -2010,9 +2003,8 @@ function Dashboard({ data, alerts, go }) {
           {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕"},
           {label:"Due in 30 Days",  v:expiring30,   color:expiring30>0?T.gold:T.textMuted,  icon:"⏱"},
           {label:"Compliance",      v:`${pct}%`,    color:pct>=80?T.green:pct>=60?T.gold:T.red, icon:"◎"},
-          {label:"Projects",        v:(data.projects||[]).length, color:T.blue, icon:"◆"},
           {label:"People",          v:mpPeople,     color:T.green,  icon:"◈"},
-          {label:"Equipment",       v:eqTotal,      color:T.gold,   icon:"◎"},
+          {label:"Equipment Assets",v:eqTotal,      color:T.gold,   icon:"◎"},
         ].map((k,i)=>(
           <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
@@ -2036,43 +2028,33 @@ function Dashboard({ data, alerts, go }) {
         </div>
       </div>
 
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"20px",marginBottom:18}}>
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:18}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:16}}>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>PROJECT OVERVIEW</div>
-            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Basic operational visibility without finance details</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Operational visibility only. Financial metrics have been moved to the Finance section.</div>
           </div>
-          <button onClick={()=>go("projects")} style={{background:T.blueDim,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Open Project Docs →</button>
+          <button onClick={() => go("finance")} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Open Finance →</button>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
-          {projectCards.map((p, idx) => (
-            <div key={p.project} className="card-hover" style={{background:`linear-gradient(180deg, ${T.card} 0%, ${T.bg} 100%)`,border:`1px solid ${T.border}`,borderRadius:16,padding:"18px",boxShadow:T.shadow,animationDelay:`${idx*0.05}s`}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:14}}>
+          {projectOverviewRows.map((row) => (
+            <div key={row.project} className="card-hover" style={{background:`linear-gradient(180deg, ${T.card} 0%, ${T.bg} 100%)`,border:`1px solid ${T.border}`,borderRadius:16,padding:"18px",boxShadow:T.shadow}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
                 <div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,lineHeight:1}}>{p.project}</div>
-                  <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Client: {p.client}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,lineHeight:1}}>{row.project}</div>
+                  <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>{row.clientName !== "—" ? row.clientName : "Client not set"}</div>
                 </div>
-                <span style={{background:p.status==="Completed"?T.greenDim:p.status==="In Progress"?T.blueDim:p.status==="On Hold"?T.goldDim:T.card2,color:p.status==="Completed"?T.green:p.status==="In Progress"?T.blue:p.status==="On Hold"?T.gold:T.textMuted,borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{p.status}</span>
+                <span style={{background:T.blueDim,color:T.blue,borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:700}}>{row.status}</span>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:14}}>
-                {[
-                  {label:"Invoices", value:p.invoices, color:T.green},
-                  {label:"Certificates", value:p.certificates, color:T.blue},
-                  {label:"Work Orders", value:p.workOrders, color:T.purple},
-                  {label:"Total Docs", value:p.totalDocs, color:T.teal},
-                ].map(s => (
-                  <div key={s.label} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 12px 10px"}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:s.color,lineHeight:1}}>{s.value}</div>
-                    <div style={{fontSize:11,color:T.textMuted,marginTop:3}}>{s.label}</div>
-                  </div>
-                ))}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
+                <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.teal,lineHeight:1}}>{row.invoices}</div><div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Invoices</div></div>
+                <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.gold,lineHeight:1}}>{row.certificates}</div><div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Certificates</div></div>
+                <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.blue,lineHeight:1}}>{row.workOrders}</div><div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Work Orders</div></div>
+                <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.purple,lineHeight:1}}>{row.dailyReports}</div><div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Daily Reports</div></div>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:12,gap:10}}>
-                <span>Start: {p.startDate ? fmtDate(p.startDate) : '—'}</span>
-                <span>Est. End: {p.endDate ? fmtDate(p.endDate) : '—'}</span>
-              </div>
-              <div style={{display:"flex",justifyContent:"flex-end"}}>
-                <button onClick={()=>go("analysis")} style={{background:"transparent",border:"none",color:T.blue,fontSize:13,fontWeight:700,cursor:"pointer"}}>Open Project Analysis →</button>
+              <div style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:11,color:T.textMuted,marginTop:6}}>
+                <span>Start: {row.startDate ? fmtDate(row.startDate) : "—"}</span>
+                <span>Est. End: {row.estEndDate ? fmtDate(row.estEndDate) : "—"}</span>
               </div>
             </div>
           ))}
@@ -2096,15 +2078,30 @@ function Dashboard({ data, alerts, go }) {
         />
 
         <DashboardMiniCard
-          title="PROJECT ANALYSIS"
-          sub="Schedules, PO values, progress & daily reports"
-          icon="◐"
+          title="PROJECT DOCS"
+          sub="Project cards, certificates & work orders"
+          icon="◆"
           color={T.teal}
           stats={[
-            {label:"Projects", value:(data.projectAnalysis||[]).length},
-            {label:"In Progress", value:(data.projectAnalysis||[]).filter(p=>p.status==="In Progress").length},
-            {label:"Completed", value:(data.projectAnalysis||[]).filter(p=>p.status==="Completed").length},
-            {label:"Reports", value:(data.projectAnalysis||[]).reduce((n,p)=>n+((p.dailyReports||[]).length),0)},
+            {label:"Projects", value:(data.projects || []).length},
+            {label:"Docs", value:(data.projectDocs || []).length},
+            {label:"Analysis", value:(data.projectAnalysis || []).length},
+            {label:"Reports", value:(data.projectAnalysis || []).reduce((n,p)=>n+((p.dailyReports||[]).length),0)},
+          ]}
+          actionLabel="Open Project Docs →"
+          onClick={() => go("projects")}
+        />
+
+        <DashboardMiniCard
+          title="PROJECT ANALYSIS"
+          sub="PO details, progress & jobs"
+          icon="◐"
+          color={T.purple}
+          stats={[
+            {label:"Projects", value:(data.projectAnalysis || []).length},
+            {label:"In Progress", value:(data.projectAnalysis || []).filter(p=>p.status==="In Progress").length},
+            {label:"Completed", value:(data.projectAnalysis || []).filter(p=>p.status==="Completed").length},
+            {label:"On Hold", value:(data.projectAnalysis || []).filter(p=>p.status==="On Hold").length},
           ]}
           actionLabel="Open Analysis →"
           onClick={() => go("analysis")}
@@ -2154,8 +2151,8 @@ function Dashboard({ data, alerts, go }) {
             {expired.length===0
               ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing overdue</div>
               :<div style={{display:"grid",gap:7}}>
-                {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>) }
-                {expired.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expired.length-8} more</div>}
+                {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
+                {expired.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expired.length-8} more — check Alerts page</div>}
               </div>
             }
           </div>
@@ -2169,17 +2166,17 @@ function Dashboard({ data, alerts, go }) {
             {expiring.length===0
               ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing expiring soon</div>
               :<div style={{display:"grid",gap:7}}>
-                {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>) }
+                {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
                 {expiring.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expiring.length-8} more</div>}
               </div>
             }
           </div>
         </div>
       ) : (
-        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"40px 20px",textAlign:"center",animationDelay:".55s"}}>
-          <div style={{fontSize:44,marginBottom:12}}>✓</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,marginBottom:6}}>ALL CLEAR</div>
-          <div style={{fontSize:13,color:T.textMuted}}>No expiring or overdue items — everything is up to date.</div>
+        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"26px 20px",textAlign:"center"}}>
+          <div style={{fontSize:34,marginBottom:8}}>✅</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:18,color:T.green}}>ALL TRACKED ITEMS ARE COMPLIANT</div>
+          <div style={{fontSize:13,color:T.textSub,marginTop:4}}>No expiring items within the next 90 days</div>
         </div>
       )}
     </div>
@@ -2188,32 +2185,22 @@ function Dashboard({ data, alerts, go }) {
 
 function FinanceAccessCard({ onUnlock }) {
   const [pw, setPw] = useState("");
-  const [error, setError] = useState("");
-
-  const submit = () => {
-    if (pw === FINANCE_PASSWORD) {
-      try { localStorage.setItem(FINANCE_AUTH_KEY, "true"); } catch {}
-      onUnlock(true);
-      return;
-    }
-    setError("Incorrect finance access password");
-    setPw("");
-  };
-
+  const [err, setErr] = useState("");
   return (
-    <div style={{maxWidth:520,margin:"40px auto",background:T.card,border:`1px solid ${T.border}`,borderRadius:20,padding:"28px",boxShadow:T.shadow}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-        <div style={{width:48,height:48,borderRadius:14,background:T.goldDim,color:T.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800}}>₹</div>
-        <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>FINANCE ACCESS</div>
-          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Restricted financial information is separated from the operational dashboard.</div>
-        </div>
-      </div>
-      <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>Enter the finance access password to continue.</div>
-      <input type="password" value={pw} onChange={e=>{setPw(e.target.value); setError("");}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Finance password…" style={{width:"100%",background:T.inputBg,border:`1px solid ${error ? T.red : T.border}`,borderRadius:10,padding:"11px 14px",fontSize:14,color:T.text,outline:"none",marginBottom:10}} />
-      {error && <div style={{fontSize:12,color:T.red,fontWeight:700,marginBottom:10}}>{error}</div>}
-      <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <button onClick={submit} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 18px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Unlock Finance</button>
+    <div style={{maxWidth:"min(520px,96vw)",margin:"40px auto",background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"28px 26px"}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text,marginBottom:6}}>FINANCE ACCESS</div>
+      <div style={{fontSize:13,color:T.textMuted,marginBottom:18}}>This section contains financial information and requires separate access.</div>
+      <div style={{display:"grid",gap:10}}>
+        <input type="password" value={pw} onChange={(e)=>{setPw(e.target.value); setErr("");}} placeholder="Enter finance password" style={{width:"100%",background:T.inputBg,border:`1px solid ${err ? T.red : T.border}`,borderRadius:10,padding:"12px 14px",fontSize:14,color:T.text,outline:"none"}} />
+        {err && <div style={{fontSize:12,color:T.red,fontWeight:700}}>{err}</div>}
+        <button onClick={()=>{
+          if (pw === FINANCE_PASSWORD) {
+            try { localStorage.setItem(FINANCE_AUTH_KEY, "true"); } catch {}
+            onUnlock(true);
+          } else {
+            setErr("Incorrect finance password.");
+          }
+        }} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"12px 16px",fontSize:14,fontWeight:800,cursor:"pointer"}}>Unlock Finance</button>
       </div>
     </div>
   );
@@ -2278,7 +2265,7 @@ function FinancePage({ data, selectedInvoiceYear, setSelectedInvoiceYear, financ
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:18}}>
         <div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text}}>FINANCE</div>
-          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Year-based invoice value, collections, outstanding balances, and project finance visibility.</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Restricted financial overview for invoice value, collections, dues, and project finance summary.</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
           <select value={selectedInvoiceYear} onChange={(e)=>setSelectedInvoiceYear(e.target.value)} style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none"}}>
@@ -2290,49 +2277,12 @@ function FinancePage({ data, selectedInvoiceYear, setSelectedInvoiceYear, financ
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,marginBottom:18}}>
-        <InvoiceMetricCard
-          title="TOTAL INVOICE VALUE"
-          amount={formatSarCompact(totalInvoiceValueForYear)}
-          sub={selectedInvoiceYear === "All" ? `Across ${filteredInvoiceDocs.length} invoices` : `For ${selectedInvoiceYear} across ${filteredInvoiceDocs.length} invoices`}
-          color={T.green}
-          onClick={() => setInvoiceDetailView({ mode: "all", stream: "all" })}
-          miniCards={[
-            { title: "INCOME INVOICED", amount: formatSarCompact(incomeInvoicedForYear), color: T.green, onClick: () => setInvoiceDetailView({ mode: "all", stream: "income" }) },
-            { title: "ADVANCE INVOICED", amount: formatSarCompact(advanceInvoicedForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "all", stream: "advance" }) },
-          ]}
-        />
-        <InvoiceMetricCard
-          title="AMOUNT RECEIVED"
-          amount={formatSarCompact(totalReceivedForYear)}
-          sub={selectedInvoiceYear === "All" ? "Collected across all visible invoices" : `Collected for ${selectedInvoiceYear}`}
-          color={T.blue}
-          onClick={() => setInvoiceDetailView({ mode: "received", stream: "all" })}
-          miniCards={[
-            { title: "RECEIVED FROM INCOME", amount: formatSarCompact(receivedFromIncomeForYear), color: T.blue, onClick: () => setInvoiceDetailView({ mode: "received", stream: "income" }) },
-            { title: "RECEIVED FROM ADVANCE", amount: formatSarCompact(receivedFromAdvanceForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "received", stream: "advance" }) },
-          ]}
-        />
-        <InvoiceMetricCard
-          title="AMOUNT DUE"
-          amount={formatSarCompact(totalDueForYear)}
-          sub={selectedInvoiceYear === "All" ? "Pending and partial balances" : `Outstanding for ${selectedInvoiceYear}`}
-          color={T.red}
-          onClick={() => setInvoiceDetailView({ mode: "due", stream: "all" })}
-          miniCards={[
-            { title: "DUE FROM INCOME", amount: formatSarCompact(dueFromIncomeForYear), color: T.blue, onClick: () => setInvoiceDetailView({ mode: "due", stream: "income" }) },
-            { title: "DUE FROM ADVANCE", amount: formatSarCompact(dueFromAdvanceForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "due", stream: "advance" }) },
-          ]}
-        />
+        <InvoiceMetricCard title="TOTAL INVOICE VALUE" amount={formatSarCompact(totalInvoiceValueForYear)} sub={selectedInvoiceYear === "All" ? `Across ${filteredInvoiceDocs.length} invoices` : `For ${selectedInvoiceYear} across ${filteredInvoiceDocs.length} invoices`} color={T.green} onClick={() => setInvoiceDetailView({ mode: "all", stream: "all" })} miniCards={[{ title: "INCOME INVOICED", amount: formatSarCompact(incomeInvoicedForYear), color: T.blue, onClick: () => setInvoiceDetailView({ mode: "all", stream: "income" }) },{ title: "ADVANCE INVOICED", amount: formatSarCompact(advanceInvoicedForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "all", stream: "advance" }) }]} />
+        <InvoiceMetricCard title="AMOUNT RECEIVED" amount={formatSarCompact(totalReceivedForYear)} sub={selectedInvoiceYear === "All" ? "Collected across all visible invoices" : `Collected for ${selectedInvoiceYear}`} color={T.blue} onClick={() => setInvoiceDetailView({ mode: "received", stream: "all" })} miniCards={[{ title: "RECEIVED FROM INCOME", amount: formatSarCompact(receivedFromIncomeForYear), color: T.blue, onClick: () => setInvoiceDetailView({ mode: "received", stream: "income" }) },{ title: "RECEIVED FROM ADVANCE", amount: formatSarCompact(receivedFromAdvanceForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "received", stream: "advance" }) }]} />
+        <InvoiceMetricCard title="AMOUNT DUE" amount={formatSarCompact(totalDueForYear)} sub={selectedInvoiceYear === "All" ? "Pending and partial balances" : `Outstanding for ${selectedInvoiceYear}`} color={T.red} onClick={() => setInvoiceDetailView({ mode: "due", stream: "all" })} miniCards={[{ title: "DUE FROM INCOME", amount: formatSarCompact(dueFromIncomeForYear), color: T.blue, onClick: () => setInvoiceDetailView({ mode: "due", stream: "income" }) },{ title: "DUE FROM ADVANCE", amount: formatSarCompact(dueFromAdvanceForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "due", stream: "advance" }) }]} />
       </div>
 
-      {invoiceDetailView && (
-        <InvoiceYearDetailsModal
-          view={invoiceDetailView}
-          invoices={filteredInvoiceDocs}
-          yearLabel={selectedInvoiceYear}
-          onClose={() => setInvoiceDetailView(null)}
-        />
-      )}
+      {invoiceDetailView && <InvoiceYearDetailsModal view={invoiceDetailView} invoices={filteredInvoiceDocs} yearLabel={selectedInvoiceYear} onClose={() => setInvoiceDetailView(null)} />}
 
       <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"20px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:14}}>
@@ -2355,18 +2305,9 @@ function FinancePage({ data, selectedInvoiceYear, setSelectedInvoiceYear, financ
                   <span style={{background:T.blueDim,color:T.blue,borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:700}}>Financials</span>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10}}>
-                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,lineHeight:1}}>{formatSarCompact(row.total)}</div>
-                    <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Total</div>
-                  </div>
-                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.blue,lineHeight:1}}>{formatSarCompact(row.received)}</div>
-                    <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Received</div>
-                  </div>
-                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.red,lineHeight:1}}>{formatSarCompact(row.due)}</div>
-                    <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Due</div>
-                  </div>
+                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,lineHeight:1}}>{formatSarCompact(row.total)}</div><div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Total</div></div>
+                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.blue,lineHeight:1}}>{formatSarCompact(row.received)}</div><div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Received</div></div>
+                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.red,lineHeight:1}}>{formatSarCompact(row.due)}</div><div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Due</div></div>
                 </div>
               </div>
             ))}
