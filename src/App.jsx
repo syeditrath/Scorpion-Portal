@@ -788,20 +788,171 @@ function deriveProjectStats(projectName, projectDocs) {
 }
 
 /* ── Daily Report Modal ── */
-function DailyReportModal({ report, onSave, onClose }) {
-  const blank = { id: uid(), date: new Date().toISOString().slice(0, 10), weather: "", activities: "", manpower: "", equipment: "", issues: "", notes: "" };
-  const [f, setF] = useState(report ? { ...report } : blank);
+/* ── Bulk Daily Report Import (multiple rows from one Excel) ── */
+function BulkDailyReportImport({ projectName, onImport }) {
+  const [status, setStatus] = useState(null); // null | "parsing" | {count,skipped}  | "error"
+  const fileRef = useRef();
+
+  const handleFile = (file) => {
+    if (!file) return;
+    setStatus("parsing");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const rows = parseDailyReportExcel(e.target.result);
+        if (!rows.length) { setStatus("error"); return; }
+        onImport(rows);
+        setStatus({ count: rows.length });
+        setTimeout(() => setStatus(null), 3000);
+      } catch(err) {
+        console.error(err);
+        setStatus("error");
+        setTimeout(() => setStatus(null), 3000);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <button onClick={()=>fileRef.current.click()} disabled={status==="parsing"}
+        style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:status==="parsing"?"wait":"pointer",display:"flex",alignItems:"center",gap:6}}>
+        {status==="parsing"?"⏳ Importing…":"📊 Bulk Import Excel"}
+      </button>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}}
+        onChange={e=>{if(e.target.files[0]){handleFile(e.target.files[0]);e.target.value="";}}}/>
+      {status&&status!=="parsing"&&status!=="error"&&(
+        <span style={{fontSize:12,color:T.green,fontWeight:700}}>✓ {status.count} row{status.count!==1?"s":""} imported</span>
+      )}
+      {status==="error"&&<span style={{fontSize:12,color:T.red,fontWeight:700}}>✕ Parse failed</span>}
+    </div>
+  );
+}
+
+/* ── Excel column map for daily report import ───────────────────────────── */
+const DR_COL_MAP = {
+  "DATE":"date","REPORT DATE":"date","DAY":"date",
+  "WEATHER":"weather","WEATHER CONDITIONS":"weather","CONDITIONS":"weather",
+  "ACTIVITIES":"activities","WORK DONE":"activities","WORK":"activities","ACTIVITY":"activities","DESCRIPTION":"activities","WORK DESCRIPTION":"activities",
+  "MANPOWER":"manpower","MANPOWER COUNT":"manpower","WORKERS":"manpower","NO. OF WORKERS":"manpower","HEADCOUNT":"manpower","NO OF WORKERS":"manpower",
+  "EQUIPMENT":"equipment","EQUIPMENT USED":"equipment","PLANT":"equipment","PLANT & EQUIPMENT":"equipment","MACHINERY":"equipment",
+  "ISSUES":"issues","DELAYS":"issues","ISSUES / DELAYS":"issues","PROBLEMS":"issues","REMARKS":"issues",
+  "NOTES":"notes","ADDITIONAL NOTES":"notes","COMMENTS":"notes","SUPERVISOR NOTES":"notes",
+};
+
+function parseDailyReportExcel(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type:"array", cellDates:true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json(ws, { defval:"" });
+  return rawRows
+    .filter(row => Object.values(row).some(v => v !== null && v !== ""))
+    .map(row => {
+      const rec = { id: uid() };
+      const upper = {};
+      Object.entries(row).forEach(([k,v]) => { upper[String(k).toUpperCase().trim()] = v; });
+      Object.entries(DR_COL_MAP).forEach(([col, key]) => {
+        const val = upper[col];
+        if (val === undefined || val === null || val === "") return;
+        if (key === "date") {
+          rec[key] = excelDateToStr(val) || String(val);
+        } else {
+          rec[key] = String(val).trim();
+        }
+      });
+      return rec;
+    })
+    .filter(rec => Object.keys(rec).filter(k => k !== "id").length > 0);
+}
+
+function DailyReportModal({ report, projectName, onSave, onClose }) {
+  const blank = { id: uid(), date: new Date().toISOString().slice(0,10), weather:"", activities:"", manpower:"", equipment:"", issues:"", notes:"", fileLink:"", fileName:"" };
+  const [f, setF]         = useState(report ? { ...blank, ...report } : blank);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
+  const [parsing,   setParsing]   = useState(false);
+  const [parseMsg,  setParseMsg]  = useState("");
+  const fileRef = useRef();
+  const excelRef = useRef();
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }));
   const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
   const LS = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
+
+  /* Upload daily report file (PDF/image/doc) to Supabase */
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    setUploading(true); setUploadErr("");
+    try {
+      const folder = `daily-reports/${(projectName||"general").replace(/[^a-zA-Z0-9]/g,"_")}`;
+      const url = await uploadToSupabase(file, folder);
+      upd("fileLink", url);
+      upd("fileName", file.name);
+    } catch(err) {
+      setUploadErr("Upload failed: " + (err.message || "check Supabase config"));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  /* Import from Excel — auto-fill fields from the sheet's first data row */
+  const handleExcelImport = (file) => {
+    if (!file) return;
+    setParsing(true); setParseMsg("");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const rows = parseDailyReportExcel(e.target.result);
+        if (!rows.length) { setParseMsg("⚠ No data rows found — check column headers."); setParsing(false); return; }
+        // If single row: auto-fill form. If multi-row: show count and use first.
+        const first = rows[0];
+        setF(prev => ({ ...prev, ...first, id: prev.id }));
+        setParseMsg(rows.length === 1
+          ? "✓ Fields filled from Excel. Review and save."
+          : `✓ ${rows.length} rows found — filled from first row. Use bulk import for all rows.`
+        );
+      } catch(err) {
+        setParseMsg("✕ Could not parse Excel: " + err.message);
+      }
+      setParsing(false);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   return (
     <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:560,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:600,maxHeight:"93vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+
+        {/* Header */}
         <div style={{padding:"20px 24px 14px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:T.card,zIndex:1,borderRadius:"18px 18px 0 0"}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{report?"✎ Edit Daily Report":"+ New Daily Report"}</div>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{report?"✎ Edit Daily Report":"+ New Daily Report"}</div>
+            {projectName&&<div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{projectName}</div>}
+          </div>
           <button onClick={onClose} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>✕</button>
         </div>
-        <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:14}}>
+
+        <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* ── Excel import strip ── */}
+          <div style={{background:`${T.gold}0f`,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"14px 16px"}}>
+            <div style={{fontSize:12,fontWeight:700,color:T.gold,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+              <span>⬆</span> IMPORT FROM EXCEL SHEET
+            </div>
+            <div style={{fontSize:12,color:T.textMuted,marginBottom:10,lineHeight:1.5}}>
+              Upload the supervisor's Excel daily report sheet to auto-fill the fields below.
+              Expected columns: <span style={{color:T.text,fontWeight:600}}>Date, Weather, Activities, Manpower, Equipment, Issues, Notes</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <button onClick={()=>excelRef.current.click()} disabled={parsing}
+                style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:parsing?"wait":"pointer",display:"flex",alignItems:"center",gap:6}}>
+                {parsing?"⏳ Parsing…":"📊 Choose Excel File"}
+              </button>
+              <input ref={excelRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}}
+                onChange={e=>{if(e.target.files[0]){handleExcelImport(e.target.files[0]);e.target.value="";}}}/>
+              {parseMsg&&<div style={{fontSize:12,color:parseMsg.startsWith("✓")?T.green:T.red,fontWeight:600,flex:1}}>{parseMsg}</div>}
+            </div>
+          </div>
+
+          {/* ── Manual fields ── */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><label style={LS}>DATE</label><input type="date" value={f.date} onChange={e=>upd("date",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
             <div><label style={LS}>WEATHER</label><input value={f.weather} onChange={e=>upd("weather",e.target.value)} placeholder="e.g. Sunny, 38°C" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
@@ -813,10 +964,52 @@ function DailyReportModal({ report, onSave, onClose }) {
           </div>
           <div><label style={LS}>ISSUES / DELAYS</label><textarea value={f.issues} onChange={e=>upd("issues",e.target.value)} rows={2} placeholder="Problems, delays, safety incidents…" style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           <div><label style={LS}>ADDITIONAL NOTES</label><textarea value={f.notes} onChange={e=>upd("notes",e.target.value)} rows={2} placeholder="Inspector remarks, client feedback, etc." style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+
+          {/* ── File attachment (PDF / Excel / image) ── */}
+          <div>
+            <label style={LS}>ATTACH DAILY REPORT FILE (PDF / EXCEL / IMAGE)</label>
+            <div style={{border:`2px dashed ${T.border}`,borderRadius:10,padding:"16px",textAlign:"center",background:T.card2}}>
+              {f.fileLink ? (
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:22}}>{/\.pdf$/i.test(f.fileName||f.fileLink)?"📄":/\.(xlsx?|csv)$/i.test(f.fileName||f.fileLink)?"📊":/\.(png|jpe?g|webp)$/i.test(f.fileName||f.fileLink)?"🖼️":"📎"}</span>
+                    <div style={{textAlign:"left"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:T.text,wordBreak:"break-all"}}>{f.fileName||"Uploaded file"}</div>
+                      <a href={f.fileLink} target="_blank" rel="noreferrer" style={{fontSize:11,color:T.blue,fontWeight:600,textDecoration:"none"}}>↗ View / Download</a>
+                    </div>
+                  </div>
+                  <button onClick={()=>{upd("fileLink","");upd("fileName","");}}
+                    style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>
+                    ✕ Remove
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{fontSize:28,marginBottom:8}}>📎</div>
+                  <div style={{fontSize:13,color:T.textMuted,marginBottom:10}}>
+                    {uploading ? "Uploading…" : "Drop the supervisor's daily report sheet here"}
+                  </div>
+                  <button onClick={()=>fileRef.current.click()} disabled={uploading}
+                    style={{background:T.blueDim,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,cursor:uploading?"wait":"pointer"}}>
+                    {uploading?"⏳ Uploading…":"⬆ Choose File"}
+                  </button>
+                  <input ref={fileRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp,.doc,.docx" style={{display:"none"}}
+                    onChange={e=>{if(e.target.files[0]){handleFileUpload(e.target.files[0]);e.target.value="";}}}/>
+                  {uploadErr&&<div style={{marginTop:8,fontSize:12,color:T.red,fontWeight:600}}>{uploadErr}</div>}
+                </>
+              )}
+            </div>
+          </div>
+
         </div>
-        <div style={{padding:"12px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end"}}>
+
+        {/* Footer */}
+        <div style={{padding:"12px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,justifyContent:"flex-end",position:"sticky",bottom:0,background:T.card,borderRadius:"0 0 18px 18px"}}>
           <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
-          <button onClick={()=>onSave(f)} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Report</button>
+          <button onClick={()=>{ if(uploading){return;} onSave(f); }} disabled={uploading}
+            style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:uploading?"not-allowed":"pointer",opacity:uploading?0.7:1}}>
+            {uploading?"Uploading…":"Save Report"}
+          </button>
         </div>
       </div>
     </div>
@@ -1077,7 +1270,39 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📝 DAILY REPORTS</div>
             <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{reports.length} report{reports.length!==1?"s":""}</div>
           </div>
-          <button onClick={()=>setDrModal("new")} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Add Report</button>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {/* Export all reports to Excel */}
+            {reports.length>0&&(
+              <button onClick={()=>exportToExcel(
+                reports.map(r=>({
+                  "Project": proj.project,
+                  "Date": r.date,
+                  "Weather": r.weather||"",
+                  "Activities / Work Done": r.activities||"",
+                  "Manpower Count": r.manpower||"",
+                  "Equipment Used": r.equipment||"",
+                  "Issues / Delays": r.issues||"",
+                  "Notes": r.notes||"",
+                  "File Attached": r.fileName||"",
+                  "File Link": r.fileLink||"",
+                })),
+                `Daily_Reports_${(proj.project||"Project").replace(/\s+/g,"_")}`
+              )}
+                style={{background:"rgba(52,211,153,0.12)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399",borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                ⬇ Export Excel
+              </button>
+            )}
+            {/* Bulk import multiple rows from Excel */}
+            <BulkDailyReportImport projectName={proj.project} onImport={(rows)=>{
+              const updated = [...(proj.dailyReports||[])];
+              rows.forEach(r=>{
+                const dup = updated.find(x=>x.date===r.date);
+                if(!dup) updated.push(r);
+              });
+              onUpdate({...proj,dailyReports:updated});
+            }}/>
+            <button onClick={()=>setDrModal("new")} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Add Report</button>
+          </div>
         </div>
         {reports.length===0 ? (
           <div style={{textAlign:"center",padding:"30px 20px",color:T.textMuted,fontSize:14}}>
@@ -1098,6 +1323,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                         {r.weather&&<span>🌤 {r.weather}</span>}
                         {r.manpower&&<span>👷 {r.manpower} workers</span>}
                         {r.equipment&&<span>🚧 {r.equipment}</span>}
+                        {r.fileLink&&<span style={{color:T.blue,fontWeight:600}}>📎 {r.fileName||"File attached"}</span>}
                       </div>
                     </div>
                     <div style={{display:"flex",gap:6,alignItems:"center"}}>
@@ -1107,10 +1333,25 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                     </div>
                   </div>
                   {isE&&(
-                    <div style={{padding:"12px 14px 12px 60px",borderTop:`1px solid ${T.border}`,background:T.card2,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
-                      {r.activities&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>ACTIVITIES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.activities}</div></div>}
-                      {r.issues&&<div><div style={{fontSize:10,fontWeight:700,color:T.red,marginBottom:4}}>ISSUES / DELAYS</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.issues}</div></div>}
-                      {r.notes&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>NOTES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.notes}</div></div>}
+                    <div style={{padding:"12px 14px 14px 60px",borderTop:`1px solid ${T.border}`,background:T.card2,display:"flex",flexDirection:"column",gap:12}}>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+                        {r.activities&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>ACTIVITIES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.activities}</div></div>}
+                        {r.issues&&<div><div style={{fontSize:10,fontWeight:700,color:T.red,marginBottom:4}}>ISSUES / DELAYS</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.issues}</div></div>}
+                        {r.notes&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>NOTES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.notes}</div></div>}
+                      </div>
+                      {r.fileLink&&(
+                        <div style={{display:"flex",alignItems:"center",gap:10,background:T.card,border:`1px solid ${T.border}`,borderRadius:9,padding:"9px 14px"}}>
+                          <span style={{fontSize:18}}>{/\.pdf$/i.test(r.fileName||r.fileLink)?"📄":/\.(xlsx?|csv)$/i.test(r.fileName||r.fileLink)?"📊":/\.(png|jpe?g|webp)$/i.test(r.fileName||r.fileLink)?"🖼️":"📎"}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.fileName||"Daily Report File"}</div>
+                            <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>Attached report sheet</div>
+                          </div>
+                          <a href={r.fileLink} target="_blank" rel="noreferrer"
+                            style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>
+                            ↗ Open
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1121,7 +1362,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
       </div>
 
       {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
-      {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
+      {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
     </div>
   );
 }
