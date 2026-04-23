@@ -382,6 +382,8 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
 /* ─── Auth ────────────────────────────────────────────────────────────────── */
 const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY = "cta_auth";
+const FINANCE_PASSWORD = "finance2025"; // Change finance access password
+const FINANCE_AUTH_KEY = "cta_finance_auth";
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
 const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
@@ -457,6 +459,10 @@ function getPreviewUrl(url) {
 
 function isAuthenticated() {
   try { return localStorage.getItem(AUTH_KEY) === "true"; } catch { return false; }
+}
+
+function isFinanceAuthenticated() {
+  try { return localStorage.getItem(FINANCE_AUTH_KEY) === "true"; } catch { return false; }
 }
 
 const EMPTY_DATA = {
@@ -1642,6 +1648,8 @@ export default function App() {
 
   const logout = () => {
     try { localStorage.removeItem(AUTH_KEY); } catch {}
+    try { localStorage.removeItem(FINANCE_AUTH_KEY); } catch {}
+    setFinanceAuthed(false);
     setAuthed(false);
   };
 
@@ -1762,7 +1770,8 @@ export default function App() {
         </header>
 
         <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
-          {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>}
+          {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
+          {page==="finance"   && <div className="fade-in" key="finance"><FinancePage data={data} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear} financeAuthed={financeAuthed} setFinanceAuthed={setFinanceAuthed} showToast={showToast}/></div>}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
           {page==="analysis"  && <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go}/></div>}
@@ -1789,8 +1798,9 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
   const isMobile = viewportWidth < 1200;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
+    {id:"finance",   icon:"₹", label:"Finance",            desc:"Invoices & collections"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
-    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
+    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Project records"},
     {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO value, progress & jobs"},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
@@ -1937,9 +1947,7 @@ function ProjectsModal({projects,onSave,onClose}) {
 /* ════════════════════════════════════════════════════════════════════════════
    DASHBOARD
 ════════════════════════════════════════════════════════════════════════════ */
-function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYear }) {
-  const [invoiceDetailView, setInvoiceDetailView] = useState(null);
-  /* ── computed stats ── */
+function Dashboard({ data, alerts, go }) {
   const scorpionExp = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=90; }).length;
   const scorpionExp30 = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=30; }).length;
 
@@ -1962,7 +1970,6 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
   const overdueCount = alerts.filter(a=>a.days<0).length;
   const expiring30   = alerts.filter(a=>a.days>=0&&a.days<=30).length;
 
-  /* ── compliance pct (items with expiry tracked) ── */
   const allTracked = [
     ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>daysUntil(d.expiryDate)),
     ...data.manpower.flatMap(p=>[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)].filter(Boolean).map(daysUntil)),
@@ -1973,6 +1980,251 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
 
   const expired  = alerts.filter(a=>a.days<0).sort((a,b)=>a.days-b.days);
   const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
+
+  const projectDocs = data.projectDocs || [];
+  const projectAnalysis = data.projectAnalysis || [];
+  const projectCards = (data.projects || []).map(project => {
+    const docs = projectDocs.filter(d => d.project === project);
+    const invs = docs.filter(d => d.subTab === "invoices");
+    const certs = docs.filter(d => d.subTab === "certificates");
+    const workOrders = docs.filter(d => d.subTab === "workorders");
+    const analysis = projectAnalysis.find(p => p.project === project);
+    return {
+      project,
+      invoices: invs.length,
+      certificates: certs.length,
+      workOrders: workOrders.length,
+      totalDocs: docs.length,
+      status: analysis?.status || "Not Setup",
+      client: analysis?.clientName || "—",
+      startDate: analysis?.startDate || "",
+      endDate: analysis?.estEndDate || "",
+    };
+  });
+
+  return (
+    <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
+        {[
+          {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲"},
+          {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕"},
+          {label:"Due in 30 Days",  v:expiring30,   color:expiring30>0?T.gold:T.textMuted,  icon:"⏱"},
+          {label:"Compliance",      v:`${pct}%`,    color:pct>=80?T.green:pct>=60?T.gold:T.red, icon:"◎"},
+          {label:"Projects",        v:(data.projects||[]).length, color:T.blue, icon:"◆"},
+          {label:"People",          v:mpPeople,     color:T.green,  icon:"◈"},
+          {label:"Equipment",       v:eqTotal,      color:T.gold,   icon:"◎"},
+        ].map((k,i)=>(
+          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(28px,3vw,42px)",fontWeight:800,color:k.color,lineHeight:1,animation:"countUp 0.6s ease both"}}>{k.v}</div>
+            <div style={{fontSize:12,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"16px 20px",marginBottom:18,animationDelay:".3s"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textSub,letterSpacing:".5px"}}>OVERALL COMPLIANCE</span>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(18px,2vw,26px)",color:pct>=80?T.green:pct>=60?T.gold:T.red}}>{pct}%</span>
+        </div>
+        <div style={{height:8,background:T.border,borderRadius:999}}>
+          <div style={{height:"100%",width:`${pct}%`,borderRadius:999,transition:"width 1.2s cubic-bezier(0.22,1,0.36,1)",background:pct>=80?`linear-gradient(90deg,${T.green},#059669,${T.green})`:pct>=60?`linear-gradient(90deg,${T.gold},#d97706,${T.gold})`:`linear-gradient(90deg,${T.red},#dc2626,${T.red})`,backgroundSize:"200% 100%",animation:"shimmer 2s linear infinite"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,color:T.textSub}}>
+          <span>{validCount} valid of {allTracked.length} tracked items</span>
+          <span>{overdueCount>0?`${overdueCount} overdue`:"No overdue items"}</span>
+        </div>
+      </div>
+
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"20px",marginBottom:18}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:16}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>PROJECT OVERVIEW</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Basic operational visibility without finance details</div>
+          </div>
+          <button onClick={()=>go("projects")} style={{background:T.blueDim,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Open Project Docs →</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
+          {projectCards.map((p, idx) => (
+            <div key={p.project} className="card-hover" style={{background:`linear-gradient(180deg, ${T.card} 0%, ${T.bg} 100%)`,border:`1px solid ${T.border}`,borderRadius:16,padding:"18px",boxShadow:T.shadow,animationDelay:`${idx*0.05}s`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
+                <div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,lineHeight:1}}>{p.project}</div>
+                  <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Client: {p.client}</div>
+                </div>
+                <span style={{background:p.status==="Completed"?T.greenDim:p.status==="In Progress"?T.blueDim:p.status==="On Hold"?T.goldDim:T.card2,color:p.status==="Completed"?T.green:p.status==="In Progress"?T.blue:p.status==="On Hold"?T.gold:T.textMuted,borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{p.status}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:14}}>
+                {[
+                  {label:"Invoices", value:p.invoices, color:T.green},
+                  {label:"Certificates", value:p.certificates, color:T.blue},
+                  {label:"Work Orders", value:p.workOrders, color:T.purple},
+                  {label:"Total Docs", value:p.totalDocs, color:T.teal},
+                ].map(s => (
+                  <div key={s.label} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 12px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:s.color,lineHeight:1}}>{s.value}</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginTop:3}}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:12,gap:10}}>
+                <span>Start: {p.startDate ? fmtDate(p.startDate) : '—'}</span>
+                <span>Est. End: {p.endDate ? fmtDate(p.endDate) : '—'}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"flex-end"}}>
+                <button onClick={()=>go("analysis")} style={{background:"transparent",border:"none",color:T.blue,fontSize:13,fontWeight:700,cursor:"pointer"}}>Open Project Analysis →</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,marginBottom:18}}>
+        <DashboardMiniCard
+          title="SCORPION DOCUMENTS"
+          sub="CR, insurance, licenses, contracts"
+          icon="◉"
+          color={T.blue}
+          stats={[
+            {label:"Total Docs", value:data.scorpionDocs.length},
+            {label:"Expiring", value:scorpionExp},
+            {label:"Due in 30d", value:scorpionExp30},
+            {label:"Categories", value:(data.scorpionDocCats||[]).length},
+          ]}
+          actionLabel="Open Documents →"
+          onClick={() => go("scorpion")}
+        />
+
+        <DashboardMiniCard
+          title="PROJECT ANALYSIS"
+          sub="Schedules, PO values, progress & daily reports"
+          icon="◐"
+          color={T.teal}
+          stats={[
+            {label:"Projects", value:(data.projectAnalysis||[]).length},
+            {label:"In Progress", value:(data.projectAnalysis||[]).filter(p=>p.status==="In Progress").length},
+            {label:"Completed", value:(data.projectAnalysis||[]).filter(p=>p.status==="Completed").length},
+            {label:"Reports", value:(data.projectAnalysis||[]).reduce((n,p)=>n+((p.dailyReports||[]).length),0)},
+          ]}
+          actionLabel="Open Analysis →"
+          onClick={() => go("analysis")}
+        />
+
+        <DashboardMiniCard
+          title="MANPOWER"
+          sub="Staff, documents & certifications"
+          icon="◈"
+          color={T.green}
+          stats={[
+            {label:"People", value:mpPeople},
+            {label:"Categories", value:mpCats},
+            {label:"Doc Alerts", value:mpDocAlerts},
+            {label:"Certs", value:data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0)},
+          ]}
+          footer={(data.manpowerCats||[]).slice(0,4).map(c => `${c} (${data.manpower.filter(p=>p.category===c).length})`).join("   •   ")}
+          actionLabel="Open Manpower →"
+          onClick={() => go("manpower")}
+        />
+
+        <DashboardMiniCard
+          title="EQUIPMENT"
+          sub="Assets, certs, invoices & permits"
+          icon="◎"
+          color={T.gold}
+          stats={[
+            {label:"Total Assets", value:eqTotal},
+            {label:"Active", value:eqActive},
+            {label:"Maintenance", value:eqMaint},
+            {label:"Exp. Alerts", value:eqExp},
+          ]}
+          footer={`Certs: ${data.equipment.reduce((n,e)=>n+(e.certifications||[]).length,0)}   •   Invoices: ${data.equipment.reduce((n,e)=>n+(e.invoices||[]).length,0)}   •   Insurance: ${data.equipment.reduce((n,e)=>n+(e.insurance||[]).length,0)}   •   Permits: ${data.equipment.reduce((n,e)=>n+(e.permits||[]).length,0)}`}
+          actionLabel="Open Equipment →"
+          onClick={() => go("equipment")}
+        />
+      </div>
+
+      {alerts.length>0 ? (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14}}>
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".55s"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <div style={{width:3,height:18,borderRadius:2,background:T.red}}/>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.red,letterSpacing:".5px"}}>OVERDUE</span>
+              <span style={{background:T.redDim,color:T.red,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{expired.length}</span>
+            </div>
+            {expired.length===0
+              ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing overdue</div>
+              :<div style={{display:"grid",gap:7}}>
+                {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>) }
+                {expired.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expired.length-8} more</div>}
+              </div>
+            }
+          </div>
+
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".62s"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <div style={{width:3,height:18,borderRadius:2,background:T.gold}}/>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold,letterSpacing:".5px"}}>EXPIRING SOON</span>
+              <span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{expiring.length}</span>
+            </div>
+            {expiring.length===0
+              ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing expiring soon</div>
+              :<div style={{display:"grid",gap:7}}>
+                {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>) }
+                {expiring.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expiring.length-8} more</div>}
+              </div>
+            }
+          </div>
+        </div>
+      ) : (
+        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"40px 20px",textAlign:"center",animationDelay:".55s"}}>
+          <div style={{fontSize:44,marginBottom:12}}>✓</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,marginBottom:6}}>ALL CLEAR</div>
+          <div style={{fontSize:13,color:T.textMuted}}>No expiring or overdue items — everything is up to date.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FinanceAccessCard({ onUnlock }) {
+  const [pw, setPw] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = () => {
+    if (pw === FINANCE_PASSWORD) {
+      try { localStorage.setItem(FINANCE_AUTH_KEY, "true"); } catch {}
+      onUnlock(true);
+      return;
+    }
+    setError("Incorrect finance access password");
+    setPw("");
+  };
+
+  return (
+    <div style={{maxWidth:520,margin:"40px auto",background:T.card,border:`1px solid ${T.border}`,borderRadius:20,padding:"28px",boxShadow:T.shadow}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+        <div style={{width:48,height:48,borderRadius:14,background:T.goldDim,color:T.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800}}>₹</div>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>FINANCE ACCESS</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Restricted financial information is separated from the operational dashboard.</div>
+        </div>
+      </div>
+      <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>Enter the finance access password to continue.</div>
+      <input type="password" value={pw} onChange={e=>{setPw(e.target.value); setError("");}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Finance password…" style={{width:"100%",background:T.inputBg,border:`1px solid ${error ? T.red : T.border}`,borderRadius:10,padding:"11px 14px",fontSize:14,color:T.text,outline:"none",marginBottom:10}} />
+      {error && <div style={{fontSize:12,color:T.red,fontWeight:700,marginBottom:10}}>{error}</div>}
+      <div style={{display:"flex",justifyContent:"flex-end"}}>
+        <button onClick={submit} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 18px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Unlock Finance</button>
+      </div>
+    </div>
+  );
+}
+
+function FinancePage({ data, selectedInvoiceYear, setSelectedInvoiceYear, financeAuthed, setFinanceAuthed, showToast }) {
+  const [invoiceDetailView, setInvoiceDetailView] = useState(null);
+
+  if (!financeAuthed) {
+    return <FinanceAccessCard onUnlock={setFinanceAuthed} />;
+  }
 
   const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
   const availableInvoiceYears = Array.from(
@@ -1996,290 +2248,131 @@ function Dashboard({ data, alerts, go, selectedInvoiceYear, setSelectedInvoiceYe
         return String(dt.getFullYear()) === selectedInvoiceYear;
       });
 
-  const totalInvoiceValueForYear = filteredInvoiceDocs.reduce(
-    (sum, doc) => sum + (parseFloat(doc.amount) || 0),
-    0
-  );
-  const totalReceivedForYear = filteredInvoiceDocs.reduce(
-    (sum, doc) => sum + getInvoiceCollectedAmount(doc),
-    0
-  );
-  const totalDueForYear = filteredInvoiceDocs.reduce(
-    (sum, doc) => sum + getInvoiceRemainingAmount(doc),
-    0
-  );
+  const totalInvoiceValueForYear = filteredInvoiceDocs.reduce((sum, doc) => sum + (parseFloat(doc.amount) || 0), 0);
+  const totalReceivedForYear = filteredInvoiceDocs.reduce((sum, doc) => sum + getInvoiceCollectedAmount(doc), 0);
+  const totalDueForYear = filteredInvoiceDocs.reduce((sum, doc) => sum + getInvoiceRemainingAmount(doc), 0);
 
   const incomeInvoicesForYear = filteredInvoiceDocs.filter((doc) => getInvoiceStream(doc) === "income");
   const advanceInvoicesForYear = filteredInvoiceDocs.filter((doc) => getInvoiceStream(doc) === "advance");
 
   const incomeInvoicedForYear = incomeInvoicesForYear.reduce((sum, doc) => sum + (parseFloat(doc.amount) || 0), 0);
   const advanceInvoicedForYear = advanceInvoicesForYear.reduce((sum, doc) => sum + (parseFloat(doc.amount) || 0), 0);
-
   const receivedFromIncomeForYear = incomeInvoicesForYear.reduce((sum, doc) => sum + getInvoiceCollectedAmount(doc), 0);
   const receivedFromAdvanceForYear = advanceInvoicesForYear.reduce((sum, doc) => sum + getInvoiceCollectedAmount(doc), 0);
-
   const dueFromIncomeForYear = incomeInvoicesForYear.reduce((sum, doc) => sum + getInvoiceRemainingAmount(doc), 0);
   const dueFromAdvanceForYear = advanceInvoicesForYear.reduce((sum, doc) => sum + getInvoiceRemainingAmount(doc), 0);
 
+  const projectFinanceRows = (data.projects || []).map(project => {
+    const invs = filteredInvoiceDocs.filter(d => d.project === project);
+    return {
+      project,
+      count: invs.length,
+      total: invs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0),
+      received: invs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0),
+      due: invs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0),
+    };
+  }).filter(row => row.count > 0).sort((a,b)=>b.total-a.total);
+
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
-
-      {/* ── Top KPI strip ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
-        {[
-          {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲"},
-          {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕"},
-          {label:"Due in 30 Days",  v:expiring30,   color:expiring30>0?T.gold:T.textMuted,  icon:"⏱"},
-          {label:"Compliance",      v:`${pct}%`,    color:pct>=80?T.green:pct>=60?T.gold:T.red, icon:"◎"},
-          {label:"People",          v:mpPeople,     color:T.green,  icon:"◈"},
-          {label:"Equipment Assets",v:eqTotal,      color:T.gold,   icon:"◎"},
-        ].map((k,i)=>(
-          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(28px,3vw,42px)",fontWeight:800,color:k.color,lineHeight:1,animation:"countUp 0.6s ease both"}}>{k.v}</div>
-            <div style={{fontSize:12,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Compliance bar ── */}
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"16px 20px",marginBottom:18,animationDelay:".3s"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textSub,letterSpacing:".5px"}}>OVERALL COMPLIANCE</span>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(18px,2vw,26px)",color:pct>=80?T.green:pct>=60?T.gold:T.red}}>{pct}%</span>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:18}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text}}>FINANCE</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Year-based invoice value, collections, outstanding balances, and project finance visibility.</div>
         </div>
-        <div style={{height:8,background:T.border,borderRadius:999}}>
-          <div style={{height:"100%",width:`${pct}%`,borderRadius:999,transition:"width 1.2s cubic-bezier(0.22,1,0.36,1)",background:pct>=80?`linear-gradient(90deg,${T.green},#059669,${T.green})`:pct>=60?`linear-gradient(90deg,${T.gold},#d97706,${T.gold})`:`linear-gradient(90deg,${T.red},#dc2626,${T.red})`,backgroundSize:"200% 100%",animation:"shimmer 2s linear infinite"}}/>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,color:T.textSub}}>
-          <span>{validCount} valid of {allTracked.length} tracked items</span>
-          <span>{overdueCount>0?`${overdueCount} overdue`:"No overdue items"}</span>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <select value={selectedInvoiceYear} onChange={(e)=>setSelectedInvoiceYear(e.target.value)} style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none"}}>
+            <option value="All">All Years</option>
+            {availableInvoiceYears.map((year)=><option key={year} value={year}>{year}</option>)}
+          </select>
+          <button onClick={()=>{ try { localStorage.removeItem(FINANCE_AUTH_KEY); } catch {}; setFinanceAuthed(false); showToast?.("Finance locked","del"); }} style={{background:T.card2,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Lock Finance</button>
         </div>
       </div>
 
-      {/* ── Main dashboard layout ── */}
-      <div style={{display:"grid",gap:18,marginBottom:18}}>
-        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",animationDelay:".32s"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>
-                INVOICE VALUE PER YEAR
-              </div>
-              <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>
-                Based on invoice due date year
-              </div>
-            </div>
-
-            <select
-              value={selectedInvoiceYear}
-              onChange={(e) => setSelectedInvoiceYear(e.target.value)}
-              style={{
-                background: T.inputBg,
-                color: T.text,
-                border: `1px solid ${T.border}`,
-                borderRadius: 10,
-                padding: "10px 14px",
-                fontSize: 13,
-                fontWeight: 600,
-                outline: "none",
-              }}
-            >
-              <option value="All">All Years</option>
-              {availableInvoiceYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,marginTop:22}}>
-            <InvoiceMetricCard
-              title="TOTAL INVOICE VALUE"
-              amount={formatSarCompact(totalInvoiceValueForYear)}
-              sub={selectedInvoiceYear === "All"
-                ? `Across ${filteredInvoiceDocs.length} invoices`
-                : `For ${selectedInvoiceYear} across ${filteredInvoiceDocs.length} invoices`}
-              color={T.green}
-              onClick={() => setInvoiceDetailView({ mode: "all", stream: "all" })}
-              miniCards={[
-                {
-                  title: "INCOME INVOICED",
-                  amount: formatSarCompact(incomeInvoicedForYear),
-                  color: T.green,
-                  onClick: () => setInvoiceDetailView({ mode: "all", stream: "income" }),
-                },
-                {
-                  title: "ADVANCE INVOICED",
-                  amount: formatSarCompact(advanceInvoicedForYear),
-                  color: T.gold,
-                  onClick: () => setInvoiceDetailView({ mode: "all", stream: "advance" }),
-                },
-              ]}
-            />
-            <InvoiceMetricCard
-              title="AMOUNT RECEIVED"
-              amount={formatSarCompact(totalReceivedForYear)}
-              sub={selectedInvoiceYear === "All"
-                ? "Collected across all visible invoices"
-                : `Collected for ${selectedInvoiceYear}`}
-              color={T.blue}
-              onClick={() => setInvoiceDetailView({ mode: "received", stream: "all" })}
-              miniCards={[
-                {
-                  title: "RECEIVED FROM INCOME",
-                  amount: formatSarCompact(receivedFromIncomeForYear),
-                  color: T.blue,
-                  onClick: () => setInvoiceDetailView({ mode: "received", stream: "income" }),
-                },
-                {
-                  title: "RECEIVED FROM ADVANCE",
-                  amount: formatSarCompact(receivedFromAdvanceForYear),
-                  color: T.teal,
-                  onClick: () => setInvoiceDetailView({ mode: "received", stream: "advance" }),
-                },
-              ]}
-            />
-            <InvoiceMetricCard
-              title="AMOUNT DUE"
-              amount={formatSarCompact(totalDueForYear)}
-              sub={selectedInvoiceYear === "All"
-                ? "Pending and partial balances"
-                : `Outstanding for ${selectedInvoiceYear}`}
-              color={T.red}
-              onClick={() => setInvoiceDetailView({ mode: "due", stream: "all" })}
-              miniCards={[
-                {
-                  title: "DUE FROM INCOME",
-                  amount: formatSarCompact(dueFromIncomeForYear),
-                  color: T.red,
-                  onClick: () => setInvoiceDetailView({ mode: "due", stream: "income" }),
-                },
-                {
-                  title: "DUE FROM ADVANCE",
-                  amount: formatSarCompact(dueFromAdvanceForYear),
-                  color: T.orange,
-                  onClick: () => setInvoiceDetailView({ mode: "due", stream: "advance" }),
-                },
-              ]}
-            />
-          </div>
-        </div>
-
-        {invoiceDetailView && (
-          <InvoiceYearDetailsModal
-            view={invoiceDetailView}
-            invoices={filteredInvoiceDocs}
-            yearLabel={selectedInvoiceYear}
-            onClose={() => setInvoiceDetailView(null)}
-          />
-        )}
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
-          <DashboardMiniCard
-            title="SCORPION DOCUMENTS"
-            sub="CR, insurance, licenses, contracts"
-            icon="◉"
-            color={T.blue}
-            stats={[
-              {label:"Total Docs", value:data.scorpionDocs.length},
-              {label:"Expiring", value:scorpionExp},
-              {label:"Due in 30d", value:scorpionExp30},
-              {label:"Categories", value:(data.scorpionDocCats||[]).length},
-            ]}
-            actionLabel="Open Documents →"
-            onClick={() => go("scorpion")}
-          />
-
-          <DashboardMiniCard
-            title="PROJECT DOCS"
-            sub="Invoices, completion certs & work orders"
-            icon="◆"
-            color={T.teal}
-            stats={[
-              {label:"Total", value:(data.projectDocs || []).length},
-              {label:"Invoices", value:invoiceDocs.length},
-              {label:"Selected Year", value:selectedInvoiceYear === "All" ? "All" : selectedInvoiceYear},
-              {label:"Year Invoices", value:filteredInvoiceDocs.length},
-            ]}
-            actionLabel="Open Project Docs →"
-            onClick={() => go("projects")}
-          />
-
-          <DashboardMiniCard
-            title="MANPOWER"
-            sub="Staff, documents & certifications"
-            icon="◈"
-            color={T.green}
-            stats={[
-              {label:"People", value:mpPeople},
-              {label:"Categories", value:mpCats},
-              {label:"Doc Alerts", value:mpDocAlerts},
-              {label:"Certs", value:data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0)},
-            ]}
-            footer={(data.manpowerCats||[]).slice(0,4).map(c => `${c} (${data.manpower.filter(p=>p.category===c).length})`).join("   •   ")}
-            actionLabel="Open Manpower →"
-            onClick={() => go("manpower")}
-          />
-
-          <DashboardMiniCard
-            title="EQUIPMENT"
-            sub="Assets, certs, invoices & permits"
-            icon="◎"
-            color={T.gold}
-            stats={[
-              {label:"Total Assets", value:eqTotal},
-              {label:"Active", value:eqActive},
-              {label:"Maintenance", value:eqMaint},
-              {label:"Exp. Alerts", value:eqExp},
-            ]}
-            footer={`Certs: ${data.equipment.reduce((n,e)=>n+(e.certifications||[]).length,0)}   •   Invoices: ${data.equipment.reduce((n,e)=>n+(e.invoices||[]).length,0)}   •   Insurance: ${data.equipment.reduce((n,e)=>n+(e.insurance||[]).length,0)}   •   Permits: ${data.equipment.reduce((n,e)=>n+(e.permits||[]).length,0)}`}
-            actionLabel="Open Equipment →"
-            onClick={() => go("equipment")}
-          />
-        </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,marginBottom:18}}>
+        <InvoiceMetricCard
+          title="TOTAL INVOICE VALUE"
+          amount={formatSarCompact(totalInvoiceValueForYear)}
+          sub={selectedInvoiceYear === "All" ? `Across ${filteredInvoiceDocs.length} invoices` : `For ${selectedInvoiceYear} across ${filteredInvoiceDocs.length} invoices`}
+          color={T.green}
+          onClick={() => setInvoiceDetailView({ mode: "all", stream: "all" })}
+          miniCards={[
+            { title: "INCOME INVOICED", amount: formatSarCompact(incomeInvoicedForYear), color: T.green, onClick: () => setInvoiceDetailView({ mode: "all", stream: "income" }) },
+            { title: "ADVANCE INVOICED", amount: formatSarCompact(advanceInvoicedForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "all", stream: "advance" }) },
+          ]}
+        />
+        <InvoiceMetricCard
+          title="AMOUNT RECEIVED"
+          amount={formatSarCompact(totalReceivedForYear)}
+          sub={selectedInvoiceYear === "All" ? "Collected across all visible invoices" : `Collected for ${selectedInvoiceYear}`}
+          color={T.blue}
+          onClick={() => setInvoiceDetailView({ mode: "received", stream: "all" })}
+          miniCards={[
+            { title: "RECEIVED FROM INCOME", amount: formatSarCompact(receivedFromIncomeForYear), color: T.blue, onClick: () => setInvoiceDetailView({ mode: "received", stream: "income" }) },
+            { title: "RECEIVED FROM ADVANCE", amount: formatSarCompact(receivedFromAdvanceForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "received", stream: "advance" }) },
+          ]}
+        />
+        <InvoiceMetricCard
+          title="AMOUNT DUE"
+          amount={formatSarCompact(totalDueForYear)}
+          sub={selectedInvoiceYear === "All" ? "Pending and partial balances" : `Outstanding for ${selectedInvoiceYear}`}
+          color={T.red}
+          onClick={() => setInvoiceDetailView({ mode: "due", stream: "all" })}
+          miniCards={[
+            { title: "DUE FROM INCOME", amount: formatSarCompact(dueFromIncomeForYear), color: T.blue, onClick: () => setInvoiceDetailView({ mode: "due", stream: "income" }) },
+            { title: "DUE FROM ADVANCE", amount: formatSarCompact(dueFromAdvanceForYear), color: T.gold, onClick: () => setInvoiceDetailView({ mode: "due", stream: "advance" }) },
+          ]}
+        />
       </div>
 
-      {/* ── Alerts split into 2 columns ── */}
-      {alerts.length>0 ? (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14}}>
-          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".55s"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-              <div style={{width:3,height:18,borderRadius:2,background:T.red}}/>
-              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.red,letterSpacing:".5px"}}>OVERDUE</span>
-              <span style={{background:T.redDim,color:T.red,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{expired.length}</span>
-            </div>
-            {expired.length===0
-              ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing overdue</div>
-              :<div style={{display:"grid",gap:7}}>
-                {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
-                {expired.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expired.length-8} more — check Alerts page</div>}
-              </div>
-            }
-          </div>
-
-          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".62s"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-              <div style={{width:3,height:18,borderRadius:2,background:T.gold}}/>
-              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold,letterSpacing:".5px"}}>EXPIRING SOON</span>
-              <span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{expiring.length}</span>
-            </div>
-            {expiring.length===0
-              ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing expiring soon</div>
-              :<div style={{display:"grid",gap:7}}>
-                {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
-                {expiring.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expiring.length-8} more</div>}
-              </div>
-            }
-          </div>
-        </div>
-      ) : (
-        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"40px 20px",textAlign:"center",animationDelay:".55s"}}>
-          <div style={{fontSize:44,marginBottom:12}}>✓</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,marginBottom:6}}>ALL CLEAR</div>
-          <div style={{fontSize:13,color:T.textMuted}}>No expiring or overdue items — everything is up to date.</div>
-        </div>
+      {invoiceDetailView && (
+        <InvoiceYearDetailsModal
+          view={invoiceDetailView}
+          invoices={filteredInvoiceDocs}
+          yearLabel={selectedInvoiceYear}
+          onClose={() => setInvoiceDetailView(null)}
+        />
       )}
+
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"20px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:14}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>PROJECT FINANCE SUMMARY</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>Filtered by the selected invoice due-date year</div>
+          </div>
+        </div>
+        {projectFinanceRows.length === 0 ? (
+          <div style={{textAlign:"center",padding:"28px 12px",color:T.textMuted,fontSize:13}}>No invoice records found for the selected year.</div>
+        ) : (
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
+            {projectFinanceRows.map(row => (
+              <div key={row.project} className="card-hover" style={{background:`linear-gradient(180deg, ${T.card} 0%, ${T.bg} 100%)`,border:`1px solid ${T.border}`,borderRadius:16,padding:"18px",boxShadow:T.shadow}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
+                  <div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,lineHeight:1}}>{row.project}</div>
+                    <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>{row.count} invoice{row.count !== 1 ? 's' : ''}</div>
+                  </div>
+                  <span style={{background:T.blueDim,color:T.blue,borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:700}}>Financials</span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10}}>
+                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.green,lineHeight:1}}>{formatSarCompact(row.total)}</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Total</div>
+                  </div>
+                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.blue,lineHeight:1}}>{formatSarCompact(row.received)}</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Received</div>
+                  </div>
+                  <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.red,lineHeight:1}}>{formatSarCompact(row.due)}</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>Due</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
