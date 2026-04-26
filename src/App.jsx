@@ -380,10 +380,10 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
 }
 
 /* ─── Auth ────────────────────────────────────────────────────────────────── */
-const COMPANY_PASSWORD  = "scorpion2025"; // Change this to your desired password
+const COMPANY_PASSWORD  = "scorpion2026"; // Change this to your desired password
 const AUTH_KEY          = "cta_auth";
-const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
-const ANALYSIS_PASSWORD = "analysis2025"; // Change this to your desired analysis password
+const FINANCE_PASSWORD  = "finance2026"; // Change this to your desired finance password
+const ANALYSIS_PASSWORD = "analysis2026"; // Change this to your desired analysis password
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
 const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
