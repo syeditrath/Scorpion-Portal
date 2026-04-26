@@ -145,7 +145,7 @@ const LIGHT = {
 const DARK = {
   bg:"#0d1117", sidebar:"#0a0e14", card:"#161b22", card2:"#1c2333", cardHover:"#21262d",
   border:"#30363d", borderLight:"#3d444d",
-  text:"#e8edf5", textSub:"#8b949e", textMuted:"#484f58",
+  text:"#e8edf5", textSub:"#adbac7", textMuted:"#768390",
   blue:"#38bdf8", green:"#34d399", gold:"#fbbf24", red:"#f87171",
   purple:"#a78bfa", teal:"#2dd4bf", orange:"#fb923c",
   blueDim:"rgba(56,189,248,0.12)", greenDim:"rgba(52,211,153,0.12)",
