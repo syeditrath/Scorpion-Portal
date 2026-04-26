@@ -2773,9 +2773,10 @@ function AlertRow({a}) {
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
 const PD_TABS = [
-  {id:"invoices",     label:"Invoices",                    icon:"🧾", color:T.green,  dim:T.greenDim},
-  {id:"certificates", label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
-  {id:"workorders",   label:"Work Orders / Agreements",    icon:"📋", color:T.purple, dim:T.purpleDim},
+  {id:"invoices",      label:"Invoices",                    icon:"🧾", color:T.green,  dim:T.greenDim},
+  {id:"certificates",  label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
+  {id:"workorders",    label:"Work Orders / Agreements",    icon:"📋", color:T.purple, dim:T.purpleDim},
+  {id:"dailyreports",  label:"Daily Reports",               icon:"📅", color:T.gold,   dim:T.goldDim},
 ];
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -2831,15 +2832,18 @@ function ProjectDocs({data,setData,showToast}) {
 
   // ── Derived data (no hooks below this line) ───────────────────────────
   const invDocs   = docs.filter(d=>d.subTab==="invoices");
-const projInvs  = selProj ? invDocs.filter(d=>d.project===selProj) : [];
-const totalAmt  = projInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+  const projInvs  = selProj ? invDocs.filter(d=>d.project===selProj) : [];
+  const totalAmt  = projInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
 
-const certAll   = docs.filter(d=>d.subTab==="certificates");
-const projCerts = selProj ? certAll.filter(d=>d.project===selProj) : [];
+  const certAll   = docs.filter(d=>d.subTab==="certificates");
+  const projCerts = selProj ? certAll.filter(d=>d.project===selProj) : [];
 
-const woAll     = docs.filter(d=>d.subTab==="workorders");
-const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
-const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
+  const woAll     = docs.filter(d=>d.subTab==="workorders");
+  const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
+  const woDocs    = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
+
+  const drAll     = docs.filter(d=>d.subTab==="dailyreports");
+  const projDRs   = selProj ? drAll.filter(d=>d.project===selProj) : [];
 
   if (!selectedProject) {
     return (
@@ -2847,7 +2851,7 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text}}>PROJECTS</div>
-            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Select a project to view invoices, job completion certificates, and work orders</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Select a project to view invoices, certificates, work orders and daily reports</div>
           </div>
         </div>
 
@@ -2859,9 +2863,7 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
                 const projectInvoices = projectDocs.filter(d=>d.subTab==="invoices");
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
                 const projectWos = projectDocs.filter(d=>d.subTab==="workorders");
-                const projectTotal = projectInvoices.reduce((sum,d)=>sum+(parseFloat(d.amount)||0),0);
-                const projectCollected = projectInvoices.reduce((sum,d)=>sum+getInvoiceCollectedAmount(d),0);
-                const projectRemaining = projectInvoices.reduce((sum,d)=>sum+getInvoiceRemainingAmount(d),0);
+                const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
 
                 return (
                   <button
@@ -2883,42 +2885,27 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
                       <div style={{minWidth:0}}>
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{project}</div>
-                        <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>Project documents overview</div>
+                        <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{projectDocs.length} total document{projectDocs.length!==1?"s":""}</div>
                       </div>
                       <div style={{width:42,height:42,borderRadius:12,background:T.blueDim,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue,fontSize:18,fontWeight:800,flexShrink:0}}>◆</div>
                     </div>
 
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
-                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(projectTotal)}</div>
-                        <div style={{fontSize:11,color:T.textMuted,marginTop:6,fontWeight:700}}>Total Invoice Value</div>
-                      </div>
-                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.blue,lineHeight:1}}>{projectDocs.length}</div>
-                        <div style={{fontSize:11,color:T.textMuted,marginTop:6,fontWeight:700}}>Total Documents</div>
-                      </div>
                       <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:12,padding:"12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(projectCollected)}</div>
-                        <div style={{fontSize:11,color:T.green,marginTop:6,fontWeight:700}}>Amount Collected</div>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{projectInvoices.length}</div>
+                        <div style={{fontSize:11,color:T.green,marginTop:6,fontWeight:700}}>🧾 Invoices</div>
                       </div>
-                      <div style={{background:T.redDim,border:`1px solid ${T.red}33`,borderRadius:12,padding:"12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.red,lineHeight:1}}>{formatSarCompact(projectRemaining)}</div>
-                        <div style={{fontSize:11,color:T.red,marginTop:6,fontWeight:700}}>Amount Remaining</div>
+                      <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.blue,lineHeight:1}}>{projectCerts.length}</div>
+                        <div style={{fontSize:11,color:T.blue,marginTop:6,fontWeight:700}}>📜 Certificates</div>
                       </div>
-                    </div>
-
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginTop:12}}>
-                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.green,lineHeight:1}}>{projectInvoices.length}</div>
-                        <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:700}}>Invoices</div>
+                      <div style={{background:T.purpleDim,border:`1px solid ${T.purple}33`,borderRadius:12,padding:"12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.purple,lineHeight:1}}>{projectWos.length}</div>
+                        <div style={{fontSize:11,color:T.purple,marginTop:6,fontWeight:700}}>📋 Work Orders</div>
                       </div>
-                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.gold,lineHeight:1}}>{projectCerts.length}</div>
-                        <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:700}}>Certificates</div>
-                      </div>
-                      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.blue,lineHeight:1}}>{projectWos.length}</div>
-                        <div style={{fontSize:11,color:T.textMuted,marginTop:5,fontWeight:700}}>Work Orders</div>
+                      <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.gold,lineHeight:1}}>{projectDailyReports.length}</div>
+                        <div style={{fontSize:11,color:T.gold,marginTop:6,fontWeight:700}}>📅 Daily Reports</div>
                       </div>
                     </div>
 
@@ -2993,40 +2980,11 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
                           <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
                         </div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-
-    <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>
-        {pinvs.length}
-      </div>
-      <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:700}}>Total Invoices</div>
-    </div>
-
-    <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>
-        {formatSarCompact(total)}
-      </div>
-      <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:700}}>Total Value</div>
-    </div>
-
-    <div style={{background:T.redDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.red}33`}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.red,lineHeight:1}}>
-        {formatSarCompact(pinvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0))}
-      </div>
-      <div style={{fontSize:11,color:T.red,marginTop:4,fontWeight:700}}>⏳ Remaining</div>
-    </div>
-
-    <div style={{background:T.greenDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.green}33`}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>
-        {formatSarCompact(pinvs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0))}
-      </div>
-      <div style={{fontSize:11,color:T.green,marginTop:4,fontWeight:700}}>✓ Collected</div>
-    </div>
-
-  </div>
-
-                      
-                      <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>View Invoices →</div>
+                      <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</span>
+                        <span style={{fontSize:12,color:T.green,fontWeight:700}}>Total Invoices</span>
+                      </div>
+                      <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right",marginTop:10}}>View Invoices →</div>
                     </div>
                   );
                 })}
@@ -3277,10 +3235,97 @@ const woDocs = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
         </div>
       )}
 
+      {/* ══ DAILY REPORTS ═══════════════════════════════════════════════ */}
+      {subTab==="dailyreports" && (
+        selProj ? (
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+              <button onClick={backToProjects} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
+                <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>{projDRs.length} daily report{projDRs.length!==1?"s":""}</div>
+              </div>
+              <Btn color={T.gold} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>+ Add Report</Btn>
+            </div>
+            {projDRs.length===0
+              ?<Empty icon="📅" label="No daily reports yet" sub="Add the first daily report for this project" color={T.gold} onAdd={()=>setModal({mode:"add",doc:{project:selProj}})}/>
+              :<div style={{display:"grid",gap:10}}>
+                {projDRs.map((doc,i)=>(
+                  <div key={doc.id} className="fade-up"
+                    style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
+                        {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
+                        {doc.date&&<Tag color={T.gold}>{fmtDate(doc.date)}</Tag>}
+                      </div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
+                        {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+                      </div>
+                      {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                      <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
+                      <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            }
+          </div>
+        ) : (
+          <div>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>DAILY REPORTS</div>
+                <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Site activity and progress reports by project</div>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
+                  <option value="">All Projects</option>
+                  {projects.map(p=><option key={p} value={p}>{p}</option>)}
+                </select>
+                <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Add Report</Btn>
+              </div>
+            </div>
+            {(() => {
+              const drDocs = fProj ? drAll.filter(d=>d.project===fProj) : drAll;
+              return drDocs.length===0
+                ?<Empty icon="📅" label="No daily reports yet" sub="Add your first daily report" color={T.gold} onAdd={()=>setModal({mode:"add"})}/>
+                :<div style={{display:"grid",gap:10}}>
+                  {drDocs.map((doc,i)=>(
+                    <div key={doc.id} className="fade-up"
+                      style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
+                          {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
+                          {doc.date&&<Tag color={T.gold}>{fmtDate(doc.date)}</Tag>}
+                        </div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
+                          {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+                        </div>
+                        {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+                      </div>
+                      <div style={{display:"flex",gap:6,flexShrink:0}}>
+                        <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
+                        <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                      </div>
+                    </div>
+                  ))}
+                </div>;
+            })()}
+          </div>
+        )
+      )}
+
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
-      {modal && subTab==="invoices"     && <InvoiceModal     mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {modal && subTab==="certificates" && <CertificateModal mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {modal && subTab==="workorders"   && <WorkOrderModal   mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="invoices"      && <InvoiceModal      mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="workorders"    && <WorkOrderModal     mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="dailyreports"  && <DailyReportModal   mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
       {multiPdfModal && (
   <MultiPdfCertUpload
@@ -3573,6 +3618,27 @@ function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
       <FieldRow label="Expiry / End Date"><FInput type="date" value={f.expiryDate||""} onChange={set("expiryDate")} color={T.purple}/></FieldRow>
       <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.purple}/></FieldRow>
+    </FormModal>
+  );
+}
+
+function DailyReportModal({mode,doc,projects,defaultProject,onClose,onSave}) {
+  const [f,setF]=useState({project:defaultProject||"",...(doc||{})});
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} DAILY REPORT`} color={T.gold} onClose={onClose}
+      onSave={()=>{if(!f.name){alert("Report title required");return;}onSave(f,mode);}}>
+      <FieldRow label="Report Title *"><FInput value={f.name||""} onChange={set("name")} color={T.gold}/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.gold}>
+          <option value="">Select project…</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Report Date"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.gold}/></FieldRow>
+      <FieldRow label="Reference No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.gold}/></FieldRow>
+      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+      <FieldRow label="Notes / Summary"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.gold}/></FieldRow>
     </FormModal>
   );
 }
