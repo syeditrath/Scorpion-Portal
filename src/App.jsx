@@ -1901,19 +1901,19 @@ export default function App() {
 
   /* ── expiry alerts across everything ── */
   const allExpiries = [
-    ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Company Doc",days:daysUntil(d.expiryDate)})),
-    ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Project Doc",days:daysUntil(d.expiryDate)})),
+    ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Company Doc",days:daysUntil(d.expiryDate),page:"scorpion"})),
+    ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Project Doc",days:daysUntil(d.expiryDate),page:"projects"})),
     ...data.manpower.flatMap(p=>[
-      p.passportExpiry && {label:p.name,src:"Passport",    days:daysUntil(p.passportExpiry)},
-      p.visaExpiry     && {label:p.name,src:"Visa",        days:daysUntil(p.visaExpiry)},
-      p.iqamaExpiry    && {label:p.name,src:"Iqama",       days:daysUntil(p.iqamaExpiry)},
-      p.muqeemExpiry   && {label:p.name,src:"Muqeem",      days:daysUntil(p.muqeemExpiry)},
-      ...(p.certs||[]).map(c=>({label:`${p.name} — ${c.name}`,src:"Cert",days:daysUntil(c.expiryDate)})),
+      p.passportExpiry && {label:p.name,src:"Passport",    days:daysUntil(p.passportExpiry),page:"manpower"},
+      p.visaExpiry     && {label:p.name,src:"Visa",        days:daysUntil(p.visaExpiry),page:"manpower"},
+      p.iqamaExpiry    && {label:p.name,src:"Iqama",       days:daysUntil(p.iqamaExpiry),page:"manpower"},
+      p.muqeemExpiry   && {label:p.name,src:"Muqeem",      days:daysUntil(p.muqeemExpiry),page:"manpower"},
+      ...(p.certs||[]).map(c=>({label:`${p.name} — ${c.name}`,src:"Cert",days:daysUntil(c.expiryDate),page:"manpower"})),
     ].filter(Boolean)),
     ...data.equipment.flatMap(e=>[
-      ...(e.certifications||[]).map(c=>({label:`${e.name} — ${c.certNo||"Cert"}`,src:"Eq Cert",days:daysUntil(c.expiryDate)})),
-      ...(e.insurance||[]).map(c=>({label:`${e.name} — Insurance`,src:"Insurance",days:daysUntil(c.expiryDate)})),
-      ...(e.permits||[]).map(c=>({label:`${e.name} — ${c.type||"Permit"}`,src:"Permit",days:daysUntil(c.expiryDate)})),
+      ...(e.certifications||[]).map(c=>({label:`${e.name} — ${c.certNo||"Cert"}`,src:"Eq Cert",days:daysUntil(c.expiryDate),page:"equipment"})),
+      ...(e.insurance||[]).map(c=>({label:`${e.name} — Insurance`,src:"Insurance",days:daysUntil(c.expiryDate),page:"equipment"})),
+      ...(e.permits||[]).map(c=>({label:`${e.name} — ${c.type||"Permit"}`,src:"Permit",days:daysUntil(c.expiryDate),page:"equipment"})),
     ]),
   ].filter(x=>x.days!==null&&x.days<=90).sort((a,b)=>a.days-b.days);
 
@@ -2016,7 +2016,7 @@ export default function App() {
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="finance"   && (
             financeAuthed
-              ? <div className="fade-in" key="finance"><FinancePage data={data} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>
+              ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>
               : <FinanceLoginPage onLogin={(pw) => {
                   if (pw === FINANCE_PASSWORD) {
                     setFinanceAuthed(true);
@@ -2345,7 +2345,7 @@ function Dashboard({ data, alerts, go }) {
               <div style={{width:42,height:42,borderRadius:12,background:T.goldDim,color:T.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800}}>$</div>
               <div>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text,lineHeight:1}}>FINANCE</div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>Invoice values, collections & receivables</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>Invoices, work orders, collections & receivables</div>
               </div>
             </div>
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,position:"relative",zIndex:1}}>
@@ -2656,234 +2656,352 @@ function FinanceLoginPage({ onLogin }) {
    Full financial overview — invoice values, collections, receivables.
    Only accessible after finance authentication.
 ════════════════════════════════════════════════════════════════════════════ */
-function FinancePage({ data, selectedInvoiceYear, setSelectedInvoiceYear }) {
+const FIN_TABS = [
+  {id:"overview",    label:"Overview",                 icon:"$",  color:T.gold,   dim:T.goldDim},
+  {id:"invoices",    label:"Invoices",                 icon:"🧾", color:T.green,  dim:T.greenDim},
+  {id:"workorders",  label:"Work Orders / Agreements", icon:"📋", color:T.purple, dim:T.purpleDim},
+];
+
+function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelectedInvoiceYear }) {
+  const [finTab, setFinTab] = useState("overview");
   const [invoiceDetailView, setInvoiceDetailView] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [fProj, setFProj] = useState("");
+  const [selProj, setSelProj] = useState(null);
 
-  const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
+  const projects  = data.projects    || [];
+  const allDocs   = data.projectDocs || [];
+  const invoiceDocs = allDocs.filter(d => d.subTab === "invoices");
+  const woDocs      = allDocs.filter(d => d.subTab === "workorders");
 
-  const availableInvoiceYears = Array.from(
-    new Set(
-      invoiceDocs
-        .map(doc => {
-          if (!doc.dueDate) return null;
-          const dt = new Date(doc.dueDate);
-          return Number.isNaN(dt.getTime()) ? null : String(dt.getFullYear());
-        })
-        .filter(Boolean)
-    )
-  ).sort((a, b) => Number(b) - Number(a));
+  const finCounts = {
+    overview:   "",
+    invoices:   invoiceDocs.length,
+    workorders: woDocs.length,
+  };
+
+  // ── Save / delete helpers (write back to shared projectDocs) ──
+  const saveDoc = (doc, mode) => {
+    const st = finTab === "invoices" ? "invoices" : "workorders";
+    setModal(null);
+    setTimeout(() => {
+      setData(prev => {
+        const list = [...prev.projectDocs];
+        if (mode === "add") list.push({...doc, id:uid(), subTab:st});
+        else { const i = list.findIndex(d => d.id === doc.id); if (i >= 0) list[i] = {...doc, subTab:st}; }
+        return {...prev, projectDocs:list};
+      });
+      showToast(mode === "add" ? "Document added" : "Updated");
+    }, 0);
+  };
+
+  const delDoc = id => {
+    setData(prev => ({...prev, projectDocs:prev.projectDocs.filter(d => d.id !== id)}));
+    showToast("Deleted","del");
+  };
+
+  // ── Overview calculations ──
+  const availableInvoiceYears = Array.from(new Set(
+    invoiceDocs.map(doc => {
+      if (!doc.dueDate) return null;
+      const dt = new Date(doc.dueDate);
+      return Number.isNaN(dt.getTime()) ? null : String(dt.getFullYear());
+    }).filter(Boolean)
+  )).sort((a,b) => Number(b) - Number(a));
 
   const filteredInvoiceDocs = selectedInvoiceYear === "All"
     ? invoiceDocs
     : invoiceDocs.filter(doc => {
         if (!doc.dueDate) return false;
         const dt = new Date(doc.dueDate);
-        if (Number.isNaN(dt.getTime())) return false;
-        return String(dt.getFullYear()) === selectedInvoiceYear;
+        return !Number.isNaN(dt.getTime()) && String(dt.getFullYear()) === selectedInvoiceYear;
       });
 
-  const totalInvoiceValue    = filteredInvoiceDocs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
-  const totalReceived        = filteredInvoiceDocs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
-  const totalDue             = filteredInvoiceDocs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
-
-  const incomeInvs   = filteredInvoiceDocs.filter(d => getInvoiceStream(d) === "income");
-  const advanceInvs  = filteredInvoiceDocs.filter(d => getInvoiceStream(d) === "advance");
-
-  const incomeInvoiced   = incomeInvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
-  const advanceInvoiced  = advanceInvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
-
-  const receivedFromIncome   = incomeInvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
-  const receivedFromAdvance  = advanceInvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
-
+  const totalInvoiceValue = filteredInvoiceDocs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
+  const totalReceived     = filteredInvoiceDocs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
+  const totalDue          = filteredInvoiceDocs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
+  const incomeInvs        = filteredInvoiceDocs.filter(d => getInvoiceStream(d) === "income");
+  const advanceInvs       = filteredInvoiceDocs.filter(d => getInvoiceStream(d) === "advance");
+  const incomeInvoiced    = incomeInvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
+  const advanceInvoiced   = advanceInvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
+  const receivedFromIncome  = incomeInvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
+  const receivedFromAdvance = advanceInvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
   const dueFromIncome   = incomeInvs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
   const dueFromAdvance  = advanceInvs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
+  const collectionRate  = totalInvoiceValue > 0 ? Math.round((totalReceived / totalInvoiceValue) * 100) : 0;
 
-  // Per-project breakdown
-  const projects = data.projects || [];
   const projectBreakdown = projects.map(proj => {
-    const projInvs = filteredInvoiceDocs.filter(d => d.project === proj);
-    const invoiced  = projInvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
-    const collected = projInvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
-    const due       = projInvs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
+    const pinvs     = filteredInvoiceDocs.filter(d => d.project === proj);
+    const invoiced  = pinvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
+    const collected = pinvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
+    const due       = pinvs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
     const pct       = invoiced > 0 ? Math.round((collected / invoiced) * 100) : 0;
-    return { proj, invoiced, collected, due, pct, count: projInvs.length };
+    return {proj, invoiced, collected, due, pct, count:pinvs.length};
   }).filter(p => p.invoiced > 0 || p.count > 0).sort((a,b) => b.invoiced - a.invoiced);
 
-  // Collection rate
-  const collectionRate = totalInvoiceValue > 0 ? Math.round((totalReceived / totalInvoiceValue) * 100) : 0;
+  // ── Filtered work orders ──
+  const filteredWoDocs = fProj ? woDocs.filter(d => d.project === fProj) : woDocs;
+  // ── Filtered invoices (for the Invoices tab) ──
+  const projInvs = selProj ? invoiceDocs.filter(d => d.project === selProj) : [];
+  const projInvTotal = projInvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
 
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
 
       {/* ── Page header ── */}
-      <div className="fade-up" style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
+      <div className="fade-up" style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:12}}>
         <div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:32,color:T.text,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{color:T.gold}}>$</span> FINANCE OVERVIEW
+            <span style={{color:T.gold}}>$</span> FINANCE
           </div>
-          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>
-            Invoice values, collections & receivables · Finance personnel only
-          </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <label style={{fontSize:12,fontWeight:700,color:T.textMuted}}>YEAR</label>
-          <select
-            value={selectedInvoiceYear}
-            onChange={e => setSelectedInvoiceYear(e.target.value)}
-            style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none"}}
-          >
-            <option value="All">All Years</option>
-            {availableInvoiceYears.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Invoices, work orders & financial overview · Restricted access</div>
         </div>
       </div>
 
-      {/* ── Summary KPI bar ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
-        {[
-          {label:"Total Invoiced",    v:formatSarCompact(totalInvoiceValue),  color:T.green,  icon:"📋"},
-          {label:"Total Collected",   v:formatSarCompact(totalReceived),      color:T.blue,   icon:"✓"},
-          {label:"Total Outstanding", v:formatSarCompact(totalDue),           color:T.red,    icon:"⏳"},
-          {label:"Collection Rate",   v:`${collectionRate}%`,                 color:collectionRate>=80?T.green:collectionRate>=50?T.gold:T.red, icon:"◎"},
-          {label:"Total Invoices",    v:filteredInvoiceDocs.length,            color:T.purple, icon:"◆"},
-        ].map((k,i) => (
-          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden",boxShadow:T.shadow}}>
-            <div style={{position:"absolute",top:10,right:14,fontSize:22,opacity:.1}}>{k.icon}</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(22px,2.5vw,36px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
-            <div style={{fontSize:11,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
-          </div>
-        ))}
+      {/* ── Tab bar ── */}
+      <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+        {FIN_TABS.map(t => {
+          const active = finTab === t.id;
+          return (
+            <button key={t.id} onClick={() => { setFinTab(t.id); setSelProj(null); setFProj(""); setModal(null); }}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:10,border:`1px solid ${active?t.color:T.border}`,background:active?t.dim:"transparent",color:active?t.color:T.textSub,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,cursor:"pointer",transition:"all .15s"}}>
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+              {finCounts[t.id] !== "" && (
+                <span style={{background:active?t.color:T.border,color:active?"#0d1117":T.textMuted,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:800}}>{finCounts[t.id]}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Collection rate bar ── */}
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 20px",marginBottom:20,animationDelay:".28s",boxShadow:T.shadow}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textSub,letterSpacing:".5px"}}>COLLECTION RATE</span>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(18px,2vw,26px)",color:collectionRate>=80?T.green:collectionRate>=50?T.gold:T.red}}>{collectionRate}%</span>
-        </div>
-        <div style={{height:8,background:T.border,borderRadius:999}}>
-          <div style={{height:"100%",width:`${collectionRate}%`,borderRadius:999,transition:"width 1.2s cubic-bezier(0.22,1,0.36,1)",background:collectionRate>=80?`linear-gradient(90deg,${T.green},#059669)`:collectionRate>=50?`linear-gradient(90deg,${T.gold},#d97706)`:`linear-gradient(90deg,${T.red},#dc2626)`}}/>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,color:T.textSub}}>
-          <span>{formatSarCompact(totalReceived)} collected of {formatSarCompact(totalInvoiceValue)} invoiced</span>
-          <span style={{color:T.red}}>{formatSarCompact(totalDue)} outstanding</span>
-        </div>
-      </div>
-
-      {/* ── Invoice metric cards ── */}
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:20,animationDelay:".32s"}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,marginBottom:4}}>
-          INVOICE VALUE {selectedInvoiceYear !== "All" ? `— ${selectedInvoiceYear}` : "— ALL YEARS"}
-        </div>
-        <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>
-          {selectedInvoiceYear === "All" ? `Across all ${filteredInvoiceDocs.length} invoices` : `For ${selectedInvoiceYear} · ${filteredInvoiceDocs.length} invoices`}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
-          <InvoiceMetricCard
-            title="TOTAL INVOICE VALUE"
-            amount={formatSarCompact(totalInvoiceValue)}
-            sub={`${filteredInvoiceDocs.length} invoices · ${selectedInvoiceYear === "All" ? "all years" : selectedInvoiceYear}`}
-            color={T.green}
-            onClick={() => setInvoiceDetailView({ mode:"all", stream:"all" })}
-            miniCards={[
-              { title:"INCOME INVOICED",  amount:formatSarCompact(incomeInvoiced),  color:T.green, onClick:() => setInvoiceDetailView({mode:"all",stream:"income"}) },
-              { title:"ADVANCE INVOICED", amount:formatSarCompact(advanceInvoiced), color:T.gold,  onClick:() => setInvoiceDetailView({mode:"all",stream:"advance"}) },
-            ]}
-          />
-          <InvoiceMetricCard
-            title="AMOUNT RECEIVED"
-            amount={formatSarCompact(totalReceived)}
-            sub={selectedInvoiceYear === "All" ? "Collected across all invoices" : `Collected for ${selectedInvoiceYear}`}
-            color={T.blue}
-            onClick={() => setInvoiceDetailView({ mode:"received", stream:"all" })}
-            miniCards={[
-              { title:"RECEIVED FROM INCOME",  amount:formatSarCompact(receivedFromIncome),  color:T.blue, onClick:() => setInvoiceDetailView({mode:"received",stream:"income"}) },
-              { title:"RECEIVED FROM ADVANCE", amount:formatSarCompact(receivedFromAdvance), color:T.teal, onClick:() => setInvoiceDetailView({mode:"received",stream:"advance"}) },
-            ]}
-          />
-          <InvoiceMetricCard
-            title="AMOUNT DUE"
-            amount={formatSarCompact(totalDue)}
-            sub={selectedInvoiceYear === "All" ? "Pending and partial balances" : `Outstanding for ${selectedInvoiceYear}`}
-            color={T.red}
-            onClick={() => setInvoiceDetailView({ mode:"due", stream:"all" })}
-            miniCards={[
-              { title:"DUE FROM INCOME",  amount:formatSarCompact(dueFromIncome),  color:T.red,    onClick:() => setInvoiceDetailView({mode:"due",stream:"income"}) },
-              { title:"DUE FROM ADVANCE", amount:formatSarCompact(dueFromAdvance), color:T.orange, onClick:() => setInvoiceDetailView({mode:"due",stream:"advance"}) },
-            ]}
-          />
-        </div>
-      </div>
-
-      {/* ── Per-project breakdown ── */}
-      {projectBreakdown.length > 0 && (
-        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:20,animationDelay:".4s"}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,marginBottom:4}}>
-            PER-PROJECT BREAKDOWN
+      {/* ══ OVERVIEW TAB ══════════════════════════════════════════════════ */}
+      {finTab === "overview" && (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20,flexWrap:"wrap",justifyContent:"flex-end"}}>
+            <label style={{fontSize:12,fontWeight:700,color:T.textMuted}}>YEAR</label>
+            <select value={selectedInvoiceYear} onChange={e => setSelectedInvoiceYear(e.target.value)}
+              style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none",colorScheme:"light"}}>
+              <option value="All">All Years</option>
+              {availableInvoiceYears.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
           </div>
-          <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>
-            Invoice collection status by project {selectedInvoiceYear !== "All" ? `for ${selectedInvoiceYear}` : ""}
-          </div>
-          <div style={{display:"grid",gap:12}}>
-            {projectBreakdown.map((p, i) => (
-              <div key={p.proj} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",animationDelay:`${i*.04}s`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:10}}>
-                  <div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.proj}</div>
-                    <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.count} invoice{p.count!==1?"s":""}</div>
-                  </div>
-                  <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.green}}>{formatSarCompact(p.invoiced)}</div>
-                      <div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>INVOICED</div>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.blue}}>{formatSarCompact(p.collected)}</div>
-                      <div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>COLLECTED</div>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:p.due>0?T.red:T.green}}>{formatSarCompact(p.due)}</div>
-                      <div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>DUE</div>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:4}}>
-                    <span>Collection progress</span>
-                    <span style={{fontWeight:700,color:pctColor(p.pct)}}>{p.pct}%</span>
-                  </div>
-                  <div style={{height:6,background:T.border,borderRadius:999,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${p.pct}%`,borderRadius:999,background:`linear-gradient(90deg,${pctColor(p.pct)},${pctColor(p.pct)}bb)`,transition:"width 1s"}}/>
-                  </div>
-                </div>
+
+          {/* KPI strip */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
+            {[
+              {label:"Total Invoiced",    v:formatSarCompact(totalInvoiceValue), color:T.green,  icon:"📋"},
+              {label:"Total Collected",   v:formatSarCompact(totalReceived),     color:T.blue,   icon:"✓"},
+              {label:"Total Outstanding", v:formatSarCompact(totalDue),          color:T.red,    icon:"⏳"},
+              {label:"Collection Rate",   v:`${collectionRate}%`,                color:collectionRate>=80?T.green:collectionRate>=50?T.gold:T.red, icon:"◎"},
+              {label:"Total Invoices",    v:filteredInvoiceDocs.length,          color:T.purple, icon:"◆"},
+              {label:"Work Orders",       v:woDocs.length,                       color:T.purple, icon:"📋"},
+            ].map((k,i) => (
+              <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden",boxShadow:T.shadow}}>
+                <div style={{position:"absolute",top:10,right:14,fontSize:22,opacity:.1}}>{k.icon}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(22px,2.5vw,36px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+                <div style={{fontSize:11,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
               </div>
             ))}
           </div>
-        </div>
-      )}
 
-      {/* ── Invoice detail modal ── */}
-      {invoiceDetailView && (
-        <InvoiceYearDetailsModal
-          view={invoiceDetailView}
-          invoices={filteredInvoiceDocs}
-          yearLabel={selectedInvoiceYear}
-          onClose={() => setInvoiceDetailView(null)}
-        />
-      )}
-
-      {/* ── Empty state ── */}
-      {filteredInvoiceDocs.length === 0 && (
-        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center",boxShadow:T.shadow}}>
-          <div style={{fontSize:44,marginBottom:12}}>📋</div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.textSub,marginBottom:8}}>NO INVOICES</div>
-          <div style={{fontSize:13,color:T.textMuted}}>
-            {selectedInvoiceYear === "All"
-              ? "No invoices found. Add invoices in Project Docs to see financial data here."
-              : `No invoices found for ${selectedInvoiceYear}. Try selecting a different year.`}
+          {/* Collection rate bar */}
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 20px",marginBottom:20,boxShadow:T.shadow}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textSub,letterSpacing:".5px"}}>COLLECTION RATE</span>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(18px,2vw,26px)",color:collectionRate>=80?T.green:collectionRate>=50?T.gold:T.red}}>{collectionRate}%</span>
+            </div>
+            <div style={{height:8,background:T.border,borderRadius:999}}>
+              <div style={{height:"100%",width:`${collectionRate}%`,borderRadius:999,transition:"width 1.2s cubic-bezier(0.22,1,0.36,1)",background:collectionRate>=80?`linear-gradient(90deg,${T.green},#059669)`:collectionRate>=50?`linear-gradient(90deg,${T.gold},#d97706)`:`linear-gradient(90deg,${T.red},#dc2626)`}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,color:T.textSub}}>
+              <span>{formatSarCompact(totalReceived)} collected of {formatSarCompact(totalInvoiceValue)} invoiced</span>
+              <span style={{color:T.red}}>{formatSarCompact(totalDue)} outstanding</span>
+            </div>
           </div>
+
+          {/* Invoice metric cards */}
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:20}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,marginBottom:4}}>
+              INVOICE VALUE {selectedInvoiceYear !== "All" ? `— ${selectedInvoiceYear}` : "— ALL YEARS"}
+            </div>
+            <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>
+              {selectedInvoiceYear === "All" ? `Across all ${filteredInvoiceDocs.length} invoices` : `For ${selectedInvoiceYear} · ${filteredInvoiceDocs.length} invoices`}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
+              <InvoiceMetricCard title="TOTAL INVOICE VALUE" amount={formatSarCompact(totalInvoiceValue)} sub={`${filteredInvoiceDocs.length} invoices · ${selectedInvoiceYear === "All" ? "all years" : selectedInvoiceYear}`} color={T.green} onClick={() => setInvoiceDetailView({mode:"all",stream:"all"})} miniCards={[{title:"INCOME INVOICED",amount:formatSarCompact(incomeInvoiced),color:T.green,onClick:()=>setInvoiceDetailView({mode:"all",stream:"income"})},{title:"ADVANCE INVOICED",amount:formatSarCompact(advanceInvoiced),color:T.gold,onClick:()=>setInvoiceDetailView({mode:"all",stream:"advance"})}]}/>
+              <InvoiceMetricCard title="AMOUNT RECEIVED" amount={formatSarCompact(totalReceived)} sub={selectedInvoiceYear === "All" ? "Collected across all invoices" : `Collected for ${selectedInvoiceYear}`} color={T.blue} onClick={() => setInvoiceDetailView({mode:"received",stream:"all"})} miniCards={[{title:"RECEIVED FROM INCOME",amount:formatSarCompact(receivedFromIncome),color:T.blue,onClick:()=>setInvoiceDetailView({mode:"received",stream:"income"})},{title:"RECEIVED FROM ADVANCE",amount:formatSarCompact(receivedFromAdvance),color:T.teal,onClick:()=>setInvoiceDetailView({mode:"received",stream:"advance"})}]}/>
+              <InvoiceMetricCard title="AMOUNT DUE" amount={formatSarCompact(totalDue)} sub={selectedInvoiceYear === "All" ? "Pending and partial balances" : `Outstanding for ${selectedInvoiceYear}`} color={T.red} onClick={() => setInvoiceDetailView({mode:"due",stream:"all"})} miniCards={[{title:"DUE FROM INCOME",amount:formatSarCompact(dueFromIncome),color:T.red,onClick:()=>setInvoiceDetailView({mode:"due",stream:"income"})},{title:"DUE FROM ADVANCE",amount:formatSarCompact(dueFromAdvance),color:T.orange,onClick:()=>setInvoiceDetailView({mode:"due",stream:"advance"})}]}/>
+            </div>
+          </div>
+
+          {/* Per-project breakdown */}
+          {projectBreakdown.length > 0 && (
+            <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:20}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,marginBottom:4}}>PER-PROJECT BREAKDOWN</div>
+              <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>Invoice collection status by project {selectedInvoiceYear !== "All" ? `for ${selectedInvoiceYear}` : ""}</div>
+              <div style={{display:"grid",gap:12}}>
+                {projectBreakdown.map((p,i) => (
+                  <div key={p.proj} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",animationDelay:`${i*.04}s`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:10}}>
+                      <div>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.proj}</div>
+                        <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.count} invoice{p.count!==1?"s":""}</div>
+                      </div>
+                      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                        <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.green}}>{formatSarCompact(p.invoiced)}</div><div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>INVOICED</div></div>
+                        <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.blue}}>{formatSarCompact(p.collected)}</div><div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>COLLECTED</div></div>
+                        <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:p.due>0?T.red:T.green}}>{formatSarCompact(p.due)}</div><div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>DUE</div></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:4}}><span>Collection progress</span><span style={{fontWeight:700,color:pctColor(p.pct)}}>{p.pct}%</span></div>
+                      <div style={{height:6,background:T.border,borderRadius:999,overflow:"hidden"}}><div style={{height:"100%",width:`${p.pct}%`,borderRadius:999,background:`linear-gradient(90deg,${pctColor(p.pct)},${pctColor(p.pct)}bb)`,transition:"width 1s"}}/></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {invoiceDetailView && <InvoiceYearDetailsModal view={invoiceDetailView} invoices={filteredInvoiceDocs} yearLabel={selectedInvoiceYear} onClose={() => setInvoiceDetailView(null)}/>}
+
+          {filteredInvoiceDocs.length === 0 && (
+            <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center",boxShadow:T.shadow}}>
+              <div style={{fontSize:44,marginBottom:12}}>📋</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.textSub,marginBottom:8}}>NO INVOICES</div>
+              <div style={{fontSize:13,color:T.textMuted}}>{selectedInvoiceYear === "All" ? "No invoices found. Add invoices via the Invoices tab above." : `No invoices found for ${selectedInvoiceYear}. Try selecting a different year.`}</div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* ══ INVOICES TAB ══════════════════════════════════════════════════ */}
+      {finTab === "invoices" && (
+        selProj ? (
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+              <button onClick={() => setSelProj(null)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Back</button>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selProj}</div>
+                <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>{projInvs.length} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {projInvTotal.toLocaleString()}</span></div>
+              </div>
+              <Btn color={T.green} solid onClick={() => setModal({mode:"add",doc:{project:selProj}})}>+ Add Invoice</Btn>
+            </div>
+            {projInvs.length === 0
+              ? <Empty icon="🧾" label="No invoices yet" sub="Add the first invoice for this project" color={T.green} onAdd={() => setModal({mode:"add",doc:{project:selProj}})}/>
+              : <div style={{display:"grid",gap:10}}>{projInvs.map((doc,i) => <InvoiceCard key={doc.id} doc={doc} delay={i*.03} onEdit={() => setModal({mode:"edit",doc})} onDel={() => delDoc(doc.id)}/>)}</div>
+            }
+          </div>
+        ) : (
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:18}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>INVOICES</div>
+                <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Select a project to view and manage invoices</div>
+              </div>
+              <Btn color={T.green} solid onClick={() => setModal({mode:"add"})}>+ Add Invoice</Btn>
+            </div>
+            {projects.length === 0
+              ? <Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={() => {}}/>
+              : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
+                  {projects.map((p,i) => {
+                    const pinvs = invoiceDocs.filter(d => d.project === p);
+                    const total = pinvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
+                    const collected = pinvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
+                    const due = pinvs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
+                    return (
+                      <div key={p} className="fade-up card-hover" onClick={() => setSelProj(p)}
+                        style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px",cursor:"pointer",animationDelay:`${i*.04}s`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                          <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🧾</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p}</div>
+                            <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
+                          </div>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                          <div style={{background:T.bg,borderRadius:8,padding:"8px 10px"}}>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(total)}</div>
+                            <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700}}>INVOICED</div>
+                          </div>
+                          <div style={{background:T.greenDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.green}33`}}>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(collected)}</div>
+                            <div style={{fontSize:10,color:T.green,marginTop:4,fontWeight:700}}>COLLECTED</div>
+                          </div>
+                          <div style={{background:T.redDim,borderRadius:8,padding:"8px 10px",border:`1px solid ${T.red}33`}}>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.red,lineHeight:1}}>{formatSarCompact(due)}</div>
+                            <div style={{fontSize:10,color:T.red,marginTop:4,fontWeight:700}}>DUE</div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:12,color:T.green,fontWeight:700,textAlign:"right",marginTop:12}}>View Invoices →</div>
+                      </div>
+                    );
+                  })}
+                </div>
+            }
+          </div>
+        )
+      )}
+
+      {/* ══ WORK ORDERS TAB ═══════════════════════════════════════════════ */}
+      {finTab === "workorders" && (
+        <div>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>WORK ORDERS / AGREEMENTS</div>
+              <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Contracts and work orders with clients</div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <select value={fProj} onChange={e => setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
+                <option value="">All Projects</option>
+                {projects.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <Btn color={T.purple} solid onClick={() => setModal({mode:"add"})}>+ Add Work Order</Btn>
+            </div>
+          </div>
+          <div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{filteredWoDocs.length} record{filteredWoDocs.length!==1?"s":""}</div>
+          {filteredWoDocs.length === 0
+            ? <Empty icon="📋" label="No work orders yet" sub="Add your first work order or agreement" color={T.purple} onAdd={() => setModal({mode:"add"})}/>
+            : <div style={{display:"grid",gap:10}}>
+                {filteredWoDocs.map((doc,i) => {
+                  const hasExp = !!doc.expiryDate;
+                  const s = getStatus(daysUntil(doc.expiryDate));
+                  return (
+                    <div key={doc.id} className="fade-up"
+                      style={{background:T.card,border:`1px solid ${hasExp&&daysUntil(doc.expiryDate)<=90?s.color+"44":T.border}`,borderLeft:"4px solid "+T.purple,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
+                          {doc.project && <Tag color={T.teal}>{doc.project}</Tag>}
+                          {hasExp && <Tag color={s.color}>{s.label}</Tag>}
+                        </div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {doc.refNo    && <Chip>Ref: {doc.refNo}</Chip>}
+                          {doc.supplier && <Chip>Client: {doc.supplier}</Chip>}
+                          {doc.amount   && <Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
+                          {doc.date     && <Chip>Signed: {fmtDate(doc.date)}</Chip>}
+                          {hasExp       && <Chip color={s.color}>Expires: {fmtDate(doc.expiryDate)}</Chip>}
+                          {hasExp && daysUntil(doc.expiryDate)!==null && daysUntil(doc.expiryDate)<=90 && <Chip color={s.color}>{daysUntil(doc.expiryDate)>=0?`${daysUntil(doc.expiryDate)}d left`:`${Math.abs(daysUntil(doc.expiryDate))}d overdue`}</Chip>}
+                          {doc.fileLink && <FileLink href={doc.fileLink}/>}
+                        </div>
+                        {doc.notes && <div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+                      </div>
+                      <div style={{display:"flex",gap:6,flexShrink:0}}>
+                        <ABtn color={T.blue} onClick={() => setModal({mode:"edit",doc})}>✎</ABtn>
+                        <ABtn color={T.red}  onClick={() => delDoc(doc.id)}>✕</ABtn>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+          }
+        </div>
+      )}
+
+      {/* ── Modals ── */}
+      {modal && finTab === "invoices"   && <InvoiceModal   mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selProj} onClose={() => setModal(null)} onSave={saveDoc}/>}
+      {modal && finTab === "workorders" && <WorkOrderModal mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={() => setModal(null)} onSave={saveDoc}/>}
     </div>
   );
 }
@@ -3016,9 +3134,7 @@ function AlertRow({a}) {
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
 const PD_TABS = [
-  {id:"invoices",      label:"Invoices",                    icon:"🧾", color:T.green,  dim:T.greenDim},
   {id:"certificates",  label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
-  {id:"workorders",    label:"Work Orders / Agreements",    icon:"📋", color:T.purple, dim:T.purpleDim},
   {id:"dailyreports",  label:"Daily Reports",               icon:"📅", color:T.gold,   dim:T.goldDim},
 ];
 
@@ -3028,7 +3144,7 @@ const PD_TABS = [
 function ProjectDocs({data,setData,showToast}) {
   // ALL hooks must be at the top — never after a conditional return
   const [selectedProject, setSelectedProject] = useState(null);
-  const [subTab,  setSubTab]  = useState("invoices");
+  const [subTab,  setSubTab]  = useState("certificates");
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
   const [fProj,   setFProj]   = useState("");
@@ -3074,16 +3190,8 @@ function ProjectDocs({data,setData,showToast}) {
   };
 
   // ── Derived data (no hooks below this line) ───────────────────────────
-  const invDocs   = docs.filter(d=>d.subTab==="invoices");
-  const projInvs  = selProj ? invDocs.filter(d=>d.project===selProj) : [];
-  const totalAmt  = projInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-
   const certAll   = docs.filter(d=>d.subTab==="certificates");
   const projCerts = selProj ? certAll.filter(d=>d.project===selProj) : [];
-
-  const woAll     = docs.filter(d=>d.subTab==="workorders");
-  const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
-  const woDocs    = fProj ? woAll.filter(d=>d.project===fProj) : woAll;
 
   const drAll     = docs.filter(d=>d.subTab==="dailyreports");
   const projDRs   = selProj ? drAll.filter(d=>d.project===selProj) : [];
@@ -3094,7 +3202,7 @@ function ProjectDocs({data,setData,showToast}) {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text}}>PROJECTS</div>
-            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Select a project to view invoices, certificates, work orders and daily reports</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Select a project to view certificates and daily reports</div>
           </div>
         </div>
 
@@ -3103,9 +3211,7 @@ function ProjectDocs({data,setData,showToast}) {
           : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
               {projects.map((project,i)=>{
                 const projectDocs = docs.filter(d=>d.project===project);
-                const projectInvoices = projectDocs.filter(d=>d.subTab==="invoices");
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
-                const projectWos = projectDocs.filter(d=>d.subTab==="workorders");
                 const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
 
                 return (
@@ -3134,17 +3240,9 @@ function ProjectDocs({data,setData,showToast}) {
                     </div>
 
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
-                      <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:12,padding:"12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{projectInvoices.length}</div>
-                        <div style={{fontSize:11,color:T.green,marginTop:6,fontWeight:700}}>🧾 Invoices</div>
-                      </div>
                       <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"12px"}}>
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.blue,lineHeight:1}}>{projectCerts.length}</div>
                         <div style={{fontSize:11,color:T.blue,marginTop:6,fontWeight:700}}>📜 Certificates</div>
-                      </div>
-                      <div style={{background:T.purpleDim,border:`1px solid ${T.purple}33`,borderRadius:12,padding:"12px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.purple,lineHeight:1}}>{projectWos.length}</div>
-                        <div style={{fontSize:11,color:T.purple,marginTop:6,fontWeight:700}}>📋 Work Orders</div>
                       </div>
                       <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px"}}>
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.gold,lineHeight:1}}>{projectDailyReports.length}</div>
@@ -3174,69 +3272,6 @@ function ProjectDocs({data,setData,showToast}) {
       <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={changeTab}/>
 
       {/* ══ INVOICES ════════════════════════════════════════════════════ */}
-      {subTab==="invoices" && (
-        selProj ? (
-          /* Project detail — invoice list */
-          <div>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-              <button onClick={backToProjects} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
-                <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>
-                  {projInvs.length} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {totalAmt.toLocaleString()}</span>
-                </div>
-              </div>
-              <Btn color={T.green} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>+ Add Invoice</Btn>
-            </div>
-            {projInvs.length===0
-              ?<Empty icon="🧾" label="No invoices yet" sub="Add the first invoice for this project" color={T.green} onAdd={()=>setModal({mode:"add",doc:{project:selProj}})}/>
-              :<div style={{display:"grid",gap:10}}>
-                {projInvs.map((doc,i)=><InvoiceCard key={doc.id} doc={doc} delay={i*.03} onEdit={()=>setModal({mode:"edit",doc})} onDel={()=>delDoc(doc.id)}/>)}
-              </div>
-            }
-          </div>
-        ) : (
-          /* Project grid */
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:18}}>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>INVOICES</div>
-                <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Select a project to view and manage its invoices</div>
-              </div>
-              <Btn color={T.green} solid onClick={()=>setModal({mode:"add"})}>+ Add Invoice</Btn>
-            </div>
-            {projects.length===0
-              ?<Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={()=>{}}/>
-              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
-                {projects.map((p,i)=>{
-                  const pinvs=invDocs.filter(d=>d.project===p);
-                  const total=pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-                  return (
-                    <div key={p} className="fade-up" onClick={()=>openProject(p)}
-                      style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:`${i*.05}s`,transition:"border-color .2s,transform .2s"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                        <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🧾</div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p}</div>
-                          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
-                        </div>
-                      </div>
-                      <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</span>
-                        <span style={{fontSize:12,color:T.green,fontWeight:700}}>Total Invoices</span>
-                      </div>
-                      <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right",marginTop:10}}>View Invoices →</div>
-                    </div>
-                  );
-                })}
-              </div>
-            }
-          </div>
-        )
-      )}
-
       {/* ══ CERTIFICATES ════════════════════════════════════════════════ */}
       {subTab==="certificates" && (
   selProj ? (
@@ -3423,61 +3458,6 @@ function ProjectDocs({data,setData,showToast}) {
   )
 )}
 
-      {/* ══ WORK ORDERS ═════════════════════════════════════════════════ */}
-      {subTab==="workorders" && (
-        <div>
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>WORK ORDERS / AGREEMENTS</div>
-              <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Contracts and work orders with clients</div>
-            </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
-                <option value="">All Projects</option>
-                {projects.map(p=><option key={p} value={p}>{p}</option>)}
-              </select>
-              <Btn color={T.purple} solid onClick={()=>setModal({mode:"add"})}>+ Add Work Order</Btn>
-            </div>
-          </div>
-          <div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{woDocs.length} record{woDocs.length!==1?"s":""}</div>
-          {woDocs.length===0
-            ?<Empty icon="📋" label="No work orders yet" sub="Add your first work order or agreement" color={T.purple} onAdd={()=>setModal({mode:"add"})}/>
-            :<div style={{display:"grid",gap:10}}>
-              {woDocs.map((doc,i)=>{
-                const hasExp=!!doc.expiryDate;
-                const s=getStatus(daysUntil(doc.expiryDate));
-                return (
-                  <div key={doc.id} className="fade-up"
-                    style={{background:T.card,border:`1px solid ${hasExp&&daysUntil(doc.expiryDate)<=90?s.color+"44":T.border}`,borderLeft:"4px solid "+T.purple,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
-                        {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
-                        {hasExp&&<Tag color={s.color}>{s.label}</Tag>}
-                      </div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                        {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
-                        {doc.supplier&&<Chip>Client: {doc.supplier}</Chip>}
-                        {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
-                        {doc.date&&<Chip>Signed: {fmtDate(doc.date)}</Chip>}
-                        {hasExp&&<Chip color={s.color}>Expires: {fmtDate(doc.expiryDate)}</Chip>}
-                        {hasExp&&daysUntil(doc.expiryDate)!==null&&daysUntil(doc.expiryDate)<=90&&<Chip color={s.color}>{daysUntil(doc.expiryDate)>=0?`${daysUntil(doc.expiryDate)}d left`:`${Math.abs(daysUntil(doc.expiryDate))}d overdue`}</Chip>}
-                        {doc.fileLink&&<FileLink href={doc.fileLink}/>}
-                      </div>
-                      {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
-                    </div>
-                    <div style={{display:"flex",gap:6,flexShrink:0}}>
-                      <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-                      <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          }
-        </div>
-      )}
-
       {/* ══ DAILY REPORTS ═══════════════════════════════════════════════ */}
       {subTab==="dailyreports" && (
         selProj ? (
@@ -3565,9 +3545,7 @@ function ProjectDocs({data,setData,showToast}) {
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
-      {modal && subTab==="invoices"      && <InvoiceModal      mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {modal && subTab==="workorders"    && <WorkOrderModal     mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
       {multiPdfModal && (
