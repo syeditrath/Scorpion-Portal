@@ -383,11 +383,6 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
 const COMPANY_PASSWORD  = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY          = "cta_auth";
 const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
-const FINANCE_AUTH_KEY  = "cta_finance_auth";
-
-function isFinanceAuthenticated() {
-  try { return localStorage.getItem(FINANCE_AUTH_KEY) === "true"; } catch { return false; }
-}
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
 const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
@@ -1570,7 +1565,7 @@ export default function App() {
   const [projMod, setProjMod] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [authed, setAuthed] = useState(() => isAuthenticated());
-  const [financeAuthed, setFinanceAuthed] = useState(() => isFinanceAuthenticated());
+  const [financeAuthed, setFinanceAuthed] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem("cta_dark") === "true"; }
     catch { return false; }
@@ -1649,7 +1644,6 @@ export default function App() {
 
   const logout = () => {
     try { localStorage.removeItem(AUTH_KEY); } catch {}
-    try { localStorage.removeItem(FINANCE_AUTH_KEY); } catch {}
     setAuthed(false);
     setFinanceAuthed(false);
   };
@@ -1658,7 +1652,7 @@ export default function App() {
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(() => setToast(null), 3200); };
 
-  const go = p => { setPage(p); setSideOpen(false); };
+  const go = p => { setPage(p); setSideOpen(false); if (p !== "finance") setFinanceAuthed(false); };
 
   const saveProjects = projects => setData(prev=>({...prev,projects}));
 
@@ -1782,7 +1776,6 @@ export default function App() {
               ? <div className="fade-in" key="finance"><FinancePage data={data} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>
               : <FinanceLoginPage onLogin={(pw) => {
                   if (pw === FINANCE_PASSWORD) {
-                    try { localStorage.setItem(FINANCE_AUTH_KEY,"true"); } catch {}
                     setFinanceAuthed(true);
                     return true;
                   }
