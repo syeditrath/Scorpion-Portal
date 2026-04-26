@@ -383,6 +383,7 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
 const COMPANY_PASSWORD  = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY          = "cta_auth";
 const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
+const ANALYSIS_PASSWORD = "analysis2025"; // Change this to your desired analysis password
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
 const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
@@ -1808,7 +1809,8 @@ export default function App() {
   const [projMod, setProjMod] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [authed, setAuthed] = useState(() => isAuthenticated());
-  const [financeAuthed, setFinanceAuthed] = useState(false);
+  const [financeAuthed,  setFinanceAuthed]  = useState(false);
+  const [analysisAuthed, setAnalysisAuthed] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem("cta_dark") === "true"; }
     catch { return false; }
@@ -1889,13 +1891,14 @@ export default function App() {
     try { localStorage.removeItem(AUTH_KEY); } catch {}
     setAuthed(false);
     setFinanceAuthed(false);
+    setAnalysisAuthed(false);
   };
 
   // ...rest of your App code continues here
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(() => setToast(null), 3200); };
 
-  const go = p => { setPage(p); setSideOpen(false); if (p !== "finance") setFinanceAuthed(false); };
+  const go = p => { setPage(p); setSideOpen(false); if (p !== "finance") setFinanceAuthed(false); if (p !== "analysis") setAnalysisAuthed(false); };
 
   const saveProjects = projects => setData(prev=>({...prev,projects}));
 
@@ -1940,7 +1943,7 @@ export default function App() {
       {showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
-      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed}/>
+      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
@@ -2011,7 +2014,14 @@ export default function App() {
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="analysis"  && <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go}/></div>}
+          {page==="analysis"  && (
+            analysisAuthed
+              ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go}/></div>
+              : <FinanceLoginPage title="PROJECT ANALYSIS ACCESS" subtitle="This section is restricted. Enter the analysis password to continue." passwordLabel="ANALYSIS PASSWORD" placeholder="Enter analysis password…" onLogin={(pw) => {
+                  if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; }
+                  return false;
+                }}/>
+          )}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="finance"   && (
@@ -2042,13 +2052,13 @@ export default function App() {
 /* ════════════════════════════════════════════════════════════════════════════
    SIDEBAR
 ════════════════════════════════════════════════════════════════════════════ */
-function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,darkMode,onToggleDark,onLogout,financeAuthed}) {
+function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,darkMode,onToggleDark,onLogout,financeAuthed,analysisAuthed}) {
   const isMobile = viewportWidth < 1200;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
     {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
-    {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO value, progress & jobs"},
+    {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO value, progress & jobs", locked:!analysisAuthed},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
     {id:"finance",   icon:"$", label:"Finance",            desc:"Financial overview", locked:!financeAuthed},
@@ -2539,7 +2549,7 @@ function darkenTextShadow(color) {
    FINANCE LOGIN PAGE
    Shown when user navigates to Finance but hasn't authenticated yet.
 ════════════════════════════════════════════════════════════════════════════ */
-function FinanceLoginPage({ onLogin }) {
+function FinanceLoginPage({ onLogin, title="FINANCE ACCESS", subtitle="This section is restricted.\nEnter the finance password to continue.", passwordLabel="FINANCE PASSWORD", placeholder="Enter finance password…" }) {
   const [pw,    setPw]    = useState("");
   const [error, setError] = useState("");
   const [show,  setShow]  = useState(false);
@@ -2547,7 +2557,7 @@ function FinanceLoginPage({ onLogin }) {
 
   const attempt = () => {
     if (!onLogin(pw)) {
-      setError("Incorrect finance password. Please try again.");
+      setError("Incorrect password. Please try again.");
       setShake(true);
       setPw("");
       setTimeout(() => setShake(false), 600);
@@ -2583,23 +2593,23 @@ function FinanceLoginPage({ onLogin }) {
             🔒
           </div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,letterSpacing:"2px",color:T.gold}}>
-            FINANCE ACCESS
+            {title}
           </div>
-          <div style={{fontSize:13,color:T.textMuted,marginTop:6,lineHeight:1.5}}>
-            This section is restricted.<br/>Enter the finance password to continue.
+          <div style={{fontSize:13,color:T.textMuted,marginTop:6,lineHeight:1.5,whiteSpace:"pre-line"}}>
+            {subtitle}
           </div>
         </div>
 
         {/* Password field */}
         <div style={{marginBottom:16}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:8,letterSpacing:"1.5px"}}>FINANCE PASSWORD</label>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:8,letterSpacing:"1.5px"}}>{passwordLabel}</label>
           <div style={{position:"relative"}}>
             <input
               type={show ? "text" : "password"}
               value={pw}
               onChange={e => { setPw(e.target.value); setError(""); }}
               onKeyDown={e => e.key === "Enter" && attempt()}
-              placeholder="Enter finance password…"
+              placeholder={placeholder}
               style={{
                 width:"100%",
                 background:T.inputBg,
