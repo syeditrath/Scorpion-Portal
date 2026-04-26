@@ -3325,7 +3325,7 @@ function ProjectDocs({data,setData,showToast}) {
       {modal && subTab==="invoices"      && <InvoiceModal      mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="workorders"    && <WorkOrderModal     mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {modal && subTab==="dailyreports"  && <DailyReportModal   mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
       {multiPdfModal && (
   <MultiPdfCertUpload
@@ -3622,7 +3622,7 @@ function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
   );
 }
 
-function DailyReportModal({mode,doc,projects,defaultProject,onClose,onSave}) {
+function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,onSave}) {
   const [f,setF]=useState({project:defaultProject||"",...(doc||{})});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
   return (
