@@ -1054,11 +1054,17 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
             <div><label style={LS}>START DATE</label><input type="date" value={f.startDate} onChange={e=>upd("startDate",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
             <div><label style={LS}>ESTIMATED END DATE</label><input type="date" value={f.estEndDate} onChange={e=>upd("estEndDate",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
-          <div>
-            <label style={LS}>STATUS</label>
-            <select value={f.status} onChange={e=>upd("status",e.target.value)} style={{...IS,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
-              {["Not Started","In Progress","On Hold","Completed","Cancelled"].map(s=><option key={s}>{s}</option>)}
-            </select>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <label style={LS}>ACTUAL END DATE <span style={{color:T.textMuted,fontWeight:400}}>(if completed)</span></label>
+              <input type="date" value={f.actualEndDate||""} onChange={e=>upd("actualEndDate",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+            </div>
+            <div>
+              <label style={LS}>STATUS</label>
+              <select value={f.status} onChange={e=>upd("status",e.target.value)} style={{...IS,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
+                {["Not Started","In Progress","On Hold","Completed","Cancelled"].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
           </div>
           <div><label style={LS}>DESCRIPTION / SCOPE OF WORK</label><textarea value={f.description} onChange={e=>upd("description",e.target.value)} rows={3} placeholder="Brief scope of work…" style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
         </div>
@@ -1066,6 +1072,238 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
           <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
           <button onClick={()=>{if(!f.project)return; onSave(f);}} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:"pointer"}}>Save Project</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PROJECT DURATION CHART
+   Visual timeline comparing estimated vs actual days with daily report activity
+════════════════════════════════════════════════════════════════════════════ */
+function ProjectDurationChart({ proj, reports }) {
+  const start    = proj.startDate    ? new Date(proj.startDate)    : null;
+  const estEnd   = proj.estEndDate   ? new Date(proj.estEndDate)   : null;
+  const actEnd   = proj.actualEndDate? new Date(proj.actualEndDate): null;
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const isCompleted = proj.status === "Completed";
+
+  if (!start) return null;
+
+  // ── Core calculations ──
+  const estDays    = estEnd  ? Math.ceil((estEnd  - start) / 86400000) : null;
+  const actDays    = actEnd  ? Math.ceil((actEnd  - start) / 86400000)
+                   : isCompleted ? null
+                   : Math.ceil((today - start) / 86400000);
+  const elapsedDays = Math.max(0, Math.ceil((today - start) / 86400000));
+
+  // Determine the furthest point for chart scaling
+  const maxDays = Math.max(
+    estDays || 0,
+    actEnd ? Math.ceil((actEnd - start) / 86400000) : 0,
+    elapsedDays,
+    1
+  ) * 1.08; // 8% breathing room on right
+
+  // Variance
+  const referenceEnd = actEnd || (isCompleted ? null : today);
+  const referenceDays = referenceEnd ? Math.ceil((referenceEnd - start) / 86400000) : null;
+  const variance = (estDays && referenceDays) ? referenceDays - estDays : null;
+  const onTime   = variance !== null && variance <= 0;
+
+  // Report dots — map each report date to a day offset
+  const reportDots = reports
+    .filter(r => r.date)
+    .map(r => {
+      const d = new Date(r.date);
+      return Math.ceil((d - start) / 86400000);
+    })
+    .filter(d => d >= 0)
+    .sort((a,b) => a - b);
+
+  const toPercent = days => Math.min(100, Math.max(0, (days / maxDays) * 100));
+
+  const BAR_H = 28;
+  const stColor = { "Not Started":T.textMuted,"In Progress":T.blue,"On Hold":T.gold,"Completed":T.green,"Cancelled":T.red }[proj.status]||T.textMuted;
+
+  // Month/quarter tick marks
+  const ticks = [];
+  if (start && maxDays > 0) {
+    const tickCount = Math.min(6, Math.max(2, Math.floor(maxDays / 30)));
+    for (let i = 1; i < tickCount; i++) {
+      const d = Math.round((maxDays * i) / tickCount);
+      const dt = new Date(start.getTime() + d * 86400000);
+      ticks.push({ pct: toPercent(d), label: dt.toLocaleDateString("en-GB",{month:"short",day:"numeric"}) });
+    }
+  }
+
+  return (
+    <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"22px 24px",marginBottom:16,boxShadow:T.shadow}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12,marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📆 DURATION ANALYSIS</div>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>Estimated vs actual timeline · {reports.length} daily report{reports.length!==1?"s":""} tracked</div>
+        </div>
+        {variance !== null && (
+          <div style={{background:onTime?T.greenDim:T.redDim,border:`1px solid ${onTime?T.green:T.red}44`,borderRadius:12,padding:"8px 16px",textAlign:"center"}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:onTime?T.green:T.red,lineHeight:1}}>
+              {onTime ? `${Math.abs(variance)}d ahead` : `${variance}d over`}
+            </div>
+            <div style={{fontSize:11,color:onTime?T.green:T.red,fontWeight:600,marginTop:2}}>{onTime?"ON SCHEDULE":"OVER ESTIMATE"}</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── KPI row ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:22}}>
+        {[
+          { label:"START DATE",      value: start ? start.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—", color:T.blue },
+          { label:"EST. END DATE",   value: estEnd ? estEnd.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—", color:T.gold },
+          { label:"ACTUAL END",      value: actEnd ? actEnd.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : isCompleted ? "Not set" : "In progress", color:T.green },
+          { label:"EST. DURATION",   value: estDays  ? `${estDays} days`  : "—", color:T.gold },
+          { label:"ACTUAL DAYS",     value: actDays  ? `${actDays} days`  : isCompleted ? "—" : `${elapsedDays}d elapsed`, color: isCompleted ? T.green : T.blue },
+          { label:"DAILY REPORTS",   value: reports.length, color:T.teal },
+        ].map(k => (
+          <div key={k.label} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(16px,2vw,22px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.value}</div>
+            <div style={{fontSize:10,color:T.textMuted,marginTop:5,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Gantt-style bar chart ── */}
+      <div style={{position:"relative",userSelect:"none"}}>
+        {/* Date axis labels */}
+        <div style={{position:"relative",height:18,marginBottom:6,fontSize:10,color:T.textMuted}}>
+          <span style={{position:"absolute",left:0}}>{start.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</span>
+          {ticks.map((t,i) => (
+            <span key={i} style={{position:"absolute",left:`${t.pct}%`,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>{t.label}</span>
+          ))}
+          {estEnd && <span style={{position:"absolute",right:0,color:T.gold,fontWeight:700}}>{estEnd.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</span>}
+        </div>
+
+        {/* Track background */}
+        <div style={{position:"relative",background:T.border,borderRadius:999,height:BAR_H,marginBottom:12,overflow:"visible"}}>
+          {/* Estimated duration bar */}
+          {estDays && (
+            <div style={{
+              position:"absolute",left:0,top:0,
+              width:`${toPercent(estDays)}%`,height:"100%",
+              background:`linear-gradient(90deg,${T.gold}88,${T.gold}44)`,
+              borderRadius:999,
+              borderRight:`2px dashed ${T.gold}`,
+            }}/>
+          )}
+
+          {/* Actual / elapsed bar */}
+          {(actDays || elapsedDays > 0) && (
+            <div style={{
+              position:"absolute",left:0,top:"25%",
+              width:`${toPercent(actDays || elapsedDays)}%`,
+              height:"50%",
+              background: isCompleted
+                ? (onTime ? `linear-gradient(90deg,${T.green},${T.green}bb)` : `linear-gradient(90deg,${T.red},${T.red}bb)`)
+                : `linear-gradient(90deg,${T.blue},${T.blue}bb)`,
+              borderRadius:999,
+              transition:"width 1.2s ease",
+            }}/>
+          )}
+
+          {/* Today marker */}
+          {!isCompleted && elapsedDays > 0 && elapsedDays <= maxDays && (
+            <div style={{position:"absolute",left:`${toPercent(elapsedDays)}%`,top:-6,bottom:-6,width:2,background:T.blue,zIndex:2,borderRadius:1}}>
+              <div style={{position:"absolute",top:-20,left:"50%",transform:"translateX(-50%)",background:T.blue,color:"#fff",borderRadius:6,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>TODAY</div>
+            </div>
+          )}
+
+          {/* Estimated end marker */}
+          {estDays && (
+            <div style={{position:"absolute",left:`${toPercent(estDays)}%`,top:-6,bottom:-6,width:2,background:T.gold,borderRadius:1,zIndex:2}}>
+              <div style={{position:"absolute",bottom:-20,left:"50%",transform:"translateX(-50%)",background:T.gold,color:"#000",borderRadius:6,padding:"2px 6px",fontSize:9,fontWeight:800,whiteSpace:"nowrap"}}>EST.</div>
+            </div>
+          )}
+
+          {/* Actual end marker */}
+          {actEnd && (
+            <div style={{position:"absolute",left:`${toPercent(Math.ceil((actEnd-start)/86400000))}%`,top:-6,bottom:-6,width:2,background:onTime?T.green:T.red,borderRadius:1,zIndex:2}}>
+              <div style={{position:"absolute",top:-20,left:"50%",transform:"translateX(-50%)",background:onTime?T.green:T.red,color:"#fff",borderRadius:6,padding:"2px 6px",fontSize:9,fontWeight:800,whiteSpace:"nowrap"}}>ACTUAL</div>
+            </div>
+          )}
+        </div>
+
+        {/* Legend */}
+        <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:16,fontSize:11,color:T.textSub}}>
+          {estDays && <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:16,height:4,background:T.gold,opacity:.7,borderRadius:2,display:"inline-block"}}/>Estimated</span>}
+          <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:16,height:4,background:isCompleted?(onTime?T.green:T.red):T.blue,borderRadius:2,display:"inline-block"}}/>{isCompleted?"Actual":"Elapsed"}</span>
+          {!isCompleted && <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:2,height:12,background:T.blue,display:"inline-block"}}/> Today</span>}
+        </div>
+
+        {/* ── Daily report activity dots ── */}
+        {reportDots.length > 0 && (
+          <div>
+            <div style={{fontSize:11,color:T.textMuted,fontWeight:700,marginBottom:8,letterSpacing:".5px"}}>DAILY REPORT ACTIVITY</div>
+            <div style={{position:"relative",height:36,background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+              {/* Density heatmap background */}
+              {reportDots.map((d, i) => (
+                <div key={i} title={`Report on day ${d}`} style={{
+                  position:"absolute",
+                  left:`${toPercent(d)}%`,
+                  top:"50%",transform:"translate(-50%,-50%)",
+                  width:10,height:10,
+                  borderRadius:"50%",
+                  background:T.teal,
+                  opacity:.85,
+                  boxShadow:`0 0 6px ${T.teal}`,
+                }}/>
+              ))}
+              {/* Estimated end line */}
+              {estDays && (
+                <div style={{position:"absolute",left:`${toPercent(estDays)}%`,top:0,bottom:0,width:1,background:`${T.gold}88`}}/>
+              )}
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.textMuted,marginTop:4}}>
+              <span>{reports.length} reports · first: {fmtDate(reports[reports.length-1]?.date)}</span>
+              <span>latest: {fmtDate(reports[0]?.date)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Comparison summary ── */}
+        {estDays && (actDays || elapsedDays > 0) && (
+          <div style={{marginTop:16,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
+            <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.gold}}>{estDays} days</div>
+              <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600}}>ESTIMATED DURATION</div>
+              {estEnd && <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{fmtDate(proj.startDate)} → {fmtDate(proj.estEndDate)}</div>}
+            </div>
+            <div style={{background:isCompleted?(onTime?T.greenDim:T.redDim):T.blueDim,border:`1px solid ${(isCompleted?(onTime?T.green:T.red):T.blue)}33`,borderRadius:12,padding:"12px 16px"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:isCompleted?(onTime?T.green:T.red):T.blue}}>
+                {actDays || elapsedDays} days
+              </div>
+              <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600}}>{isCompleted?"ACTUAL DURATION":"ELAPSED SO FAR"}</div>
+              {actEnd && <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{fmtDate(proj.startDate)} → {fmtDate(proj.actualEndDate)}</div>}
+            </div>
+            {variance !== null && (
+              <div style={{background:onTime?T.greenDim:T.redDim,border:`1px solid ${onTime?T.green:T.red}33`,borderRadius:12,padding:"12px 16px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:onTime?T.green:T.red}}>
+                  {onTime ? `-${Math.abs(variance)}` : `+${variance}`} days
+                </div>
+                <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600}}>VARIANCE</div>
+                <div style={{fontSize:11,color:onTime?T.green:T.red,marginTop:2,fontWeight:600}}>{onTime?"Finished ahead of schedule":"Behind estimate"}</div>
+              </div>
+            )}
+            {!isCompleted && estDays && (
+              <div style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 16px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:variance!==null&&variance>0?T.red:T.textMuted}}>
+                  {estEnd ? Math.max(0, Math.ceil((estEnd - today) / 86400000)) : "—"} days
+                </div>
+                <div style={{fontSize:11,color:T.textMuted,marginTop:4,fontWeight:600}}>DAYS REMAINING</div>
+                <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Until estimated end date</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1158,6 +1396,11 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
           </div>
         ))}
       </div>
+
+      {/* ── Timeline / Duration Visual ── */}
+      {proj.startDate && (proj.estEndDate || proj.actualEndDate) && (
+        <ProjectDurationChart proj={proj} reports={reports} />
+      )}
 
       {/* ── Jobs / Phases (from invoices grouped by jobNo) ── */}
       <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",marginBottom:16,boxShadow:T.shadow}}>
