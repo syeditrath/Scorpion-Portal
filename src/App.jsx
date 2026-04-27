@@ -1881,7 +1881,8 @@ export default function App() {
     document.head.appendChild(script);
   }, []);
 
-  const darkMode_state = darkMode; // alias for use in nested scope
+  useEffect(() => {
+    document.body.classList.toggle("dark-mode", darkMode);
     document.body.style.background = darkMode ? DARK.bg : LIGHT.bg;
     try { localStorage.setItem("cta_dark", darkMode); } catch {}
   }, [darkMode]);
