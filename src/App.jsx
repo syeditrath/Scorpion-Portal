@@ -470,7 +470,8 @@ function buildEmailPayload(alertsToSend, recipientEmail, isTest = false) {
 const COMPANY_PASSWORD  = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY          = "cta_auth";
 const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
-const ANALYSIS_PASSWORD = "analysis2025"; // Change this to your desired analysis password
+const ANALYSIS_PASSWORD = "analysis2025";
+const COST_PASSWORD     = "cost2025"; // Change this to your desired cost control password
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
 const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
@@ -549,25 +550,16 @@ function isAuthenticated() {
 }
 
 const EMPTY_DATA = {
-  scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLink, notes }
+  scorpionDocs: [],
   manpowerCats: DEFAULT_MANPOWER_CATS,
-  manpower: [],       // { id, category, name, idNo, nationality, designation,
-                      //   passportNo, passportExpiry, visaNo, visaExpiry,
-                      //   iqamaNo, iqamaExpiry, muqeemNo, muqeemExpiry,
-                      //   certs: [{id,name,certNo,issueDate,expiryDate,fileLink}],
-                      //   docs:  [{id,type,docNo,expiryDate,fileLink}]  }
-  equipment: [],      // { id, name, model, serialNo, status, operator, project,
-                      //   purchaseDate, notes,
-                      //   certifications:[{id,certNo,issuedBy,issueDate,expiryDate,fileLink}],
-                      //   invoices:      [{id,invoiceNo,supplier,amount,date,fileLink}],
-                      //   insurance:     [{id,policyNo,insurer,type,issueDate,expiryDate,fileLink}],
-                      //   permits:       [{id,permitNo,type,issuedBy,issueDate,expiryDate,fileLink}] }
+  manpower: [],
+  equipment: [],
   scorpionDocCats: DEFAULT_SCORPION_CATS,
   projects: ["NEOM Phase 1","NEOM Phase 2","Riyadh Metro"],
-  projectDocs: [],  // { id, project, subTab, name, refNo, date, expiryDate, amount, fileLink, notes }
-  projectAnalysis: [], // { id, project, poValue, poNumber, quotationRef, clientName,
-                       //   startDate, estEndDate, status, description,
-                       //   dailyReports: [{id,date,weather,activities,manpower,equipment,issues,notes}] }
+  projectDocs: [],
+  projectAnalysis: [],
+  costControl: [],  // { id, project, category, description, amount, date, refNo, notes, budgeted }
+                    // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Overhead"|"Other"
 };
 
 
@@ -1898,6 +1890,7 @@ export default function App() {
   const [authed, setAuthed] = useState(() => isAuthenticated());
   const [financeAuthed,  setFinanceAuthed]  = useState(false);
   const [analysisAuthed, setAnalysisAuthed] = useState(false);
+  const [costAuthed,     setCostAuthed]     = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem("cta_dark") === "true"; }
     catch { return false; }
@@ -2016,13 +2009,14 @@ export default function App() {
     setAuthed(false);
     setFinanceAuthed(false);
     setAnalysisAuthed(false);
+    setCostAuthed(false);
   };
 
   // ...rest of your App code continues here
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(() => setToast(null), 3200); };
 
-  const go = p => { setPage(p); setSideOpen(false); if (p !== "finance") setFinanceAuthed(false); if (p !== "analysis") setAnalysisAuthed(false); };
+  const go = p => { setPage(p); setSideOpen(false); if (p !== "finance") setFinanceAuthed(false); if (p !== "analysis") setAnalysisAuthed(false); if (p !== "costs") setCostAuthed(false); };
 
   const saveProjects = projects => setData(prev=>({...prev,projects}));
 
@@ -2096,7 +2090,7 @@ export default function App() {
       )}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
-      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed}/>
+      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed} costAuthed={costAuthed}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
@@ -2182,7 +2176,14 @@ export default function App() {
           )}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="finance"   && (
+          {page==="costs" && (
+            costAuthed
+              ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go}/></div>
+              : <FinanceLoginPage title="COST CONTROL ACCESS" subtitle="This section contains sensitive financial data.\nEnter the cost control password to continue." passwordLabel="COST CONTROL PASSWORD" placeholder="Enter password…" onLogin={(pw) => {
+                  if (pw === COST_PASSWORD) { setCostAuthed(true); return true; }
+                  return false;
+                }}/>
+          )}
             financeAuthed
               ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>
               : <FinanceLoginPage onLogin={(pw) => {
@@ -2210,16 +2211,17 @@ export default function App() {
 /* ════════════════════════════════════════════════════════════════════════════
    SIDEBAR
 ════════════════════════════════════════════════════════════════════════════ */
-function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,darkMode,onToggleDark,onLogout,financeAuthed,analysisAuthed}) {
+function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,darkMode,onToggleDark,onLogout,financeAuthed,analysisAuthed,costAuthed}) {
   const isMobile = viewportWidth < 1200;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
-    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
+    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Certs & daily reports"},
     {id:"analysis",  icon:"◐", label:"Project Analysis",   desc:"PO value, progress & jobs", locked:!analysisAuthed},
+    {id:"costs",     icon:"⊕", label:"Cost Control",       desc:"Budget vs actual, margin",  locked:!costAuthed},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
-    {id:"finance",   icon:"$", label:"Finance",            desc:"Financial overview", locked:!financeAuthed},
+    {id:"finance",   icon:"$", label:"Finance",            desc:"Invoices & work orders",    locked:!financeAuthed},
   ];
   return (
     <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:"none",display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
@@ -2859,6 +2861,408 @@ function NotificationSettingsModal({ settings, allExpiries, sending, testResult,
         </div>
       </div>
     </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   COST CONTROL PAGE
+════════════════════════════════════════════════════════════════════════════ */
+const COST_CATS = [
+  {id:"Labour",        color:"#38bdf8", icon:"◈"},
+  {id:"Equipment",     color:"#fbbf24", icon:"◎"},
+  {id:"Materials",     color:"#34d399", icon:"▦"},
+  {id:"Subcontractor", color:"#a78bfa", icon:"◆"},
+  {id:"Overhead",      color:"#fb923c", icon:"⊕"},
+  {id:"Other",         color:"#94a3b8", icon:"·"},
+];
+const COST_CAT_MAP = Object.fromEntries(COST_CATS.map(c=>[c.id,c]));
+
+function CostControlPage({data, setData, showToast, go}) {
+  const [selProj, setSelProj] = useState(null);
+  const [modal,   setModal]   = useState(null);
+  const [filterCat, setFilterCat] = useState("All");
+
+  const projects  = data.projects       || [];
+  const analysis  = data.projectAnalysis|| [];
+  const allCosts  = data.costControl    || [];
+  const invoiceDocs = (data.projectDocs || []).filter(d=>d.subTab==="invoices");
+
+  const saveEntry = (entry, mode) => {
+    setModal(null);
+    setTimeout(() => {
+      setData(prev => {
+        const list = [...(prev.costControl||[])];
+        if (mode==="add") list.push({...entry, id:uid()});
+        else { const i=list.findIndex(d=>d.id===entry.id); if(i>=0) list[i]=entry; }
+        return {...prev, costControl:list};
+      });
+      showToast(mode==="add"?"Cost entry added":"Entry updated");
+    },0);
+  };
+
+  const delEntry = id => {
+    setData(prev=>({...prev, costControl:(prev.costControl||[]).filter(e=>e.id!==id)}));
+    showToast("Deleted","del");
+  };
+
+  // ── Per-project P&L helper ──
+  const getProjFinancials = (proj) => {
+    const pa        = analysis.find(a=>a.project===proj);
+    const poValue   = parseFloat(pa?.poValue)||0;
+    const invs      = invoiceDocs.filter(d=>d.project===proj);
+    const revenue   = invs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+    const collected = invs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0);
+    const costs     = allCosts.filter(c=>c.project===proj);
+    const totalCost = costs.reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+    const margin    = revenue - totalCost;
+    const marginPct = revenue>0 ? Math.round((margin/revenue)*100) : null;
+    return {poValue, revenue, collected, costs, totalCost, margin, marginPct, pa};
+  };
+
+  // ── Project overview cards ──
+  if (!selProj) {
+    const allMargin    = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.margin; },0);
+    const allRevenue   = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.revenue; },0);
+    const allCostTotal = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.totalCost; },0);
+    const overallPct   = allRevenue>0 ? Math.round((allMargin/allRevenue)*100) : null;
+
+    return (
+      <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
+        {/* Header */}
+        <div className="fade-up" style={{marginBottom:20}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:32,color:T.text,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{color:T.teal}}>⊕</span> COST CONTROL
+          </div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Budget vs actual · Gross margin · Cost breakdown per project</div>
+        </div>
+
+        {/* Portfolio summary strip */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
+          {[
+            {label:"Total Revenue",  v:formatSarCompact(allRevenue),   color:T.green},
+            {label:"Total Costs",    v:formatSarCompact(allCostTotal), color:T.red},
+            {label:"Gross Margin",   v:formatSarCompact(allMargin),    color:allMargin>=0?T.green:T.red},
+            {label:"Margin %",       v:overallPct!==null?`${overallPct}%`:"—", color:overallPct===null?T.textMuted:overallPct>=20?T.green:overallPct>=10?T.gold:T.red},
+            {label:"Projects",       v:projects.length,                color:T.blue},
+            {label:"Cost Entries",   v:allCosts.length,                color:T.purple},
+          ].map((k,i)=>(
+            <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",boxShadow:T.shadow,animationDelay:`${i*.04}s`}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2.5vw,34px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+              <div style={{fontSize:11,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Project cards */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
+          {projects.map((proj,i)=>{
+            const {poValue,revenue,collected,totalCost,margin,marginPct,costs} = getProjFinancials(proj);
+            const costByCat = COST_CATS.map(c=>({
+              ...c,
+              total: costs.filter(e=>e.category===c.id).reduce((s,e)=>s+(parseFloat(e.amount)||0),0)
+            })).filter(c=>c.total>0);
+            const maxCat = Math.max(...costByCat.map(c=>c.total),1);
+            return (
+              <div key={proj} className="fade-up card-hover" onClick={()=>setSelProj(proj)}
+                style={{background:T.card,border:`1px solid ${margin<0?T.red:T.border}`,borderRadius:18,padding:"20px",cursor:"pointer",animationDelay:`${i*.04}s`,boxShadow:T.shadow}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proj}</div>
+                    <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{costs.length} cost entr{costs.length===1?"y":"ies"}</div>
+                  </div>
+                  {marginPct!==null && (
+                    <div style={{background:marginPct>=20?T.greenDim:marginPct>=0?T.goldDim:T.redDim,border:`1px solid ${marginPct>=20?T.green:marginPct>=0?T.gold:T.red}44`,borderRadius:10,padding:"6px 12px",textAlign:"center",flexShrink:0}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:marginPct>=20?T.green:marginPct>=0?T.gold:T.red,lineHeight:1}}>{marginPct}%</div>
+                      <div style={{fontSize:9,fontWeight:700,color:marginPct>=20?T.green:marginPct>=0?T.gold:T.red,marginTop:2}}>MARGIN</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* P&L mini table */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+                  <div style={{background:T.bg,borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(revenue)}</div>
+                    <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700}}>REVENUE</div>
+                  </div>
+                  <div style={{background:T.redDim,border:`1px solid ${T.red}22`,borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.red,lineHeight:1}}>{formatSarCompact(totalCost)}</div>
+                    <div style={{fontSize:10,color:T.red,marginTop:4,fontWeight:700}}>TOTAL COST</div>
+                  </div>
+                  <div style={{background:margin>=0?T.greenDim:T.redDim,border:`1px solid ${margin>=0?T.green:T.red}22`,borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:margin>=0?T.green:T.red,lineHeight:1}}>{formatSarCompact(Math.abs(margin))}</div>
+                    <div style={{fontSize:10,color:margin>=0?T.green:T.red,marginTop:4,fontWeight:700}}>{margin>=0?"MARGIN":"LOSS"}</div>
+                  </div>
+                </div>
+
+                {/* Mini cost bars by category */}
+                {costByCat.length>0 && (
+                  <div style={{display:"grid",gap:5}}>
+                    {costByCat.slice(0,4).map(c=>(
+                      <div key={c.id} style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{fontSize:10,color:T.textMuted,width:88,flexShrink:0,fontWeight:600}}>{c.id}</div>
+                        <div style={{flex:1,height:5,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${Math.round((c.total/maxCat)*100)}%`,background:c.color,borderRadius:999}}/>
+                        </div>
+                        <div style={{fontSize:10,color:T.textSub,minWidth:52,textAlign:"right"}}>{formatSarCompact(c.total)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{fontSize:12,color:T.teal,fontWeight:700,textAlign:"right",marginTop:12}}>Open Cost Detail →</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {projects.length===0 && (
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center"}}>
+            <div style={{fontSize:44,marginBottom:12}}>⊕</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.textSub,marginBottom:8}}>NO PROJECTS</div>
+            <div style={{fontSize:13,color:T.textMuted}}>Add projects via Manage Projects in the sidebar, then enter cost data here.</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Project detail view ──
+  const {poValue, revenue, collected, totalCost, margin, marginPct, costs, pa} = getProjFinancials(selProj);
+  const filteredCosts = filterCat==="All" ? costs : costs.filter(c=>c.category===filterCat);
+
+  // Cost by category
+  const catBreakdown = COST_CATS.map(c=>({
+    ...c, total: costs.filter(e=>e.category===c.id).reduce((s,e)=>s+(parseFloat(e.amount)||0),0),
+    count: costs.filter(e=>e.category===c.id).length
+  }));
+  const maxCatTotal = Math.max(...catBreakdown.map(c=>c.total),1);
+
+  // Budget vs actual: compare poValue budget allocation (user can set budget per category on project analysis)
+  const budgetedTotal = costs.reduce((s,c)=>s+(parseFloat(c.budgeted)||0),0);
+
+  // Monthly cost trend
+  const monthlyMap = {};
+  costs.forEach(c=>{
+    if(!c.date) return;
+    const ym = c.date.slice(0,7);
+    monthlyMap[ym]=(monthlyMap[ym]||0)+(parseFloat(c.amount)||0);
+  });
+  const monthlyTrend = Object.entries(monthlyMap).sort(([a],[b])=>a.localeCompare(b));
+  const maxMonthly = Math.max(...monthlyTrend.map(([,v])=>v),1);
+
+  return (
+    <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+        <button onClick={()=>setSelProj(null)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← All Projects</button>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selProj}</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>
+            {pa?.clientName&&<span>Client: {pa.clientName} · </span>}
+            {pa?.poNumber&&<span>PO: {pa.poNumber} · </span>}
+            {costs.length} cost {costs.length===1?"entry":"entries"}
+          </div>
+        </div>
+        <button onClick={()=>setModal({mode:"add",entry:{project:selProj}})}
+          style={{background:`linear-gradient(135deg,${T.teal},#0d9488)`,border:"none",color:"#fff",borderRadius:10,padding:"10px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,cursor:"pointer",letterSpacing:"1px"}}>
+          + ADD COST ENTRY
+        </button>
+      </div>
+
+      {/* P&L hero */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"24px 28px",marginBottom:16,boxShadow:T.shadow}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.textSub,marginBottom:16,letterSpacing:"1px"}}>PROFIT & LOSS SUMMARY</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:20}}>
+          {[
+            {label:"CONTRACT VALUE (PO)", v:poValue?formatSarCompact(poValue):"Not set",   color:T.gold},
+            {label:"REVENUE INVOICED",    v:formatSarCompact(revenue),                      color:T.green},
+            {label:"AMOUNT COLLECTED",    v:formatSarCompact(collected),                    color:T.blue},
+            {label:"TOTAL COSTS",         v:formatSarCompact(totalCost),                    color:T.red},
+            {label:"GROSS MARGIN",        v:formatSarCompact(Math.abs(margin)),              color:margin>=0?T.green:T.red},
+            {label:"MARGIN %",            v:marginPct!==null?`${marginPct}%`:"—",           color:marginPct===null?T.textMuted:marginPct>=20?T.green:marginPct>=10?T.gold:T.red},
+          ].map((k,i)=>(
+            <div key={k.label} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.04}s`}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2.2vw,28px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+              <div style={{fontSize:10,color:T.textMuted,marginTop:5,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Revenue vs Cost bar */}
+        {(revenue>0||totalCost>0) && (
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:6}}>
+              <span>Cost as % of Revenue</span>
+              <span style={{fontWeight:700,color:totalCost/Math.max(revenue,1)>1?T.red:T.green}}>
+                {revenue>0?Math.round((totalCost/revenue)*100):0}%
+              </span>
+            </div>
+            <div style={{height:10,background:T.border,borderRadius:999,overflow:"hidden",position:"relative"}}>
+              <div style={{position:"absolute",height:"100%",width:`${Math.min(100,revenue>0?Math.round((totalCost/revenue)*100):0)}%`,background:totalCost>revenue?`linear-gradient(90deg,${T.red},${T.red}bb)`:`linear-gradient(90deg,${T.teal},${T.teal}bb)`,borderRadius:999,transition:"width 1s"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginTop:4}}>
+              <span style={{color:T.green}}>Revenue: {formatSarCompact(revenue)}</span>
+              <span style={{color:margin>=0?T.green:T.red}}>{margin>=0?"Profit":"Loss"}: {formatSarCompact(Math.abs(margin))}</span>
+              <span style={{color:T.red}}>Costs: {formatSarCompact(totalCost)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Cost breakdown by category */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14,marginBottom:14}}>
+        <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:16}}>COST BY CATEGORY</div>
+          {catBreakdown.filter(c=>c.total>0).length===0
+            ?<div style={{fontSize:13,color:T.textMuted,textAlign:"center",padding:"20px"}}>No costs recorded yet</div>
+            :<div style={{display:"grid",gap:10}}>
+              {catBreakdown.filter(c=>c.total>0).map(c=>(
+                <div key={c.id}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{color:c.color,fontSize:14}}>{c.icon}</span>
+                      <span style={{fontSize:13,color:T.text,fontWeight:600}}>{c.id}</span>
+                      <span style={{fontSize:11,color:T.textMuted}}>({c.count})</span>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:12,color:T.textMuted}}>{revenue>0?Math.round((c.total/revenue)*100):0}% of rev</span>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:c.color}}>{formatSarCompact(c.total)}</span>
+                    </div>
+                  </div>
+                  <div style={{height:6,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${Math.round((c.total/maxCatTotal)*100)}%`,background:c.color,borderRadius:999,transition:"width 1s"}}/>
+                  </div>
+                </div>
+              ))}
+              <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10,marginTop:4,display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:13,fontWeight:700,color:T.textSub}}>TOTAL</span>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.red}}>{formatSarCompact(totalCost)}</span>
+              </div>
+            </div>
+          }
+        </div>
+
+        {/* Monthly spend trend */}
+        {monthlyTrend.length>0 && (
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:16}}>MONTHLY SPEND</div>
+            <div style={{display:"grid",gap:6}}>
+              {monthlyTrend.map(([ym,v])=>{
+                const [yr,mo]=ym.split("-");
+                const label=new Date(parseInt(yr),parseInt(mo)-1).toLocaleDateString("en-GB",{month:"short",year:"2-digit"});
+                return (
+                  <div key={ym} style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{fontSize:11,color:T.textMuted,width:48,flexShrink:0}}>{label}</div>
+                    <div style={{flex:1,height:18,background:T.border,borderRadius:4,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${Math.round((v/maxMonthly)*100)}%`,background:`linear-gradient(90deg,${T.teal},${T.teal}bb)`,borderRadius:4,display:"flex",alignItems:"center"}}>
+                        {v/maxMonthly>0.35&&<span style={{fontSize:10,color:"#fff",fontWeight:700,paddingLeft:6}}>{formatSarCompact(v)}</span>}
+                      </div>
+                    </div>
+                    {v/maxMonthly<=0.35&&<span style={{fontSize:11,color:T.textMuted,minWidth:54,textAlign:"right"}}>{formatSarCompact(v)}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Cost entries list */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:16}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>COST ENTRIES</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{filteredCosts.length} {filterCat!=="All"?filterCat+" ":""}entr{filteredCosts.length===1?"y":"ies"}</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <select value={filterCat} onChange={e=>setFilterCat(e.target.value)}
+              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
+              <option value="All">All Categories</option>
+              {COST_CATS.map(c=><option key={c.id} value={c.id}>{c.id}</option>)}
+            </select>
+            <button onClick={()=>setModal({mode:"add",entry:{project:selProj}})}
+              style={{background:T.tealDim,border:`1px solid ${T.teal}44`,color:T.teal,borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Add Entry</button>
+          </div>
+        </div>
+
+        {filteredCosts.length===0
+          ?<div style={{textAlign:"center",padding:"30px",background:T.bg,borderRadius:12,border:`1px dashed ${T.border}`}}>
+            <div style={{fontSize:32,marginBottom:10}}>⊕</div>
+            <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>No cost entries yet</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>Click "+ Add Cost Entry" to record Labour, Equipment, Materials and more</div>
+          </div>
+          :<div style={{display:"grid",gap:8}}>
+            {filteredCosts.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map((entry,i)=>{
+              const cat = COST_CAT_MAP[entry.category]||COST_CAT_MAP["Other"];
+              return (
+                <div key={entry.id} className="fade-up"
+                  style={{background:T.bg,border:`1px solid ${T.border}`,borderLeft:`4px solid ${cat.color}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.02}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{entry.description||"—"}</span>
+                      <span style={{background:`${cat.color}22`,color:cat.color,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{cat.icon} {cat.id}</span>
+                      {entry.date&&<span style={{fontSize:11,color:T.textMuted}}>{fmtDate(entry.date)}</span>}
+                      {entry.refNo&&<span style={{fontSize:11,color:T.textMuted}}>Ref: {entry.refNo}</span>}
+                    </div>
+                    {entry.notes&&<div style={{fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{entry.notes}</div>}
+                    {entry.budgeted&&<div style={{fontSize:11,color:T.textMuted,marginTop:3}}>Budgeted: {formatSarCompact(parseFloat(entry.budgeted)||0)} · Variance: <span style={{color:parseFloat(entry.amount)>parseFloat(entry.budgeted)?T.red:T.green,fontWeight:700}}>{formatSarCompact(Math.abs((parseFloat(entry.amount)||0)-(parseFloat(entry.budgeted)||0)))}</span></span></div>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.red}}>
+                      {formatSarCompact(parseFloat(entry.amount)||0)}
+                    </div>
+                    <div style={{display:"flex",gap:4}}>
+                      <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",entry})}>✎</ABtn>
+                      <ABtn color={T.red}  onClick={()=>delEntry(entry.id)}>✕</ABtn>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        }
+      </div>
+
+      {modal && <CostEntryModal mode={modal.mode} entry={modal.entry} projects={projects} onClose={()=>setModal(null)} onSave={saveEntry}/>}
+    </div>
+  );
+}
+
+function CostEntryModal({mode, entry, projects, onClose, onSave}) {
+  const [f, setF] = useState(entry||{});
+  const set = k => v => setF(p=>({...p,[k]:v}));
+  const budgeted = parseFloat(f.budgeted)||0;
+  const actual   = parseFloat(f.amount)||0;
+  const variance = actual - budgeted;
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} COST ENTRY`} color={T.teal} onClose={onClose}
+      onSave={()=>{ if(!f.description){alert("Description required");return;} if(!f.amount){alert("Amount required");return;} onSave(f,mode); }}>
+      <FieldRow label="Description *"><FInput value={f.description||""} onChange={set("description")} color={T.teal}/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.teal}>
+          <option value="">Select project…</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Category *">
+        <FSelect value={f.category||""} onChange={set("category")} color={T.teal}>
+          <option value="">Select category…</option>
+          {COST_CATS.map(c=><option key={c.id} value={c.id}>{c.icon} {c.id}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Actual Amount (SAR) *"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.teal}/></FieldRow>
+      <FieldRow label="Budgeted Amount (SAR)">
+        <div>
+          <FInput type="number" value={f.budgeted||""} onChange={set("budgeted")} color={T.gold}/>
+          {budgeted>0&&actual>0&&<div style={{fontSize:11,marginTop:4,color:variance>0?T.red:T.green,fontWeight:600}}>
+            {variance>0?`▲ ${formatSarCompact(variance)} over budget`:`▼ ${formatSarCompact(Math.abs(variance))} under budget`}
+          </div>}
+        </div>
+      </FieldRow>
+      <FieldRow label="Date"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.teal}/></FieldRow>
+      <FieldRow label="Reference No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.teal}/></FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.teal}/></FieldRow>
+    </FormModal>
   );
 }
 
