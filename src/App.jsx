@@ -3205,7 +3205,7 @@ function CostControlPage({data, setData, showToast, go}) {
                       {entry.refNo&&<span style={{fontSize:11,color:T.textMuted}}>Ref: {entry.refNo}</span>}
                     </div>
                     {entry.notes&&<div style={{fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{entry.notes}</div>}
-                    {entry.budgeted&&<div style={{fontSize:11,color:T.textMuted,marginTop:3}}>Budgeted: {formatSarCompact(parseFloat(entry.budgeted)||0)} · Variance: <span style={{color:parseFloat(entry.amount)>parseFloat(entry.budgeted)?T.red:T.green,fontWeight:700}}>{formatSarCompact(Math.abs((parseFloat(entry.amount)||0)-(parseFloat(entry.budgeted)||0)))}</span></span></div>}
+                    {entry.budgeted&&<div style={{fontSize:11,color:T.textMuted,marginTop:3}}>Budgeted: {formatSarCompact(parseFloat(entry.budgeted)||0)} · Variance: <span style={{color:parseFloat(entry.amount)>parseFloat(entry.budgeted)?T.red:T.green,fontWeight:700}}>{formatSarCompact(Math.abs((parseFloat(entry.amount)||0)-(parseFloat(entry.budgeted)||0)))}</span></div>}
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
                     <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.red}}>
