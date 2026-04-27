@@ -4455,11 +4455,18 @@ function ManpowerPage({data,setData,showToast}) {
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=critical>0?T.gold:T.border;e.currentTarget.style.transform="none";}}>
                 <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
-                  <div>
+                  <div style={{flex:1,minWidth:0}}>
                     <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.name}</div>
                     <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.designation||"—"} · {p.nationality||""}</div>
                   </div>
-                  {critical>0&&<span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"2px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>{critical} alerts</span>}
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5,flexShrink:0,marginLeft:8}}>
+                    {p.project && (
+                      <span style={{background:T.blueDim,color:T.blue,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,border:`1px solid ${T.blue}33`,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"right"}} title={p.project}>
+                        ◆ {p.project}
+                      </span>
+                    )}
+                    {critical>0&&<span style={{background:T.goldDim,color:T.gold,borderRadius:999,padding:"2px 10px",fontSize:11,fontWeight:700}}>{critical} alerts</span>}
+                  </div>
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
                   {p.category&&<Tag color={T.green}>{p.category}</Tag>}
@@ -4490,7 +4497,7 @@ function ManpowerPage({data,setData,showToast}) {
         </div>
       }
 
-      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats}
+      {addModal  && <PersonModal mode={addModal.mode} person={addModal.person} cats={cats} projects={data.projects||[]}
         onClose={()=>{
           setAddModal(false);
           if(editingFrom){setPerson(editingFrom);setEditingFrom(null);}
@@ -4558,6 +4565,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
   const PROFILE_ROWS=[
     ["Full Name",person.name],["ID No.",person.idNo],["Nationality",person.nationality],
     ["Designation",person.designation],["Category",person.category],
+    ["Assigned Project",person.project],
     ["Passport No.",person.passportNo],["Passport Expiry",fmtDate(person.passportExpiry)],
     ["Visa No.",person.visaNo],["Visa Expiry",fmtDate(person.visaExpiry)],
     ["Iqama No.",person.iqamaNo],["Iqama Expiry",fmtDate(person.iqamaExpiry)],
@@ -4570,7 +4578,10 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
         <button onClick={onBack} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>← Back</button>
         <div style={{flex:1}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{person.name}</div>
-          <div style={{fontSize:12,color:T.textMuted}}>{person.designation} · {person.category}</div>
+          <div style={{fontSize:12,color:T.textMuted,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span>{person.designation} · {person.category}</span>
+            {person.project && <span style={{background:T.blueDim,color:T.blue,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>◆ {person.project}</span>}
+          </div>
         </div>
         <Btn color={T.blue}  onClick={onEdit}>✎ Edit</Btn>
         <Btn color={T.red}   onClick={()=>{ if(window.confirm("Delete this person?")) onDelete(); }}>✕ Delete</Btn>
@@ -4657,7 +4668,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
   );
 }
 
-function PersonModal({mode,person,cats,onClose,onSave}) {
+function PersonModal({mode,person,cats,projects,onClose,onSave}) {
   const [f,setF]=useState(person||{});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
   return (
@@ -4668,6 +4679,12 @@ function PersonModal({mode,person,cats,onClose,onSave}) {
         <FSelect value={f.category||""} onChange={set("category")} color={T.green}>
           <option value="">Select…</option>
           {cats.map(c=><option key={c} value={c}>{c}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Assigned Project">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
+          <option value="">No project assigned</option>
+          {(projects||[]).map(p=><option key={p} value={p}>{p}</option>)}
         </FSelect>
       </FieldRow>
       <FieldRow label="ID No."><FInput value={f.idNo||""} onChange={set("idNo")} color={T.green}/></FieldRow>
