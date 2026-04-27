@@ -389,12 +389,83 @@ const NOTIFY_LAST_SENT_KEY = "cta_notify_last_sent";
 function loadNotifySettings() {
   try {
     const s = localStorage.getItem(NOTIFY_STORAGE_KEY);
-    return s ? JSON.parse(s) : { enabled: false, email: "", thresholdDays: 90 };
-  } catch { return { enabled: false, email: "", thresholdDays: 90 }; }
+    if (!s) return { enabled: false, emails: [], thresholdDays: 90 };
+    const p = JSON.parse(s);
+    // migrate old single-email field
+    if (!p.emails) p.emails = p.email ? [p.email] : [];
+    return p;
+  } catch { return { enabled: false, emails: [], thresholdDays: 90 }; }
 }
 
 function saveNotifySettings(s) {
   try { localStorage.setItem(NOTIFY_STORAGE_KEY, JSON.stringify(s)); } catch {}
+}
+
+function buildEmailPayload(alertsToSend, recipientEmail, isTest = false) {
+  const overdue  = alertsToSend.filter(a => a.days < 0).sort((a,b) => a.days - b.days);
+  const expiring = alertsToSend.filter(a => a.days >= 0).sort((a,b) => a.days - b.days);
+  const today    = new Date().toLocaleDateString("en-GB", {weekday:"long",year:"numeric",month:"long",day:"numeric"});
+
+  // Group by category
+  const grouped = {};
+  alertsToSend.forEach(a => {
+    const cat = a.src || "Other";
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(a);
+  });
+
+  // Rich plain-text message (used in template as {{alert_list}})
+  const lines = [];
+  lines.push(`Scorpion Arabia — Document & Asset Manager`);
+  lines.push(`Alert Report: ${today}`);
+  lines.push(`${"─".repeat(50)}`);
+  lines.push(`SUMMARY: ${alertsToSend.length} alert(s) — ${overdue.length} overdue, ${expiring.length} expiring soon`);
+  lines.push(``);
+
+  if (overdue.length > 0) {
+    lines.push(`🔴 OVERDUE ITEMS (${overdue.length})`);
+    lines.push(`${"─".repeat(40)}`);
+    overdue.forEach(a => {
+      lines.push(`  ✕ ${a.label}`);
+      lines.push(`    Category : ${a.src}`);
+      lines.push(`    Status   : OVERDUE by ${Math.abs(a.days)} day${Math.abs(a.days)!==1?"s":""}`);
+      lines.push(``);
+    });
+  }
+
+  if (expiring.length > 0) {
+    lines.push(`🟡 EXPIRING SOON (${expiring.length})`);
+    lines.push(`${"─".repeat(40)}`);
+    expiring.forEach(a => {
+      lines.push(`  ⚠ ${a.label}`);
+      lines.push(`    Category : ${a.src}`);
+      lines.push(`    Expires  : in ${a.days} day${a.days!==1?"s":""}`);
+      lines.push(``);
+    });
+  }
+
+  // Grouped summary
+  lines.push(`${"─".repeat(50)}`);
+  lines.push(`BY CATEGORY:`);
+  Object.entries(grouped).forEach(([cat, items]) => {
+    const od = items.filter(i => i.days < 0).length;
+    const ex = items.filter(i => i.days >= 0).length;
+    lines.push(`  ${cat}: ${items.length} total (${od} overdue, ${ex} expiring)`);
+  });
+
+  lines.push(``);
+  lines.push(`This is an ${isTest?"TEST ":""}automated alert from Scorpion Arabia Portal.`);
+  lines.push(`Please log in to review and action these items.`);
+
+  return {
+    to_email:       recipientEmail,
+    subject:        `${isTest?"[TEST] ":""}Scorpion Arabia Alerts — ${alertsToSend.length} item${alertsToSend.length!==1?"s":""} require attention (${new Date().toLocaleDateString("en-GB")})`,
+    total_alerts:   alertsToSend.length,
+    overdue_count:  overdue.length,
+    expiring_count: expiring.length,
+    alert_list:     lines.join("\n"),
+    sent_date:      today,
+  };
 }
 const COMPANY_PASSWORD  = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY          = "cta_auth";
@@ -1900,8 +1971,9 @@ export default function App() {
   // ── Daily email notification check (must be before any early returns) ──
   const allExpiriesRef = useRef([]);
   useEffect(() => {
-    // allExpiriesRef is updated after render, use it here
-    if (!notifySettings.enabled || !notifySettings.email) return;
+    if (!notifySettings.enabled) return;
+    const recipients = notifySettings.emails || [];
+    if (recipients.length === 0) return;
     if (!window.emailjs) return;
     const lastSent = localStorage.getItem(NOTIFY_LAST_SENT_KEY);
     const today = new Date().toDateString();
@@ -1909,25 +1981,15 @@ export default function App() {
     const threshold = Number(notifySettings.thresholdDays) || 90;
     const alertsToSend = allExpiriesRef.current.filter(a => a.days <= threshold);
     if (alertsToSend.length === 0) return;
-    const overdue  = alertsToSend.filter(a => a.days < 0);
-    const expiring = alertsToSend.filter(a => a.days >= 0);
-    const formatRow = a => a.days < 0 ? `• [OVERDUE ${Math.abs(a.days)}d] ${a.label} (${a.src})` : `• [${a.days}d left] ${a.label} (${a.src})`;
-    const message = [
-      overdue.length  > 0 ? `🔴 OVERDUE (${overdue.length}):\n${overdue.map(formatRow).join("\n")}` : "",
-      expiring.length > 0 ? `🟡 EXPIRING SOON (${expiring.length}):\n${expiring.map(formatRow).join("\n")}` : "",
-    ].filter(Boolean).join("\n\n");
-    window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email:       notifySettings.email,
-      subject:        `Scorpion Arabia — ${alertsToSend.length} Alert${alertsToSend.length!==1?"s":""} (${new Date().toLocaleDateString("en-GB")})`,
-      total_alerts:   alertsToSend.length,
-      overdue_count:  overdue.length,
-      expiring_count: expiring.length,
-      alert_list:     message,
-      sent_date:      new Date().toLocaleDateString("en-GB",{weekday:"long",year:"numeric",month:"long",day:"numeric"}),
-    }).then(() => {
+    // Send to each recipient
+    Promise.all(
+      recipients.map(email =>
+        window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, buildEmailPayload(alertsToSend, email, false))
+      )
+    ).then(() => {
       localStorage.setItem(NOTIFY_LAST_SENT_KEY, today);
     }).catch(err => console.warn("EmailJS daily send failed:", err));
-  }, [notifySettings, data]); // data dep so it re-checks when data loads
+  }, [notifySettings, data]);
 
   T = darkMode ? DARK : LIGHT;
 
@@ -2013,28 +2075,18 @@ export default function App() {
           onSave={s => { setNotifySettings(s); saveNotifySettings(s); setNotifyModal(false); setNotifyTestResult(null); }}
           onClose={() => { setNotifyModal(false); setNotifyTestResult(null); }}
           onTest={async (s) => {
-            if (!s.email) return;
+            const recipients = s.emails || [];
+            if (recipients.length === 0) return;
             setNotifySending(true); setNotifyTestResult(null);
             const threshold = Number(s.thresholdDays) || 90;
             const alertsToSend = allExpiries.filter(a => a.days <= threshold);
-            const overdue  = alertsToSend.filter(a => a.days < 0);
-            const expiring = alertsToSend.filter(a => a.days >= 0);
-            const formatRow = a => a.days < 0 ? `• [OVERDUE ${Math.abs(a.days)}d] ${a.label} (${a.src})` : `• [${a.days}d left] ${a.label} (${a.src})`;
-            const message = [
-              overdue.length  > 0 ? `🔴 OVERDUE (${overdue.length}):\n${overdue.map(formatRow).join("\n")}` : "",
-              expiring.length > 0 ? `🟡 EXPIRING SOON (${expiring.length}):\n${expiring.map(formatRow).join("\n")}` : "",
-            ].filter(Boolean).join("\n\n") || "✅ No alerts at this threshold.";
             try {
-              await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-                to_email: s.email,
-                subject: `[TEST] Scorpion Arabia — ${alertsToSend.length} Alert${alertsToSend.length!==1?"s":""}`,
-                total_alerts: alertsToSend.length,
-                overdue_count: overdue.length,
-                expiring_count: expiring.length,
-                alert_list: message,
-                sent_date: new Date().toLocaleDateString("en-GB", {weekday:"long",year:"numeric",month:"long",day:"numeric"}),
-              });
-              setNotifyTestResult({ok:true, msg:`✅ Test email sent to ${s.email}`});
+              await Promise.all(
+                recipients.map(email =>
+                  window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, buildEmailPayload(alertsToSend, email, true))
+                )
+              );
+              setNotifyTestResult({ok:true, msg:`✅ Test email sent to ${recipients.length} recipient${recipients.length!==1?"s":""}: ${recipients.join(", ")}`});
             } catch (err) {
               setNotifyTestResult({ok:false, msg:`❌ Failed: ${err?.text || err?.message || "Unknown error"}`});
             }
@@ -2655,36 +2707,53 @@ function darkenTextShadow(color) {
    NOTIFICATION SETTINGS MODAL
 ════════════════════════════════════════════════════════════════════════════ */
 function NotificationSettingsModal({ settings, allExpiries, sending, testResult, onSave, onClose, onTest }) {
-  const [form, setForm] = useState({ ...settings });
+  const [form, setForm]       = useState({ ...settings, emails: settings.emails || (settings.email ? [settings.email] : []) });
+  const [newEmail, setNewEmail] = useState("");
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const addEmail = () => {
+    const e = newEmail.trim().toLowerCase();
+    if (!e || !e.includes("@")) return;
+    if (form.emails.includes(e)) { setNewEmail(""); return; }
+    set("emails", [...form.emails, e]);
+    setNewEmail("");
+  };
+  const removeEmail = e => set("emails", form.emails.filter(x => x !== e));
 
   const threshold     = Number(form.thresholdDays) || 90;
   const previewAlerts = allExpiries.filter(a => a.days <= threshold);
   const overdue       = previewAlerts.filter(a => a.days < 0);
   const expiring      = previewAlerts.filter(a => a.days >= 0);
 
+  // Group by source category
+  const grouped = {};
+  previewAlerts.forEach(a => {
+    const cat = a.src || "Other";
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(a);
+  });
+
+  const hasRecipients = form.emails.length > 0;
+
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.gold}55`,borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:520,boxShadow:`0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px ${T.gold}22`,position:"relative",maxHeight:"90vh",overflowY:"auto"}}>
-        {/* Gold top bar */}
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.gold}55`,borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:580,boxShadow:`0 24px 64px rgba(0,0,0,0.4), 0 0 0 1px ${T.gold}22`,position:"relative",maxHeight:"92vh",overflowY:"auto"}}>
         <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${T.gold},transparent)`,borderRadius:"20px 20px 0 0"}}/>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,display:"flex",alignItems:"center",gap:10}}>
-              🔔 EMAIL NOTIFICATIONS
-            </div>
-            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Get daily alerts for expiring & overdue items</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,display:"flex",alignItems:"center",gap:10}}>🔔 EMAIL NOTIFICATIONS</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Daily alerts for expiring & overdue certifications</div>
           </div>
           <button onClick={onClose} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
         </div>
 
         {/* Enable toggle */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",marginBottom:18}}>
           <div>
             <div style={{fontWeight:700,fontSize:14,color:T.text}}>Enable Daily Alerts</div>
-            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Sends one email per day when alerts exist</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>One email per day, automatically sent on first login</div>
           </div>
           <button onClick={() => set("enabled", !form.enabled)}
             style={{width:48,height:26,borderRadius:999,border:"none",cursor:"pointer",background:form.enabled?T.gold:T.border,transition:"background .2s",position:"relative",flexShrink:0}}>
@@ -2692,18 +2761,38 @@ function NotificationSettingsModal({ settings, allExpiries, sending, testResult,
           </button>
         </div>
 
-        {/* Email address */}
-        <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:"1px"}}>RECIPIENT EMAIL ADDRESS</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={e => set("email", e.target.value)}
-            placeholder="e.g. manager@scorpionarabia.com"
-            style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:10,padding:"11px 14px",fontSize:14,color:T.text,outline:"none",colorScheme:"light"}}
-            onFocus={e => e.target.style.borderColor = T.gold}
-            onBlur={e => e.target.style.borderColor = T.border}
-          />
+        {/* Recipients */}
+        <div style={{marginBottom:18}}>
+          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:8,letterSpacing:"1px"}}>RECIPIENTS ({form.emails.length})</label>
+          {/* Existing recipients */}
+          {form.emails.length > 0 && (
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+              {form.emails.map(e => (
+                <div key={e} style={{display:"flex",alignItems:"center",gap:6,background:T.goldDim,border:`1px solid ${T.gold}44`,borderRadius:8,padding:"5px 10px"}}>
+                  <span style={{fontSize:13,color:T.text,fontWeight:500}}>✉ {e}</span>
+                  <button onClick={() => removeEmail(e)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Add new email */}
+          <div style={{display:"flex",gap:8}}>
+            <input
+              type="email"
+              value={newEmail}
+              onChange={e => setNewEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addEmail()}
+              placeholder="Add email address…"
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+              onFocus={e => e.target.style.borderColor = T.gold}
+              onBlur={e => e.target.style.borderColor = T.border}
+            />
+            <button onClick={addEmail}
+              style={{background:T.goldDim,border:`1px solid ${T.gold}55`,borderRadius:10,padding:"10px 16px",color:T.gold,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+              + Add
+            </button>
+          </div>
+          <div style={{fontSize:11,color:T.textMuted,marginTop:5}}>Press Enter or click Add · each recipient gets a separate email</div>
         </div>
 
         {/* Threshold */}
@@ -2711,46 +2800,43 @@ function NotificationSettingsModal({ settings, allExpiries, sending, testResult,
           <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:"1px"}}>ALERT THRESHOLD</label>
           <select value={form.thresholdDays} onChange={e => set("thresholdDays", e.target.value)}
             style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:10,padding:"11px 14px",fontSize:14,color:T.text,outline:"none",colorScheme:"light"}}>
-            <option value={30}>30 days (critical only)</option>
+            <option value={30}>30 days — critical only</option>
             <option value={60}>60 days</option>
             <option value={90}>90 days (recommended)</option>
             <option value={180}>180 days</option>
           </select>
-          <div style={{fontSize:11,color:T.textMuted,marginTop:6}}>Items expiring within this window will be included in alerts</div>
         </div>
 
-        {/* Alert preview */}
+        {/* Alert preview grouped by category */}
         <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",marginBottom:20}}>
-          <div style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:10}}>📋 Current Alert Preview</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:previewAlerts.length>0?12:0}}>
-            <div style={{textAlign:"center",background:T.redDim,borderRadius:8,padding:"8px"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.red}}>{overdue.length}</div>
-              <div style={{fontSize:10,color:T.red,fontWeight:700}}>OVERDUE</div>
-            </div>
-            <div style={{textAlign:"center",background:T.goldDim,borderRadius:8,padding:"8px"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.gold}}>{expiring.length}</div>
-              <div style={{fontSize:10,color:T.gold,fontWeight:700}}>EXPIRING</div>
-            </div>
-            <div style={{textAlign:"center",background:T.blueDim,borderRadius:8,padding:"8px"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.blue}}>{previewAlerts.length}</div>
-              <div style={{fontSize:10,color:T.blue,fontWeight:700}}>TOTAL</div>
-            </div>
+          <div style={{fontWeight:700,fontSize:13,color:T.text,marginBottom:12}}>📋 Email Preview — {previewAlerts.length} item{previewAlerts.length!==1?"s":""}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:previewAlerts.length>0?14:0}}>
+            {[{label:"OVERDUE",count:overdue.length,color:T.red,dim:T.redDim},{label:"EXPIRING",count:expiring.length,color:T.gold,dim:T.goldDim},{label:"TOTAL",count:previewAlerts.length,color:T.blue,dim:T.blueDim}].map(k=>(
+              <div key={k.label} style={{textAlign:"center",background:k.dim,borderRadius:8,padding:"8px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:k.color}}>{k.count}</div>
+                <div style={{fontSize:10,color:k.color,fontWeight:700}}>{k.label}</div>
+              </div>
+            ))}
           </div>
-          {previewAlerts.length > 0 && (
-            <div style={{maxHeight:140,overflowY:"auto",display:"grid",gap:4}}>
-              {previewAlerts.slice(0,12).map((a,i) => (
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:T.textSub}}>
-                  <span style={{color:a.days<0?T.red:a.days<=30?T.gold:T.textMuted,fontWeight:700,width:80,flexShrink:0,fontSize:11}}>
-                    {a.days<0?`${Math.abs(a.days)}d overdue`:`${a.days}d left`}
-                  </span>
-                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</span>
-                  <span style={{color:T.textMuted,fontSize:10,flexShrink:0}}>({a.src})</span>
+          {previewAlerts.length > 0 ? (
+            <div style={{maxHeight:200,overflowY:"auto",display:"grid",gap:6}}>
+              {Object.entries(grouped).map(([cat, items]) => (
+                <div key={cat}>
+                  <div style={{fontSize:10,fontWeight:800,color:T.textMuted,letterSpacing:"1px",marginBottom:4,marginTop:4}}>{cat.toUpperCase()} ({items.length})</div>
+                  {items.map((a,i) => (
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:T.textSub,paddingLeft:8,marginBottom:2}}>
+                      <span style={{color:a.days<0?T.red:a.days<=30?T.gold:T.textMuted,fontWeight:700,minWidth:90,fontSize:11}}>
+                        {a.days<0?`🔴 ${Math.abs(a.days)}d overdue`:`🟡 ${a.days}d left`}
+                      </span>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:T.text}}>{a.label}</span>
+                    </div>
+                  ))}
                 </div>
               ))}
-              {previewAlerts.length > 12 && <div style={{fontSize:11,color:T.textMuted,textAlign:"center"}}>+{previewAlerts.length-12} more items</div>}
             </div>
+          ) : (
+            <div style={{fontSize:12,color:T.green,fontWeight:600}}>✅ No alerts at this threshold — no email will be sent</div>
           )}
-          {previewAlerts.length === 0 && <div style={{fontSize:12,color:T.green,fontWeight:600}}>✅ No alerts at this threshold — no email would be sent</div>}
         </div>
 
         {/* Test result */}
@@ -2762,9 +2848,9 @@ function NotificationSettingsModal({ settings, allExpiries, sending, testResult,
 
         {/* Actions */}
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          <button onClick={() => onTest(form)} disabled={!form.email || sending}
-            style={{flex:1,background:T.blueDim,border:`1px solid ${T.blue}55`,borderRadius:10,padding:"11px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.blue,cursor:form.email&&!sending?"pointer":"not-allowed",opacity:form.email&&!sending?1:0.5}}>
-            {sending ? "Sending…" : "📧 Send Test Email"}
+          <button onClick={() => onTest(form)} disabled={!hasRecipients || sending}
+            style={{flex:1,background:T.blueDim,border:`1px solid ${T.blue}55`,borderRadius:10,padding:"11px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.blue,cursor:hasRecipients&&!sending?"pointer":"not-allowed",opacity:hasRecipients&&!sending?1:0.5}}>
+            {sending ? "Sending…" : `📧 Test (${form.emails.length} recipient${form.emails.length!==1?"s":""})`}
           </button>
           <button onClick={() => onSave(form)}
             style={{flex:1,background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",borderRadius:10,padding:"11px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:"#080b10",cursor:"pointer",letterSpacing:"1px"}}>
