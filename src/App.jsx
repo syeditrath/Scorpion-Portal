@@ -2003,6 +2003,7 @@ export default function App() {
 
   return (
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg}}>
+      {showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
       {notifyModal && (
         <NotificationSettingsModal
           settings={notifySettings}
