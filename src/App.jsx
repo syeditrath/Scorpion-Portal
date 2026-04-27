@@ -1897,6 +1897,38 @@ export default function App() {
     return () => clearTimeout(t);
   }, [data, loadingData]);
 
+  // ── Daily email notification check (must be before any early returns) ──
+  const allExpiriesRef = useRef([]);
+  useEffect(() => {
+    // allExpiriesRef is updated after render, use it here
+    if (!notifySettings.enabled || !notifySettings.email) return;
+    if (!window.emailjs) return;
+    const lastSent = localStorage.getItem(NOTIFY_LAST_SENT_KEY);
+    const today = new Date().toDateString();
+    if (lastSent === today) return;
+    const threshold = Number(notifySettings.thresholdDays) || 90;
+    const alertsToSend = allExpiriesRef.current.filter(a => a.days <= threshold);
+    if (alertsToSend.length === 0) return;
+    const overdue  = alertsToSend.filter(a => a.days < 0);
+    const expiring = alertsToSend.filter(a => a.days >= 0);
+    const formatRow = a => a.days < 0 ? `• [OVERDUE ${Math.abs(a.days)}d] ${a.label} (${a.src})` : `• [${a.days}d left] ${a.label} (${a.src})`;
+    const message = [
+      overdue.length  > 0 ? `🔴 OVERDUE (${overdue.length}):\n${overdue.map(formatRow).join("\n")}` : "",
+      expiring.length > 0 ? `🟡 EXPIRING SOON (${expiring.length}):\n${expiring.map(formatRow).join("\n")}` : "",
+    ].filter(Boolean).join("\n\n");
+    window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email:       notifySettings.email,
+      subject:        `Scorpion Arabia — ${alertsToSend.length} Alert${alertsToSend.length!==1?"s":""} (${new Date().toLocaleDateString("en-GB")})`,
+      total_alerts:   alertsToSend.length,
+      overdue_count:  overdue.length,
+      expiring_count: expiring.length,
+      alert_list:     message,
+      sent_date:      new Date().toLocaleDateString("en-GB",{weekday:"long",year:"numeric",month:"long",day:"numeric"}),
+    }).then(() => {
+      localStorage.setItem(NOTIFY_LAST_SENT_KEY, today);
+    }).catch(err => console.warn("EmailJS daily send failed:", err));
+  }, [notifySettings, data]); // data dep so it re-checks when data loads
+
   T = darkMode ? DARK : LIGHT;
 
   if (loadingData) {
@@ -1949,43 +1981,7 @@ export default function App() {
       ...(e.permits||[]).map(c=>({label:`${e.name} — ${c.type||"Permit"}`,src:"Permit",days:daysUntil(c.expiryDate),page:"equipment"})),
     ]),
   ].filter(x=>x.days!==null&&x.days<=90).sort((a,b)=>a.days-b.days);
-
-  // ── Daily email notification check ──
-  useEffect(() => {
-    if (!notifySettings.enabled || !notifySettings.email || !window.emailjs) return;
-
-    const lastSent = localStorage.getItem(NOTIFY_LAST_SENT_KEY);
-    const today = new Date().toDateString();
-    if (lastSent === today) return; // already sent today
-
-    const threshold = Number(notifySettings.thresholdDays) || 90;
-    const alertsToSend = allExpiries.filter(a => a.days <= threshold);
-    if (alertsToSend.length === 0) return;
-
-    const overdue  = alertsToSend.filter(a => a.days < 0);
-    const expiring = alertsToSend.filter(a => a.days >= 0);
-
-    const formatRow = a => a.days < 0
-      ? `• [OVERDUE ${Math.abs(a.days)}d] ${a.label} (${a.src})`
-      : `• [${a.days}d left] ${a.label} (${a.src})`;
-
-    const message = [
-      overdue.length  > 0 ? `🔴 OVERDUE (${overdue.length}):\n${overdue.map(formatRow).join("\n")}` : "",
-      expiring.length > 0 ? `🟡 EXPIRING SOON (${expiring.length}):\n${expiring.map(formatRow).join("\n")}` : "",
-    ].filter(Boolean).join("\n\n");
-
-    window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email:      notifySettings.email,
-      subject:       `Scorpion Arabia — ${alertsToSend.length} Alert${alertsToSend.length!==1?"s":""} (${new Date().toLocaleDateString("en-GB")})`,
-      total_alerts:  alertsToSend.length,
-      overdue_count: overdue.length,
-      expiring_count:expiring.length,
-      alert_list:    message,
-      sent_date:     new Date().toLocaleDateString("en-GB", {weekday:"long",year:"numeric",month:"long",day:"numeric"}),
-    }).then(() => {
-      localStorage.setItem(NOTIFY_LAST_SENT_KEY, today);
-    }).catch(err => console.warn("EmailJS daily send failed:", err));
-  }, [notifySettings, allExpiries]);
+  allExpiriesRef.current = allExpiries;
 
   // Global search results
   const searchResults = globalSearch.length > 1 ? (() => {
