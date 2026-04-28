@@ -2184,6 +2184,7 @@ export default function App() {
                   return false;
                 }}/>
           )}
+          {page==="finance" && (
             financeAuthed
               ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>
               : <FinanceLoginPage onLogin={(pw) => {
