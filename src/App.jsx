@@ -2119,7 +2119,7 @@ export default function App() {
 )}
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"2px",color:"#f59e0b",textTransform:"uppercase"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
+              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>ENTERPRISE RESOURCE PLANNING</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
               {/* Global search */}
@@ -2404,23 +2404,77 @@ function Dashboard({ data, alerts, go }) {
 
   const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
 
+  const [alertModal, setAlertModal] = useState(null); // "overdue" | "expiring30"
+
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
+
+      {/* ── Alert drill-down modal ── */}
+      {alertModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setAlertModal(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${alertModal==="overdue"?T.red:T.gold}55`,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:560,maxHeight:"80vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.4)"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${alertModal==="overdue"?T.red:T.gold},transparent)`,borderRadius:"20px 20px 0 0"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:alertModal==="overdue"?T.red:T.gold}}>
+                  {alertModal==="overdue"?"🔴 OVERDUE ITEMS":"🟡 DUE IN 30 DAYS"}
+                </div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>
+                  {alertModal==="overdue"
+                    ? `${expired.length} item${expired.length!==1?"s":""} past expiry — click any to go to that section`
+                    : `${alerts.filter(a=>a.days>=0&&a.days<=30).length} item${alerts.filter(a=>a.days>=0&&a.days<=30).length!==1?"s":""} expiring within 30 days`}
+                </div>
+              </div>
+              <button onClick={()=>setAlertModal(null)} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer"}}>✕</button>
+            </div>
+            <div style={{display:"grid",gap:8}}>
+              {(alertModal==="overdue"
+                ? expired
+                : alerts.filter(a=>a.days>=0&&a.days<=30).sort((a,b)=>a.days-b.days)
+              ).map((a,i)=>(
+                <button key={i} onClick={()=>{ go(a.page); setAlertModal(null); }}
+                  style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,textAlign:"left",cursor:"pointer",width:"100%",transition:"border-color .15s"}}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor=alertModal==="overdue"?T.red:T.gold}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                  <div style={{width:52,flexShrink:0,textAlign:"center"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:a.days<0?T.red:a.days<=7?T.red:T.gold,lineHeight:1}}>
+                      {a.days<0?Math.abs(a.days):a.days}
+                    </div>
+                    <div style={{fontSize:9,fontWeight:700,color:a.days<0?T.red:T.gold,marginTop:2}}>{a.days<0?"OVERDUE":"DAYS LEFT"}</div>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{a.src}</div>
+                  </div>
+                  <div style={{fontSize:11,color:T.blue,fontWeight:700,flexShrink:0}}>
+                    {{scorpion:"Company Docs",manpower:"Manpower",equipment:"Equipment",projects:"Project Docs"}[a.page]||a.page} →
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Top KPI strip ── */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
         {[
-          {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲"},
-          {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕"},
-          {label:"Due in 30 Days",  v:expiring30,   color:expiring30>0?T.gold:T.textMuted,  icon:"⏱"},
-          {label:"Compliance",      v:`${pct}%`,    color:pct>=80?T.green:pct>=60?T.gold:T.red, icon:"◎"},
-          {label:"People",          v:mpPeople,     color:T.green,  icon:"◈"},
-          {label:"Equipment Assets",v:eqTotal,      color:T.gold,   icon:"◎"},
+          {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲", click:null},
+          {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕", click:overdueCount>0?()=>setAlertModal("overdue"):null},
+          {label:"Due in 30 Days",  v:expiring30,   color:expiring30>0?T.gold:T.textMuted,  icon:"⏱", click:expiring30>0?()=>setAlertModal("expiring30"):null},
+          {label:"Compliance",      v:`${pct}%`,    color:pct>=80?T.green:pct>=60?T.gold:T.red, icon:"◎", click:null},
+          {label:"People",          v:mpPeople,     color:T.green,  icon:"◈", click:()=>go("manpower")},
+          {label:"Equipment Assets",v:eqTotal,      color:T.gold,   icon:"◎", click:()=>go("equipment")},
         ].map((k,i)=>(
-          <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
+          <div key={k.label} className="fade-up"
+            onClick={k.click||undefined}
+            style={{background:T.card,border:`1px solid ${k.click?"transparent":T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden",cursor:k.click?"pointer":"default",transition:"border-color .15s, transform .15s",outline:"none"}}
+            onMouseEnter={e=>{ if(k.click){ e.currentTarget.style.borderColor=k.color; e.currentTarget.style.transform="translateY(-2px)"; }}}
+            onMouseLeave={e=>{ if(k.click){ e.currentTarget.style.borderColor="transparent"; e.currentTarget.style.transform="none"; }}}>
             <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(28px,3vw,42px)",fontWeight:800,color:k.color,lineHeight:1,animation:"countUp 0.6s ease both"}}>{k.v}</div>
             <div style={{fontSize:12,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
+            {k.click&&<div style={{fontSize:10,color:k.color,marginTop:4,fontWeight:700,opacity:.7}}>Click to view →</div>}
           </div>
         ))}
       </div>
