@@ -921,8 +921,140 @@ const DR_COL_MAP = {
   "NOTES":"notes","ADDITIONAL NOTES":"notes","COMMENTS":"notes","SUPERVISOR NOTES":"notes",
 };
 
+/* ── Scorpion DPR template cell reader ───────────────────────────────────── */
+function dprReadCell(ws, ref) {
+  if (!ws[ref]) return "";
+  const c = ws[ref];
+  if (c.t === "d" || c.v instanceof Date) return excelDateToStr(c.v) || c.w || "";
+  if (c.v !== undefined && c.v !== null) return String(c.v).trim();
+  return c.w ? String(c.w).trim() : "";
+}
+
+function dprReadRange(ws, rangeStr) {
+  try {
+    const range = XLSX.utils.decode_range(rangeStr);
+    const parts = new Set();
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      for (let c2 = range.s.c; c2 <= range.e.c; c2++) {
+        const ref = XLSX.utils.encode_cell({r, c:c2});
+        if (ws[ref]?.v != null && String(ws[ref].v).trim()) parts.add(String(ws[ref].v).trim());
+      }
+    }
+    return [...parts].join(" ");
+  } catch { return ""; }
+}
+
+/* Detect if workbook is the Scorpion DPR template (has "Daily DPR Form" sheet
+   OR has the header text in cell D3) */
+function isScorpionDprTemplate(wb) {
+  if (wb.SheetNames.includes("Daily DPR Form")) return true;
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const title = dprReadCell(ws, "D3");
+  return title.includes("DAILY PROGRESS REPORT");
+}
+
+/* Parse a single Scorpion DPR form sheet into a report record */
+function parseScorpionDprSheet(wb) {
+  const ws = wb.Sheets[wb.SheetNames.includes("Daily DPR Form") ? "Daily DPR Form" : wb.SheetNames[0]];
+  // Helper: try primary cell, then scan siblings in same row if empty
+  const cell = (ref) => {
+    let v = dprReadCell(ws, ref);
+    if (v) return v;
+    // scan nearby cells in same row (merged cells store value in anchor)
+    const col = ref.replace(/\d+/, "");
+    const row = ref.replace(/[A-Z]+/, "");
+    const cols = ["B","C","D","E","F","G","H","I","J","K"];
+    for (const c2 of cols) {
+      if (c2 === col) continue;
+      const alt = dprReadCell(ws, c2 + row);
+      if (alt) return alt;
+    }
+    return "";
+  };
+
+  const manpowerSheet = wb.Sheets["Manpower_Data"];
+  const equipmentSheet = wb.Sheets["Equipment_Data"];
+
+  // Manpower from dedicated sheet if it has data, else parse inline rows 40-45
+  let manpowerList = [];
+  if (manpowerSheet) {
+    const rows = XLSX.utils.sheet_to_json(manpowerSheet, { defval:"" });
+    manpowerList = rows.filter(r => r.Name || r["Name"]).map(r => `${r.Name||r["Name"]} (${r.Position||""})${r["Working Hours"]?" — "+r["Working Hours"]+"h":""}`.replace(/\s*\(\)/,"")).filter(Boolean);
+  } else {
+    for (let row = 40; row <= 44; row++) {
+      // 3 blocks per row: B/C/D, E/F/G, H/I/J
+      [[`B${row}`,`C${row}`,`D${row}`],[`E${row}`,`F${row}`,`G${row}`],[`H${row}`,`I${row}`,`J${row}`]].forEach(([n,p,h])=>{
+        const name = dprReadCell(ws, n);
+        if (name) manpowerList.push(`${name}${dprReadCell(ws,p)?" ("+dprReadCell(ws,p)+")":""}${dprReadCell(ws,h)?" — "+dprReadCell(ws,h)+"h":""}`);
+      });
+    }
+  }
+
+  // Equipment from dedicated sheet if available, else parse inline rows 48-62
+  let equipmentList = [];
+  if (equipmentSheet) {
+    const rows = XLSX.utils.sheet_to_json(equipmentSheet, { defval:"" });
+    equipmentList = rows.filter(r => r.Description || r["Description"]).map(r => `${r.Description||""} [${r.Condition||""}] Asset:${r["Asset No."]||""} ${r.Hours||""}h`.replace(/\s+/g," ").trim()).filter(Boolean);
+  } else {
+    for (let row = 48; row <= 62; row++) {
+      const desc = dprReadCell(ws, `B${row}`) || dprReadCell(ws, `C${row}`);
+      if (desc) equipmentList.push(`${desc}${dprReadCell(ws,`D${row}`)?" ["+dprReadCell(ws,`D${row}`)+"]":""}${dprReadCell(ws,`F${row}`)?" Asset:"+dprReadCell(ws,`F${row}`):""}${dprReadCell(ws,`H${row}`)?" "+dprReadCell(ws,`H${row}`)+"h":""}`);
+    }
+  }
+
+  return {
+    id: uid(),
+    dprSource: "scorpion_template",
+    // Section 1 — Header
+    date:          dprReadCell(ws,"I8") || cell("I8"),
+    project:       dprReadCell(ws,"D8") || cell("D8"),
+    contractor:    dprReadCell(ws,"D9") || cell("D9"),
+    client:        dprReadCell(ws,"I9") || cell("I9"),
+    shiftTiming:   dprReadCell(ws,"D10") || cell("D10"),
+    weather:       dprReadCell(ws,"I10") || cell("I10"),
+    // Section 2 — Work Profile & Activity
+    profile:       dprReadCell(ws,"D13") || cell("D13"),
+    activity:      dprReadCell(ws,"I13") || cell("I13"),
+    // Section 3 — Progress
+    totalQty:      dprReadCell(ws,"C18") || cell("C18"),
+    prevProgress:  dprReadCell(ws,"E18") || cell("E18"),
+    progressToday: dprReadCell(ws,"G18") || cell("G18"),
+    accumulated:   dprReadCell(ws,"I18") || cell("I18"),
+    // Section 4 — Drilling
+    force:         dprReadCell(ws,"C23") || cell("C23"),
+    torque:        dprReadCell(ws,"E23") || cell("E23"),
+    mudPressure:   dprReadCell(ws,"G23") || cell("G23"),
+    pumpRate:      dprReadCell(ws,"H23") || cell("H23"),
+    mudDensity:    dprReadCell(ws,"I23") || cell("I23"),
+    mudViscosity:  dprReadCell(ws,"J23") || cell("J23"),
+    // Section 5 — Activity summaries
+    activities:    dprReadRange(ws,"B27:K31"),
+    activityNextDay: dprReadRange(ws,"B33:K37"),
+    // Section 6 — Personnel
+    manpower:      manpowerList.length ? String(manpowerList.length) : "",
+    manpowerList:  manpowerList.join(" | "),
+    // Section 7 — Equipment
+    equipment:     equipmentList.join(" | "),
+    // Section 8 — Bentonite
+    bentoniteStored:    dprReadCell(ws,"C66") || cell("C66"),
+    bentoniteUsed:      dprReadCell(ws,"F66") || cell("F66"),
+    bentoniteRemaining: dprReadCell(ws,"I66") || cell("I66"),
+    // Section 9 — Comments
+    issues:  dprReadRange(ws,"B71:E73"),
+    notes:   dprReadRange(ws,"G71:K73"),
+  };
+}
+
 function parseDailyReportExcel(arrayBuffer) {
   const wb = XLSX.read(arrayBuffer, { type:"array", cellDates:true });
+
+  // ── Scorpion Premium DPR Template path ──
+  if (isScorpionDprTemplate(wb)) {
+    const rec = parseScorpionDprSheet(wb);
+    return [rec].filter(r => r.date || r.activities || r.project);
+  }
+
+  // ── Generic column-mapped path (legacy / other formats) ──
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rawRows = XLSX.utils.sheet_to_json(ws, { defval:"" });
   return rawRows
@@ -974,7 +1106,7 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
     }
   };
 
-  /* Import from Excel — auto-fill fields from the sheet's first data row */
+  /* Import from Excel — handles Scorpion DPR template + generic formats */
   const handleExcelImport = (file) => {
     if (!file) return;
     setParsing(true); setParseMsg("");
@@ -983,12 +1115,14 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
       try {
         const rows = parseDailyReportExcel(e.target.result);
         if (!rows.length) { setParseMsg("⚠ No data rows found — check column headers."); setParsing(false); return; }
-        // If single row: auto-fill form. If multi-row: show count and use first.
         const first = rows[0];
         setF(prev => ({ ...prev, ...first, id: prev.id }));
-        setParseMsg(rows.length === 1
-          ? "✓ Fields filled from Excel. Review and save."
-          : `✓ ${rows.length} rows found — filled from first row. Use bulk import for all rows.`
+        const isScorpion = first.dprSource === "scorpion_template";
+        setParseMsg(isScorpion
+          ? "✓ Scorpion DPR template detected — all sections extracted. Review and save."
+          : rows.length === 1
+            ? "✓ Fields filled from Excel. Review and save."
+            : `✓ ${rows.length} rows found — filled from first row. Use bulk import for all rows.`
         );
       } catch(err) {
         setParseMsg("✕ Could not parse Excel: " + err.message);
@@ -1046,6 +1180,83 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
           <div><label style={LS}>ISSUES / DELAYS</label><textarea value={f.issues} onChange={e=>upd("issues",e.target.value)} rows={2} placeholder="Problems, delays, safety incidents…" style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           <div><label style={LS}>ADDITIONAL NOTES</label><textarea value={f.notes} onChange={e=>upd("notes",e.target.value)} rows={2} placeholder="Inspector remarks, client feedback, etc." style={{...IS,resize:"vertical"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
 
+          {/* ── Scorpion DPR extra fields (shown when template parsed) ── */}
+          {f.dprSource==="scorpion_template" && (
+            <div style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+              <div style={{padding:"10px 14px",background:T.goldDim,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:13,fontWeight:700,color:T.gold}}>📊 SCORPION DPR — EXTRACTED FIELDS</span>
+              </div>
+              <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:10}}>
+                {/* Work profile / activity */}
+                {(f.profile||f.activity) && (
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    {f.profile&&<div><label style={LS}>WORK PROFILE</label><div style={{fontSize:13,color:T.text,padding:"8px 10px",background:T.card2,borderRadius:7,border:`1px solid ${T.border}`}}>{f.profile}</div></div>}
+                    {f.activity&&<div><label style={LS}>ACTIVITY</label><div style={{fontSize:13,color:T.text,padding:"8px 10px",background:T.card2,borderRadius:7,border:`1px solid ${T.border}`}}>{f.activity}</div></div>}
+                  </div>
+                )}
+                {/* Progress summary */}
+                {(f.totalQty||f.progressToday||f.accumulated) && (
+                  <div>
+                    <label style={LS}>PROGRESS SUMMARY (m)</label>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                      {[["Total Qty",f.totalQty,T.textMuted],["Previous",f.prevProgress,T.textMuted],["Today",f.progressToday,T.blue],["Accumulated",f.accumulated,T.green]].map(([l,v,c])=>v?(
+                        <div key={l} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:c}}>{v}</div>
+                          <div style={{fontSize:10,color:T.textMuted,marginTop:2}}>{l}</div>
+                        </div>
+                      ):null)}
+                    </div>
+                  </div>
+                )}
+                {/* Drilling parameters */}
+                {(f.force||f.torque||f.mudPressure||f.pumpRate) && (
+                  <div>
+                    <label style={LS}>DRILLING PARAMETERS</label>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {[["Force (Ton)",f.force],["Torque (Ton/m)",f.torque],["Mud Press (PSI)",f.mudPressure],["Pump Rate (gal/min)",f.pumpRate],["Mud Density",f.mudDensity],["Mud Viscosity",f.mudViscosity]].map(([l,v])=>v?(
+                        <div key={l} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",fontSize:12}}>
+                          <span style={{color:T.textMuted}}>{l}: </span><span style={{fontWeight:700,color:T.text}}>{v}</span>
+                        </div>
+                      ):null)}
+                    </div>
+                  </div>
+                )}
+                {/* Bentonite */}
+                {(f.bentoniteStored||f.bentoniteUsed||f.bentoniteRemaining) && (
+                  <div>
+                    <label style={LS}>BENTONITE MATERIAL (bags)</label>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                      {[["Stored",f.bentoniteStored,T.textMuted],["Used Today",f.bentoniteUsed,T.orange],["Remaining",f.bentoniteRemaining,T.green]].map(([l,v,c])=>(
+                        <div key={l} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:c}}>{v||"—"}</div>
+                          <div style={{fontSize:10,color:T.textMuted,marginTop:2}}>{l}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Client/contractor info */}
+                {(f.contractor||f.client||f.shiftTiming) && (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                    {[["Contractor",f.contractor],["Client",f.client],["Shift",f.shiftTiming]].map(([l,v])=>v?(
+                      <div key={l} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",fontSize:12}}>
+                        <span style={{color:T.textMuted}}>{l}: </span><span style={{fontWeight:700,color:T.text}}>{v}</span>
+                      </div>
+                    ):null)}
+                  </div>
+                )}
+                {/* Next day plan */}
+                {f.activityNextDay && (
+                  <div><label style={LS}>NEXT DAY PLAN</label><div style={{fontSize:12,color:T.textSub,padding:"8px 10px",background:T.card2,borderRadius:7,border:`1px solid ${T.border}`,lineHeight:1.6}}>{f.activityNextDay}</div></div>
+                )}
+                {/* Manpower list */}
+                {f.manpowerList && (
+                  <div><label style={LS}>PERSONNEL ON SITE</label><div style={{fontSize:12,color:T.text,padding:"8px 10px",background:T.card2,borderRadius:7,border:`1px solid ${T.border}`,lineHeight:1.7}}>{f.manpowerList.split(" | ").map((p,i)=><div key={i}>{p}</div>)}</div></div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── File attachment (PDF / Excel / image) ── */}
           <div>
             <label style={LS}>ATTACH DAILY REPORT FILE (PDF / EXCEL / IMAGE)</label>
@@ -1090,6 +1301,257 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
           <button onClick={()=>{ if(uploading){return;} onSave(f); }} disabled={uploading}
             style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:13,fontWeight:800,cursor:uploading?"not-allowed":"pointer",opacity:uploading?0.7:1}}>
             {uploading?"Uploading…":"Save Report"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DPR CONSOLIDATION MODAL
+   Collates daily reports from ALL projects into one master Excel export.
+   Also lets the user drop multiple DPR Excel files directly to parse them
+   without first manually adding a report.
+════════════════════════════════════════════════════════════════════════════ */
+function DprConsolidateModal({ projectAnalysis, onClose }) {
+  const [dropping, setDropping]         = useState(false);
+  const [ingestStatus, setIngestStatus] = useState([]); // [{name, ok, rec}]
+  const [ingesting, setIngesting]       = useState(false);
+  const fileRef = useRef();
+
+  // All existing saved daily reports across projects, enriched with project name
+  const savedRows = (projectAnalysis || []).flatMap(pa =>
+    (pa.dailyReports || []).map(r => ({ ...r, _project: pa.project }))
+  );
+
+  // Ingested-from-drop rows (not yet saved to app state)
+  const droppedRows = ingestStatus.filter(s => s.ok && s.rec).map(s => ({ ...s.rec, _project: s.rec.project || "Unassigned", _fromFile: s.name }));
+
+  const allRows = [...savedRows, ...droppedRows];
+
+  const handleFiles = async (files) => {
+    const xlsxFiles = [...files].filter(f => /\.xlsx?$/i.test(f.name));
+    if (!xlsxFiles.length) return;
+    setIngesting(true);
+    const results = [];
+    for (const file of xlsxFiles) {
+      const result = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const rows = parseDailyReportExcel(e.target.result);
+            if (!rows.length) { resolve({ name: file.name, ok: false }); return; }
+            resolve({ name: file.name, ok: true, rec: { ...rows[0], _fileName: file.name } });
+          } catch { resolve({ name: file.name, ok: false }); }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+      results.push(result);
+    }
+    setIngestStatus(prev => {
+      const existing = prev.map(p => p.name);
+      return [...prev, ...results.filter(r => !existing.includes(r.name))];
+    });
+    setIngesting(false);
+  };
+
+  const exportMaster = () => {
+    if (!allRows.length) return;
+    const headers = [
+      "Project", "Date", "Contractor", "Client", "Shift", "Weather",
+      "Work Profile", "Activity",
+      "Total Qty (m)", "Prev Progress (m)", "Progress Today (m)", "Accumulated (m)",
+      "Force (Ton)", "Torque (Ton/m)", "Mud Pressure (PSI)", "Pump Rate (gal/min)", "Mud Density", "Mud Viscosity",
+      "Today's Activities", "Next Day Plan",
+      "Manpower Count", "Personnel List", "Equipment Used",
+      "Bentonite Stored", "Bentonite Used", "Bentonite Remaining",
+      "Issues / Delays", "Contractor Comments", "Notes",
+      "File Attached", "Source File",
+    ];
+    const rows = allRows.map(r => [
+      r._project || r.project || "",
+      r.date || "",
+      r.contractor || "",
+      r.client || "",
+      r.shiftTiming || "",
+      r.weather || "",
+      r.profile || "",
+      r.activity || "",
+      r.totalQty || "",
+      r.prevProgress || "",
+      r.progressToday || "",
+      r.accumulated || "",
+      r.force || "",
+      r.torque || "",
+      r.mudPressure || "",
+      r.pumpRate || "",
+      r.mudDensity || "",
+      r.mudViscosity || "",
+      r.activities || "",
+      r.activityNextDay || "",
+      r.manpower || "",
+      r.manpowerList || "",
+      r.equipment || "",
+      r.bentoniteStored || "",
+      r.bentoniteUsed || "",
+      r.bentoniteRemaining || "",
+      r.issues || "",
+      r.notes || "",
+      (r.notes && !r.issues) ? r.notes : "",
+      r.fileName || r._fromFile || "",
+      r._fromFile || r.fileName || "",
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // Column widths
+    const colWidths = [22,12,18,18,12,14,16,20,12,14,16,14,10,12,14,16,12,14,30,30,12,35,30,14,12,16,25,25,20,20,20];
+    ws["!cols"] = colWidths.map(w => ({ wch: w }));
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "DPR Master");
+
+    // Per-project sheets
+    const byProject = {};
+    allRows.forEach(r => {
+      const p = r._project || r.project || "Unassigned";
+      if (!byProject[p]) byProject[p] = [];
+      byProject[p].push(r);
+    });
+    Object.entries(byProject).forEach(([proj, pRows]) => {
+      const safeName = proj.replace(/[\\/\?\*\[\]:]/g,"").slice(0,28);
+      const pWs = XLSX.utils.aoa_to_sheet([headers, ...pRows.map(r => [
+        r._project||r.project||"", r.date||"", r.contractor||"", r.client||"", r.shiftTiming||"",
+        r.weather||"", r.profile||"", r.activity||"",
+        r.totalQty||"", r.prevProgress||"", r.progressToday||"", r.accumulated||"",
+        r.force||"", r.torque||"", r.mudPressure||"", r.pumpRate||"", r.mudDensity||"", r.mudViscosity||"",
+        r.activities||"", r.activityNextDay||"",
+        r.manpower||"", r.manpowerList||"", r.equipment||"",
+        r.bentoniteStored||"", r.bentoniteUsed||"", r.bentoniteRemaining||"",
+        r.issues||"", r.notes||"", "", r.fileName||r._fromFile||"", r._fromFile||r.fileName||"",
+      ])]);
+      pWs["!cols"] = colWidths.map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, pWs, safeName);
+    });
+
+    const today = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `DPR_Master_Consolidation_${today}.xlsx`);
+  };
+
+  const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:820,maxHeight:"93vh",display:"flex",flexDirection:"column",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+
+        {/* Header */}
+        <div style={{padding:"20px 24px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,borderRadius:"18px 18px 0 0",background:T.card}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>📊 DPR CONSOLIDATION</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>
+              {savedRows.length} saved report{savedRows.length!==1?"s":""} across {(projectAnalysis||[]).length} project{(projectAnalysis||[]).length!==1?"s":""}
+              {droppedRows.length>0&&<span style={{color:T.blue,marginLeft:8}}>+ {droppedRows.length} from dropped files</span>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18}}>✕</button>
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Drop zone for additional DPR files */}
+          <div
+            onDragOver={e=>{e.preventDefault();setDropping(true);}}
+            onDragLeave={()=>setDropping(false)}
+            onDrop={e=>{e.preventDefault();setDropping(false);handleFiles(e.dataTransfer.files);}}
+            onClick={()=>fileRef.current.click()}
+            style={{border:`2px dashed ${dropping?T.blue:T.border}`,borderRadius:14,padding:"24px 16px",textAlign:"center",cursor:"pointer",background:dropping?T.blueDim:T.card2,transition:"all .2s"}}>
+            <div style={{fontSize:32,marginBottom:8}}>📂</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:16,color:T.text,marginBottom:4}}>
+              {ingesting?"⏳ Parsing files…":"Drop Supervisor DPR Excel Files Here"}
+            </div>
+            <div style={{fontSize:12,color:T.textMuted}}>
+              Drag & drop multiple filled DPR Excel files — data is extracted automatically and included in the export
+            </div>
+            <input ref={fileRef} type="file" multiple accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{handleFiles(e.target.files);e.target.value="";}}/>
+          </div>
+
+          {/* Ingested file status */}
+          {ingestStatus.length>0&&(
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:.5}}>DROPPED FILES</div>
+              {ingestStatus.map((s,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:9}}>
+                  <span style={{fontSize:16}}>📊</span>
+                  <span style={{flex:1,fontSize:13,fontWeight:500,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</span>
+                  {s.ok
+                    ? <span style={{background:T.greenDim,border:`1px solid ${T.green}33`,color:T.green,borderRadius:6,padding:"2px 10px",fontSize:11,fontWeight:700}}>✓ Parsed{s.rec?.date?" — "+fmtDate(s.rec.date):""}</span>
+                    : <span style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,padding:"2px 10px",fontSize:11,fontWeight:700}}>✕ Failed</span>
+                  }
+                  <button onClick={e=>{e.stopPropagation();setIngestStatus(p=>p.filter((_,j)=>j!==i));}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer",flexShrink:0}}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Preview table of all reports */}
+          {allRows.length>0 ? (
+            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+              <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.text}}>{allRows.length} TOTAL REPORT{allRows.length!==1?"S":""} READY</div>
+                <div style={{fontSize:12,color:T.textMuted}}>Scroll to see all</div>
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead>
+                    <tr style={{background:T.card2}}>
+                      {["Project","Date","Contractor","Weather","Profile","Progress Today (m)","Manpower","Source"].map(h=>(
+                        <th key={h} style={{padding:"8px 12px",textAlign:"left",fontWeight:700,fontSize:11,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allRows.map((r,i)=>(
+                      <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
+                        <td style={{padding:"8px 12px",fontWeight:600,color:T.text,whiteSpace:"nowrap"}}>{r._project||r.project||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.date?fmtDate(r.date):"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.contractor||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub}}>{r.weather||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.profile||"—"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"center"}}>
+                          {r.progressToday
+                            ? <span style={{background:T.blueDim,color:T.blue,fontWeight:700,borderRadius:6,padding:"2px 8px"}}>{r.progressToday}m</span>
+                            : <span style={{color:T.textMuted}}>—</span>}
+                        </td>
+                        <td style={{padding:"8px 12px",color:T.textSub}}>{r.manpower||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textMuted,fontSize:11}}>
+                          {r._fromFile
+                            ? <span style={{background:T.goldDim,color:T.gold,borderRadius:5,padding:"2px 8px",fontWeight:600}}>📂 File</span>
+                            : <span style={{background:T.greenDim,color:T.green,borderRadius:5,padding:"2px 8px",fontWeight:600}}>✓ Saved</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div style={{textAlign:"center",padding:"40px 20px",color:T.textMuted}}>
+              <div style={{fontSize:48,marginBottom:12}}>📋</div>
+              <div style={{fontSize:14}}>No daily reports yet. Add reports from each project's detail page, or drop DPR Excel files above.</div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,alignItems:"center",flexShrink:0,borderRadius:"0 0 18px 18px",background:T.card}}>
+          <div style={{flex:1,fontSize:12,color:T.textMuted}}>
+            {allRows.length} report{allRows.length!==1?"s":""} → 1 master Excel (all projects) + {Object.keys(Object.fromEntries(allRows.map(r=>[r._project||r.project||"Unassigned",1]))).length} per-project sheet{Object.keys(Object.fromEntries(allRows.map(r=>[r._project||r.project||"Unassigned",1]))).length!==1?"s":""}
+          </div>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          <button onClick={exportMaster} disabled={allRows.length===0}
+            style={{background:allRows.length>0?`linear-gradient(135deg,${T.green},#059669)`:"transparent",border:`1px solid ${T.border}`,color:allRows.length>0?"#000":T.textMuted,borderRadius:10,padding:"10px 28px",fontSize:14,fontWeight:800,cursor:allRows.length>0?"pointer":"not-allowed",display:"flex",alignItems:"center",gap:8}}>
+            ⬇ Export Master Excel
           </button>
         </div>
       </div>
@@ -1601,10 +2063,30 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                 reports.map(r=>({
                   "Project": proj.project,
                   "Date": r.date,
+                  "Contractor": r.contractor||"",
+                  "Client": r.client||"",
+                  "Shift Timing": r.shiftTiming||"",
                   "Weather": r.weather||"",
-                  "Activities / Work Done": r.activities||"",
+                  "Work Profile": r.profile||"",
+                  "Activity": r.activity||"",
+                  "Total Qty (m)": r.totalQty||"",
+                  "Prev Progress (m)": r.prevProgress||"",
+                  "Progress Today (m)": r.progressToday||"",
+                  "Accumulated (m)": r.accumulated||"",
+                  "Force (Ton)": r.force||"",
+                  "Torque (Ton/m)": r.torque||"",
+                  "Mud Pressure (PSI)": r.mudPressure||"",
+                  "Pump Rate (gal/min)": r.pumpRate||"",
+                  "Mud Density": r.mudDensity||"",
+                  "Mud Viscosity": r.mudViscosity||"",
+                  "Today's Activities": r.activities||"",
+                  "Next Day Plan": r.activityNextDay||"",
                   "Manpower Count": r.manpower||"",
+                  "Personnel List": r.manpowerList||"",
                   "Equipment Used": r.equipment||"",
+                  "Bentonite Stored": r.bentoniteStored||"",
+                  "Bentonite Used": r.bentoniteUsed||"",
+                  "Bentonite Remaining": r.bentoniteRemaining||"",
                   "Issues / Delays": r.issues||"",
                   "Notes": r.notes||"",
                   "File Attached": r.fileName||"",
@@ -1697,6 +2179,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
   const [detail, setDetail] = useState(null);
   const [fStat,  setFStat]  = useState("All");
   const [search, setSearch] = useState("");
+  const [showDprConsolidate, setShowDprConsolidate] = useState(false);
 
   const projects  = data.projects || [];
   const analysis  = data.projectAnalysis || [];
@@ -1754,7 +2237,13 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
             {analysis.length} project{analysis.length!==1?"s":""} · Progress auto-calculated from Project Docs invoices
           </div>
         </div>
-        <button onClick={()=>setModal("new")} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:11,padding:"11px 22px",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:`0 4px 14px ${T.gold}44`}}>+ New Project</button>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <button onClick={()=>setShowDprConsolidate(true)}
+            style={{background:T.card,border:`1px solid ${T.border}`,color:T.text,borderRadius:11,padding:"11px 20px",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+            📊 DPR Consolidation
+          </button>
+          <button onClick={()=>setModal("new")} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:11,padding:"11px 22px",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:`0 4px 14px ${T.gold}44`}}>+ New Project</button>
+        </div>
       </div>
 
       {/* Portfolio KPI strip */}
@@ -1873,6 +2362,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
         </div>
       )}
 
+      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} onClose={()=>setShowDprConsolidate(false)}/>}
       {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} onSave={save} onClose={()=>setModal(null)}/>}
     </div>
   );
