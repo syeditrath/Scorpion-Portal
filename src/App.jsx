@@ -883,7 +883,7 @@ function deriveProjectStats(projectName, projectDocs) {
     totalInvoiced:  j.invoices.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
     totalCollected: j.invoices.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0),
     totalDue:       j.invoices.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0),
-  })).sort((a, b) => (a.jobNo || "zzz").localeCompare(b.jobNo || "zzz"));
+  })).filter(j => j.jobNo).sort((a, b) => a.jobNo.localeCompare(b.jobNo));
 
   return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs };
 }
@@ -1916,7 +1916,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
           {icon:"🧾",label:"TOTAL INVOICED",   v:formatSarCompact(totalInvoiced),                color:T.green},
           {icon:"✓", label:"COLLECTED",        v:formatSarCompact(totalCollected),               color:T.blue},
           {icon:"⏳",label:"DUE / REMAINING",  v:formatSarCompact(totalDue),                     color:totalDue>0?T.red:T.textMuted},
-          {icon:"📋",label:"JOBS (PHASES)",    v:jobs.filter(j=>j.jobNo).length||invs.length,    color:T.purple},
+          {icon:"📋",label:"JOBS (PHASES)",    v:jobs.length||invs.length,                       color:T.purple},
           {icon:"📅",label:"DURATION",         v:duration?`${duration} days`:"—",                color:T.teal},
         ].map((k,i)=>(
           <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:13,padding:"16px 18px",boxShadow:T.shadow,animationDelay:`${i*.05}s`}}>
@@ -1946,11 +1946,20 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
           </button>
         </div>
 
-        {invs.length === 0 ? (
+        {jobs.length === 0 ? (
           <div style={{textAlign:"center",padding:"30px 20px",background:T.card2,borderRadius:12,border:`1px dashed ${T.border}`}}>
             <div style={{fontSize:32,marginBottom:10}}>🧾</div>
-            <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>No invoices found for this project.</div>
-            <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Add invoices in <strong>Project Docs → Invoices</strong> tab with a Job No. to see them here as phases.</div>
+            {invs.length > 0 ? (
+              <>
+                <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>{invs.length} invoice{invs.length!==1?"s":""} found — no Job Numbers assigned yet.</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Edit each invoice in <strong>Project Docs → Invoices</strong> and set a Job No. to group them into phases here.</div>
+              </>
+            ) : (
+              <>
+                <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>No invoices found for this project.</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Add invoices in <strong>Project Docs → Invoices</strong> tab with a Job No. to see them here as phases.</div>
+              </>
+            )}
             <button onClick={()=>go("projects")} style={{marginTop:14,background:`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Go to Project Docs →</button>
           </div>
         ) : (
@@ -1969,7 +1978,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:14,fontWeight:700,color:T.text}}>
-                        {job.jobNo ? `Job ${job.jobNo}` : "Unassigned Invoices"}
+                        {`Job ${job.jobNo}`}
                       </div>
                       <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:14,flexWrap:"wrap"}}>
                         <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(job.totalInvoiced)} invoiced</span>
@@ -2097,9 +2106,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                   <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",background:isE?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandDr(isE?null:r.id)}>
                     <div style={{width:34,height:34,borderRadius:8,background:T.blueDim,border:`1px solid ${T.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>📅</div>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:700,color:T.text}}>
-  {r.fileName?.replace(/\.[^/.]+$/, "") || r.name || "Daily Report"}
-</div>
+                      <div style={{fontSize:13,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
                       <div style={{fontSize:11,color:T.textMuted,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
                         {r.weather&&<span>🌤 {r.weather}</span>}
                         {r.manpower&&<span>👷 {r.manpower} workers</span>}
@@ -2325,9 +2332,9 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
                   }
                 </div>
                 {/* Jobs count */}
-                {p.jobs.filter(j=>j.jobNo).length>0&&(
+                {p.jobs.length>0&&(
                   <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:8,padding:"6px 12px",fontSize:12,color:T.gold,fontWeight:600}}>
-                    🏗 {p.jobs.filter(j=>j.jobNo).length} Job{p.jobs.filter(j=>j.jobNo).length!==1?"s":""} · {p.invs.length} Invoice{p.invs.length!==1?"s":""}
+                    🏗 {p.jobs.length} Job{p.jobs.length!==1?"s":""} · {p.invs.length} Invoice{p.invs.length!==1?"s":""}
                     {(p.dailyReports?.length||0)>0&&<span style={{marginLeft:10,color:T.orange}}>📝 {p.dailyReports.length} report{p.dailyReports.length!==1?"s":""}</span>}
                   </div>
                 )}
@@ -4444,24 +4451,19 @@ function ProjectDocs({data,setData,showToast}) {
         const projectName = savedDoc.project;
         let projectRec = analysis.find(p => p.project === projectName);
 
-        const cleanReportName =
-  savedDoc.fileName?.replace(/\.[^/.]+$/, "") ||
-  savedDoc.name ||
-  "Daily Report";
-
-const analysisReport = {
-  id: savedDoc.id,
-  date: savedDoc.date || "",
-  name: cleanReportName,
-  fileName: savedDoc.fileName,
-  fileLink: savedDoc.fileLink,
-  extractedFields: savedDoc.extractedFields,
-  activity: savedDoc.activity,
-  progressToday: savedDoc.progressToday,
-  accumulated: savedDoc.accumulated,
-  bentoniteUsed: savedDoc.bentoniteUsed,
-  notes: savedDoc.notes,
-};
+        const analysisReport = {
+          id: savedDoc.id,
+          date: savedDoc.date,
+          name: savedDoc.name,
+          fileName: savedDoc.fileName,
+          fileLink: savedDoc.fileLink,
+          extractedFields: savedDoc.extractedFields,
+          activity: savedDoc.activity,
+          progressToday: savedDoc.progressToday,
+          accumulated: savedDoc.accumulated,
+          bentoniteUsed: savedDoc.bentoniteUsed,
+          notes: savedDoc.notes,
+        };
 
         if (!projectRec) {
           projectRec = {
@@ -4789,15 +4791,10 @@ const analysisReport = {
                     style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-  <span style={{
-    fontFamily:"'Barlow Condensed',sans-serif",
-    fontWeight:800,
-    fontSize:"clamp(14px,1.1vw,17px)",
-    color:T.text
-  }}>
-    {doc.name || doc.fileName?.replace(/\.[^/.]+$/, "") || "Daily Report"}
-  </span>
-</div>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
+                        {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
+                        {doc.date&&<Tag color={T.gold}>{fmtDate(doc.date)}</Tag>}
+                      </div>
                       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                         {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
                         {doc.fileLink&&<FileLink href={doc.fileLink}/>}
@@ -5276,7 +5273,16 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
             }}
           />
 
-          
+          {f.fileName && (
+  <div style={{
+    fontSize:12,
+    color:T.green,
+    marginTop:8,
+    fontWeight:600
+  }}>
+    ✓ Excel uploaded
+  </div>
+)}
 
           {msg && (
             <div style={{fontSize:12,color:msg.startsWith("✓") ? T.green : T.red,marginTop:8,fontWeight:700}}>
