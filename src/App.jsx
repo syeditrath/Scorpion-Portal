@@ -4782,10 +4782,15 @@ function ProjectDocs({data,setData,showToast}) {
                     style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
-                        {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
-                        {doc.date&&<Tag color={T.gold}>{fmtDate(doc.date)}</Tag>}
-                      </div>
+  <span style={{
+    fontFamily:"'Barlow Condensed',sans-serif",
+    fontWeight:800,
+    fontSize:"clamp(14px,1.1vw,17px)",
+    color:T.text
+  }}>
+    {doc.name || doc.fileName?.replace(/\.[^/.]+$/, "") || "Daily Report"}
+  </span>
+</div>
                       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                         {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
                         {doc.fileLink&&<FileLink href={doc.fileLink}/>}
@@ -5264,16 +5269,7 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
             }}
           />
 
-          {f.fileName && (
-  <div style={{
-    fontSize:12,
-    color:T.green,
-    marginTop:8,
-    fontWeight:600
-  }}>
-    ✓ Excel uploaded
-  </div>
-)}
+          
 
           {msg && (
             <div style={{fontSize:12,color:msg.startsWith("✓") ? T.green : T.red,marginTop:8,fontWeight:700}}>
