@@ -2097,7 +2097,9 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                   <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",background:isE?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandDr(isE?null:r.id)}>
                     <div style={{width:34,height:34,borderRadius:8,background:T.blueDim,border:`1px solid ${T.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>📅</div>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:T.text}}>
+  {r.fileName?.replace(/\.[^/.]+$/, "") || r.name || "Daily Report"}
+</div>
                       <div style={{fontSize:11,color:T.textMuted,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
                         {r.weather&&<span>🌤 {r.weather}</span>}
                         {r.manpower&&<span>👷 {r.manpower} workers</span>}
@@ -4442,19 +4444,24 @@ function ProjectDocs({data,setData,showToast}) {
         const projectName = savedDoc.project;
         let projectRec = analysis.find(p => p.project === projectName);
 
-        const analysisReport = {
-          id: savedDoc.id,
-          date: savedDoc.date,
-          name: savedDoc.name,
-          fileName: savedDoc.fileName,
-          fileLink: savedDoc.fileLink,
-          extractedFields: savedDoc.extractedFields,
-          activity: savedDoc.activity,
-          progressToday: savedDoc.progressToday,
-          accumulated: savedDoc.accumulated,
-          bentoniteUsed: savedDoc.bentoniteUsed,
-          notes: savedDoc.notes,
-        };
+        const cleanReportName =
+  savedDoc.fileName?.replace(/\.[^/.]+$/, "") ||
+  savedDoc.name ||
+  "Daily Report";
+
+const analysisReport = {
+  id: savedDoc.id,
+  date: savedDoc.date || "",
+  name: cleanReportName,
+  fileName: savedDoc.fileName,
+  fileLink: savedDoc.fileLink,
+  extractedFields: savedDoc.extractedFields,
+  activity: savedDoc.activity,
+  progressToday: savedDoc.progressToday,
+  accumulated: savedDoc.accumulated,
+  bentoniteUsed: savedDoc.bentoniteUsed,
+  notes: savedDoc.notes,
+};
 
         if (!projectRec) {
           projectRec = {
