@@ -158,7 +158,27 @@ const DARK = {
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 const uid       = () => Math.random().toString(36).slice(2,9);
 const daysUntil = d  => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : null;
-const fmtDate   = d  => d ? new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+const fmtDate = d => {
+  if (!d) return "No Date";
+
+  let dateObj;
+
+  if (d instanceof Date) {
+    dateObj = d;
+  } else if (typeof d === "number") {
+    dateObj = new Date(Math.round((d - 25569) * 86400 * 1000));
+  } else {
+    dateObj = new Date(d);
+  }
+
+  if (isNaN(dateObj.getTime())) return "No Date";
+
+  return dateObj.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 function formatSarCompact(value) {
   const num = Number(value || 0);
   if (!num) return "—";
@@ -5190,8 +5210,8 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
         ...prev,
         ...r,
         project: prev.project || r.project || defaultProject || "",
-        name: `Daily Report - ${r.date ? fmtDate(r.date) : new Date().toLocaleDateString("en-GB")}`,
-        date: r.date || new Date().toISOString().slice(0,10),
+        name: `Daily Report - ${fmtDate(excelDateToStr(r.date) || r.date || new Date())}`,
+        date: excelDateToStr(r.date) || r.date || new Date().toISOString().slice(0,10),
         fileName: file.name,
         fileLink: fileUrl,
         extractedFields: extracted,
