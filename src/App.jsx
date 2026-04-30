@@ -5202,7 +5202,7 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
         extractedFields: extracted,
       }));
 
-      setMsg("✓ Excel uploaded and required fields extracted.");
+      setMsg("✓ Excel uploaded successfully.");
     } catch (err) {
       console.error(err);
       setMsg("Could not read this Excel file.");
@@ -5265,10 +5265,15 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
           />
 
           {f.fileName && (
-            <div style={{fontSize:12,color:T.textMuted,marginTop:8}}>
-              Uploaded: <b>{f.fileName}</b>
-            </div>
-          )}
+  <div style={{
+    fontSize:12,
+    color:T.green,
+    marginTop:8,
+    fontWeight:600
+  }}>
+    ✓ Excel uploaded
+  </div>
+)}
 
           {msg && (
             <div style={{fontSize:12,color:msg.startsWith("✓") ? T.green : T.red,marginTop:8,fontWeight:700}}>
@@ -5278,22 +5283,7 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
         </div>
       </FieldRow>
 
-      {f.extractedFields && (
-        <FieldRow label="Extracted Fields">
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {Object.entries(f.extractedFields).map(([k,v]) => (
-              <div key={k} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:10}}>
-                <div style={{fontSize:11,color:T.textMuted,fontWeight:800,textTransform:"uppercase"}}>
-                  {k.replace("field","Field ")}
-                </div>
-                <div style={{fontSize:13,color:T.text,fontWeight:700}}>
-                  {v || "—"}
-                </div>
-              </div>
-            ))}
-          </div>
-        </FieldRow>
-      )}
+      
     </FormModal>
   );
 }
