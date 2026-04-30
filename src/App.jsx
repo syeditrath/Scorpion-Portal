@@ -4414,19 +4414,74 @@ function ProjectDocs({data,setData,showToast}) {
   const changeTab = t => { setSubTab(t); if (selectedProject) { setSelProj(selectedProject); setFProj(selectedProject); } else { setSelProj(null); setFProj(""); } };
 
   const saveDoc = (doc, mode) => {
-    const st = subTab; // capture before any state changes
-    // Close modal FIRST so it unmounts cleanly before data update triggers re-render
-    setModal(null);
-    setTimeout(() => {
-      setData(prev=>{
-        const list=[...prev.projectDocs];
-        if(mode==="add") list.push({...doc,id:uid(),subTab:st});
-        else { const i=list.findIndex(d=>d.id===doc.id); if(i>=0) list[i]={...doc,subTab:st}; }
-        return{...prev,projectDocs:list};
-      });
-      showToast(mode==="add"?"Document added":"Updated");
-    }, 0);
-  };
+  const st = subTab;
+  setModal(null);
+
+  setTimeout(() => {
+    setData(prev => {
+      const list = [...prev.projectDocs];
+      const savedDoc = mode === "add"
+        ? {...doc, id: uid(), subTab: st}
+        : {...doc, subTab: st};
+
+      if (mode === "add") {
+        list.push(savedDoc);
+      } else {
+        const i = list.findIndex(d => d.id === doc.id);
+        if (i >= 0) list[i] = savedDoc;
+      }
+
+      let analysis = prev.projectAnalysis || [];
+
+      if (st === "dailyreports") {
+        const projectName = savedDoc.project;
+        let projectRec = analysis.find(p => p.project === projectName);
+
+        const analysisReport = {
+          id: savedDoc.id,
+          date: savedDoc.date,
+          name: savedDoc.name,
+          fileName: savedDoc.fileName,
+          fileLink: savedDoc.fileLink,
+          extractedFields: savedDoc.extractedFields,
+          activity: savedDoc.activity,
+          progressToday: savedDoc.progressToday,
+          accumulated: savedDoc.accumulated,
+          bentoniteUsed: savedDoc.bentoniteUsed,
+          notes: savedDoc.notes,
+        };
+
+        if (!projectRec) {
+          projectRec = {
+            id: uid(),
+            project: projectName,
+            status: "In Progress",
+            dailyReports: [analysisReport],
+          };
+          analysis = [...analysis, projectRec];
+        } else {
+          const oldReports = projectRec.dailyReports || [];
+          const exists = oldReports.find(r => r.id === analysisReport.id);
+          const dailyReports = exists
+            ? oldReports.map(r => r.id === analysisReport.id ? analysisReport : r)
+            : [...oldReports, analysisReport];
+
+          analysis = analysis.map(p =>
+            p.id === projectRec.id ? {...p, dailyReports} : p
+          );
+        }
+      }
+
+      return {
+        ...prev,
+        projectDocs: list,
+        projectAnalysis: analysis,
+      };
+    });
+
+    showToast(mode === "add" ? "Daily report uploaded and synced" : "Updated");
+  }, 0);
+};
 
   const delDoc = id => {
     setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}));
@@ -5088,22 +5143,152 @@ function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
 }
 
 function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,onSave}) {
-  const [f,setF]=useState({project:defaultProject||"",...(doc||{})});
-  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  const [f,setF] = useState({ project: defaultProject || "", ...(doc || {}) });
+  const [parsing,setParsing] = useState(false);
+  const [msg,setMsg] = useState("");
+  const excelRef = useRef();
+
+  const handleExcel = async (file) => {
+    if (!file) return;
+    setParsing(true);
+    setMsg("");
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const rows = parseDailyReportExcel(buffer);
+
+      if (!rows.length) {
+        setMsg("No readable data found in this Excel file.");
+        setParsing(false);
+        return;
+      }
+
+      const r = rows[0];
+
+      let fileUrl = "";
+      try {
+        fileUrl = await uploadToSupabase(
+          file,
+          `daily-reports/${(f.project || defaultProject || "general").replace(/[^a-zA-Z0-9]/g, "_")}`
+        );
+      } catch {
+        fileUrl = "";
+      }
+
+      const extracted = {
+        field1:  r.project || f.project || defaultProject || "",
+        field2:  [r.contractor, r.client].filter(Boolean).join(" / "),
+        field8:  r.activity || "",
+        field9:  r.totalQty || "",
+        field11: r.progressToday || "",
+        field12: r.accumulated || "",
+        field19: r.bentoniteUsed || "",
+        field27: r.notes || "",
+      };
+
+      setF(prev => ({
+        ...prev,
+        ...r,
+        project: prev.project || r.project || defaultProject || "",
+        name: `Daily Report - ${r.date ? fmtDate(r.date) : new Date().toLocaleDateString("en-GB")}`,
+        date: r.date || new Date().toISOString().slice(0,10),
+        fileName: file.name,
+        fileLink: fileUrl,
+        extractedFields: extracted,
+      }));
+
+      setMsg("✓ Excel uploaded and required fields extracted.");
+    } catch (err) {
+      console.error(err);
+      setMsg("Could not read this Excel file.");
+    }
+
+    setParsing(false);
+  };
+
   return (
-    <FormModal title={`${mode==="add"?"ADD":"EDIT"} DAILY REPORT`} color={T.gold} onClose={onClose}
-      onSave={()=>{if(!f.name){alert("Report title required");return;}onSave(f,mode);}}>
-      <FieldRow label="Report Title *"><FInput value={f.name||""} onChange={set("name")} color={T.gold}/></FieldRow>
+    <FormModal
+      title="UPLOAD DAILY REPORT"
+      color={T.gold}
+      onClose={onClose}
+      onSave={() => {
+        if (!f.project) {
+          alert("Project is required");
+          return;
+        }
+        if (!f.extractedFields) {
+          alert("Please upload the Excel daily report first");
+          return;
+        }
+        onSave(f, mode);
+      }}
+    >
       <FieldRow label="Project *">
-        <FSelect value={f.project||""} onChange={set("project")} color={T.gold}>
+        <FSelect value={f.project || ""} onChange={v => setF(p => ({...p, project:v}))} color={T.gold}>
           <option value="">Select project…</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          {projects.map(p => <option key={p} value={p}>{p}</option>)}
         </FSelect>
       </FieldRow>
-      <FieldRow label="Report Date"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.gold}/></FieldRow>
-      <FieldRow label="Reference No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.gold}/></FieldRow>
-      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
-      <FieldRow label="Notes / Summary"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.gold}/></FieldRow>
+
+      <FieldRow label="Upload Daily Report Excel *">
+        <div>
+          <button
+            type="button"
+            onClick={() => excelRef.current.click()}
+            disabled={parsing}
+            style={{
+              background:T.goldDim,
+              border:`1px solid ${T.gold}55`,
+              color:T.gold,
+              borderRadius:10,
+              padding:"10px 16px",
+              fontWeight:800
+            }}
+          >
+            {parsing ? "Reading Excel…" : "📊 Choose Excel File"}
+          </button>
+
+          <input
+            ref={excelRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style={{display:"none"}}
+            onChange={e => {
+              if (e.target.files?.[0]) handleExcel(e.target.files[0]);
+              e.target.value = "";
+            }}
+          />
+
+          {f.fileName && (
+            <div style={{fontSize:12,color:T.textMuted,marginTop:8}}>
+              Uploaded: <b>{f.fileName}</b>
+            </div>
+          )}
+
+          {msg && (
+            <div style={{fontSize:12,color:msg.startsWith("✓") ? T.green : T.red,marginTop:8,fontWeight:700}}>
+              {msg}
+            </div>
+          )}
+        </div>
+      </FieldRow>
+
+      {f.extractedFields && (
+        <FieldRow label="Extracted Fields">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {Object.entries(f.extractedFields).map(([k,v]) => (
+              <div key={k} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:10}}>
+                <div style={{fontSize:11,color:T.textMuted,fontWeight:800,textTransform:"uppercase"}}>
+                  {k.replace("field","Field ")}
+                </div>
+                <div style={{fontSize:13,color:T.text,fontWeight:700}}>
+                  {v || "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </FieldRow>
+      )}
     </FormModal>
   );
 }
