@@ -2051,34 +2051,19 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                 reports.map(r=>({
                   "Project": proj.project,
                   "Date": r.date,
-                  "Contractor": r.contractor||"",
+                  
                   "Client": r.client||"",
-                  "Shift Timing": r.shiftTiming||"",
-                  "Weather": r.weather||"",
+                  
                   "Work Profile": r.profile||"",
                   "Activity": r.activity||"",
                   "Total Qty (m)": r.totalQty||"",
-                  "Prev Progress (m)": r.prevProgress||"",
-                  "Progress Today (m)": r.progressToday||"",
+                  
                   "Accumulated (m)": r.accumulated||"",
-                  "Force (Ton)": r.force||"",
-                  "Torque (Ton/m)": r.torque||"",
-                  "Mud Pressure (PSI)": r.mudPressure||"",
-                  "Pump Rate (gal/min)": r.pumpRate||"",
-                  "Mud Density": r.mudDensity||"",
-                  "Mud Viscosity": r.mudViscosity||"",
+                  
                   "Today's Activities": r.activities||"",
-                  "Next Day Plan": r.activityNextDay||"",
-                  "Manpower Count": r.manpower||"",
-                  "Personnel List": r.manpowerList||"",
-                  "Equipment Used": r.equipment||"",
-                  "Bentonite Stored": r.bentoniteStored||"",
-                  "Bentonite Used": r.bentoniteUsed||"",
-                  "Bentonite Remaining": r.bentoniteRemaining||"",
+                  
                   "Issues / Delays": r.issues||"",
-                  "Notes": r.notes||"",
-                  "File Attached": r.fileName||"",
-                  "File Link": r.fileLink||"",
+                  
                 })),
                 `Daily_Reports_${(proj.project||"Project").replace(/\s+/g,"_")}`
               )}
