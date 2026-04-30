@@ -1359,53 +1359,29 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
   const exportMaster = () => {
     if (!allRows.length) return;
     const headers = [
-      "Project", "Date", "Contractor", "Client", "Shift", "Weather",
-      "Work Profile", "Activity",
-      "Total Qty (m)", "Prev Progress (m)", "Progress Today (m)", "Accumulated (m)",
-      "Force (Ton)", "Torque (Ton/m)", "Mud Pressure (PSI)", "Pump Rate (gal/min)", "Mud Density", "Mud Viscosity",
-      "Today's Activities", "Next Day Plan",
-      "Manpower Count", "Personnel List", "Equipment Used",
-      "Bentonite Stored", "Bentonite Used", "Bentonite Remaining",
-      "Issues / Delays", "Contractor Comments", "Notes",
-      "File Attached", "Source File",
+      "Project",
+      "Date",
+      "Activity",
+      "Total Qty (m)",
+      "Progress Today (m)",
+      "Accumulated (m)",
+      "Today's Activities",
+      "Issues / Delays",
     ];
-    const rows = allRows.map(r => [
+    const toRow = r => [
       r._project || r.project || "",
       r.date || "",
-      r.contractor || "",
-      r.client || "",
-      r.shiftTiming || "",
-      r.weather || "",
-      r.profile || "",
       r.activity || "",
       r.totalQty || "",
-      r.prevProgress || "",
       r.progressToday || "",
       r.accumulated || "",
-      r.force || "",
-      r.torque || "",
-      r.mudPressure || "",
-      r.pumpRate || "",
-      r.mudDensity || "",
-      r.mudViscosity || "",
       r.activities || "",
-      r.activityNextDay || "",
-      r.manpower || "",
-      r.manpowerList || "",
-      r.equipment || "",
-      r.bentoniteStored || "",
-      r.bentoniteUsed || "",
-      r.bentoniteRemaining || "",
       r.issues || "",
-      r.notes || "",
-      (r.notes && !r.issues) ? r.notes : "",
-      r.fileName || r._fromFile || "",
-      r._fromFile || r.fileName || "",
-    ]);
+    ];
+    const rows = allRows.map(toRow);
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    // Column widths
-    const colWidths = [22,12,18,18,12,14,16,20,12,14,16,14,10,12,14,16,12,14,30,30,12,35,30,14,12,16,25,25,20,20,20];
+    const colWidths = [22, 12, 22, 14, 16, 16, 40, 30];
     ws["!cols"] = colWidths.map(w => ({ wch: w }));
     ws["!freeze"] = { xSplit: 0, ySplit: 1 };
 
@@ -1421,17 +1397,9 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
     });
     Object.entries(byProject).forEach(([proj, pRows]) => {
       const safeName = proj.replace(/[\\/\?\*\[\]:]/g,"").slice(0,28);
-      const pWs = XLSX.utils.aoa_to_sheet([headers, ...pRows.map(r => [
-        r._project||r.project||"", r.date||"", r.contractor||"", r.client||"", r.shiftTiming||"",
-        r.weather||"", r.profile||"", r.activity||"",
-        r.totalQty||"", r.prevProgress||"", r.progressToday||"", r.accumulated||"",
-        r.force||"", r.torque||"", r.mudPressure||"", r.pumpRate||"", r.mudDensity||"", r.mudViscosity||"",
-        r.activities||"", r.activityNextDay||"",
-        r.manpower||"", r.manpowerList||"", r.equipment||"",
-        r.bentoniteStored||"", r.bentoniteUsed||"", r.bentoniteRemaining||"",
-        r.issues||"", r.notes||"", "", r.fileName||r._fromFile||"", r._fromFile||r.fileName||"",
-      ])]);
+      const pWs = XLSX.utils.aoa_to_sheet([headers, ...pRows.map(toRow)]);
       pWs["!cols"] = colWidths.map(w => ({ wch: w }));
+      pWs["!freeze"] = { xSplit: 0, ySplit: 1 };
       XLSX.utils.book_append_sheet(wb, pWs, safeName);
     });
 
@@ -1505,7 +1473,7 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr style={{background:T.card2}}>
-                      {["Project","Date","Contractor","Weather","Profile","Progress Today (m)","Manpower","Source"].map(h=>(
+                      {["Project","Date","Activity","Total Qty (m)","Progress Today (m)","Accumulated (m)","Issues / Delays","Source"].map(h=>(
                         <th key={h} style={{padding:"8px 12px",textAlign:"left",fontWeight:700,fontSize:11,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
                       ))}
                     </tr>
@@ -1515,15 +1483,15 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
                       <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
                         <td style={{padding:"8px 12px",fontWeight:600,color:T.text,whiteSpace:"nowrap"}}>{r._project||r.project||"—"}</td>
                         <td style={{padding:"8px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.date?fmtDate(r.date):"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.contractor||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub}}>{r.weather||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.profile||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.activity||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,textAlign:"center"}}>{r.totalQty||"—"}</td>
                         <td style={{padding:"8px 12px",textAlign:"center"}}>
                           {r.progressToday
                             ? <span style={{background:T.blueDim,color:T.blue,fontWeight:700,borderRadius:6,padding:"2px 8px"}}>{r.progressToday}m</span>
                             : <span style={{color:T.textMuted}}>—</span>}
                         </td>
-                        <td style={{padding:"8px 12px",color:T.textSub}}>{r.manpower||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,textAlign:"center"}}>{r.accumulated||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.issues||"—"}</td>
                         <td style={{padding:"8px 12px",color:T.textMuted,fontSize:11}}>
                           {r._fromFile
                             ? <span style={{background:T.goldDim,color:T.gold,borderRadius:5,padding:"2px 8px",fontWeight:600}}>📂 File</span>
