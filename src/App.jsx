@@ -858,23 +858,25 @@ function daysLeft(d) {
 
 /* Derive live stats for one project from projectDocs invoices */
 function deriveProjectStats(projectName, projectDocs) {
-  const invs = (projectDocs || []).filter(d => d.subTab === "invoices" && d.project === projectName);
+  const invs  = (projectDocs || []).filter(d => d.subTab === "invoices"     && d.project === projectName);
   const certs = (projectDocs || []).filter(d => d.subTab === "certificates" && d.project === projectName);
 
   const totalInvoiced  = invs.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
   const totalCollected = invs.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0);
   const totalDue       = invs.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0);
 
-  // Group invoices by jobNo — each unique jobNo = one Job/phase
+  // Group ONLY invoices/certs that have a jobNo into named job phases
   const jobMap = {};
   invs.forEach(d => {
-    const key = d.jobNo || "__no_job__";
-    if (!jobMap[key]) jobMap[key] = { jobNo: d.jobNo || "", invoices: [], certs: [] };
+    const key = d.jobNo ? String(d.jobNo).trim() : null;
+    if (!key) return;
+    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
     jobMap[key].invoices.push(d);
   });
   certs.forEach(d => {
-    const key = d.jobNo || "__no_job__";
-    if (!jobMap[key]) jobMap[key] = { jobNo: d.jobNo || "", invoices: [], certs: [] };
+    const key = d.jobNo ? String(d.jobNo).trim() : null;
+    if (!key) return;
+    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
     jobMap[key].certs.push(d);
   });
 
@@ -883,9 +885,13 @@ function deriveProjectStats(projectName, projectDocs) {
     totalInvoiced:  j.invoices.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
     totalCollected: j.invoices.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0),
     totalDue:       j.invoices.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0),
-  })).filter(j => j.jobNo).sort((a, b) => a.jobNo.localeCompare(b.jobNo));
+  })).sort((a, b) => a.jobNo.localeCompare(b.jobNo, undefined, { numeric: true }));
 
-  return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs };
+  // Invoices & certs with no jobNo shown as a flat list
+  const ungroupedInvs  = invs.filter(d => !d.jobNo);
+  const ungroupedCerts = certs.filter(d => !d.jobNo);
+
+  return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts };
 }
 
 /* ── Daily Report Modal ── */
@@ -1846,7 +1852,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
   const [expandDr, setExpandDr]     = useState(null);
   const [expandJob, setExpandJob]   = useState(null);
 
-  const { invs, totalInvoiced, totalCollected, totalDue, jobs } = deriveProjectStats(proj.project, projectDocs);
+  const { invs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts } = deriveProjectStats(proj.project, projectDocs);
   const poValue = parseFloat(proj.poValue) || 0;
   const pct = poValue > 0 ? Math.min(100, Math.round((totalInvoiced / poValue) * 100)) : 0;
   const dl = daysLeft(proj.estEndDate);
@@ -1932,121 +1938,169 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
         <ProjectDurationChart proj={proj} reports={reports} />
       )}
 
-      {/* ── Jobs / Phases (from invoices grouped by jobNo) ── */}
+      {/* ── Invoices / Jobs / Phases ── */}
       <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",marginBottom:16,boxShadow:T.shadow}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>🏗 JOBS / PHASES</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>🧾 INVOICES & JOBS</div>
             <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>
-              {jobs.length} job{jobs.length!==1?"s":""} from Project Docs invoices · Progress = Total Invoiced ÷ PO Value
+              {invs.length} invoice{invs.length!==1?"s":""} total
+              {jobs.length>0 && ` · ${jobs.length} job phase${jobs.length!==1?"s":""}`}
+              {" · "}Progress = Total Invoiced ÷ PO Value
             </div>
           </div>
-          <button onClick={()=>go("projects")} style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-            ➕ Add Invoice in Project Docs →
+          <button onClick={()=>go("finance")} style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+            ➕ Add Invoice in Finance →
           </button>
         </div>
 
-        {jobs.length === 0 ? (
+        {invs.length === 0 ? (
           <div style={{textAlign:"center",padding:"30px 20px",background:T.card2,borderRadius:12,border:`1px dashed ${T.border}`}}>
             <div style={{fontSize:32,marginBottom:10}}>🧾</div>
-            {invs.length > 0 ? (
-              <>
-                <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>{invs.length} invoice{invs.length!==1?"s":""} found — no Job Numbers assigned yet.</div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Edit each invoice in <strong>Project Docs → Invoices</strong> and set a Job No. to group them into phases here.</div>
-              </>
-            ) : (
-              <>
-                <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>No invoices found for this project.</div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Add invoices in <strong>Project Docs → Invoices</strong> tab with a Job No. to see them here as phases.</div>
-              </>
-            )}
-            <button onClick={()=>go("projects")} style={{marginTop:14,background:`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Go to Project Docs →</button>
+            <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>No invoices found for this project.</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:6}}>Add invoices in <strong>Finance → Invoices</strong>. Optionally add a Job No. to group them into phases.</div>
+            <button onClick={()=>go("finance")} style={{marginTop:14,background:`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Go to Finance →</button>
           </div>
         ) : (
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {jobs.map(job => {
-              const jobPct = poValue > 0 ? Math.min(100, Math.round((job.totalInvoiced / poValue) * 100)) : 0;
-              const jobKey = job.jobNo || "__no_job__";
-              const isExp  = expandJob === jobKey;
-              const hasCerts = job.certs.length > 0;
-              return (
-                <div key={jobKey} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
-                  {/* Job header */}
-                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:isExp?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandJob(isExp?null:jobKey)}>
-                    <div style={{width:38,height:38,borderRadius:9,background:T.goldDim,border:`1px solid ${T.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,fontWeight:800,color:T.gold,fontFamily:"'Barlow Condensed',sans-serif"}}>
-                      {job.jobNo?"J":"?"}
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:14,fontWeight:700,color:T.text}}>
-                        {`Job ${job.jobNo}`}
-                      </div>
-                      <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:14,flexWrap:"wrap"}}>
-                        <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(job.totalInvoiced)} invoiced</span>
-                        <span style={{color:T.blue}}>{formatSarCompact(job.totalCollected)} collected</span>
-                        {job.totalDue>0&&<span style={{color:T.red}}>{formatSarCompact(job.totalDue)} due</span>}
-                        <span>{job.invoices.length} invoice{job.invoices.length!==1?"s":""}</span>
-                        {hasCerts&&<span style={{color:T.teal}}>📜 {job.certs.length} cert{job.certs.length!==1?"s":""}</span>}
-                      </div>
-                    </div>
-                    {/* Mini progress bar */}
-                    <div style={{width:100,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-                      <span style={{fontSize:13,fontWeight:800,color:pctColor(jobPct)}}>{jobPct}%</span>
-                      <div style={{width:"100%",height:5,background:T.border,borderRadius:999,overflow:"hidden"}}>
-                        <div style={{height:"100%",width:`${jobPct}%`,borderRadius:999,background:pctColor(jobPct)}}/>
-                      </div>
-                      <span style={{fontSize:10,color:T.textMuted}}>of total PO</span>
-                    </div>
-                    <span style={{color:T.textMuted,fontSize:14}}>{isExp?"▲":"▼"}</span>
-                  </div>
 
-                  {/* Expanded invoice list */}
-                  {isExp && (
-                    <div style={{borderTop:`1px solid ${T.border}`,background:T.card2}}>
-                      {/* Invoices */}
-                      {job.invoices.map(inv=>{
-                        const collected = getInvoiceCollectedAmount(inv);
-                        const due       = getInvoiceRemainingAmount(inv);
-                        const stC       = /paid|received/i.test(inv.paymentStatus||"") ? T.green : /partial/i.test(inv.paymentStatus||"") ? T.gold : T.red;
-                        const stream    = getInvoiceStream(inv);
-                        return (
-                          <div key={inv.id} style={{padding:"12px 16px 12px 62px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
-                            <div style={{flex:1,minWidth:200}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
-                                <span style={{fontWeight:700,fontSize:13,color:T.text}}>{inv.name||"Invoice"}</span>
-                                {inv.refNo&&<span style={{background:T.greenDim,color:T.green,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>#{inv.refNo}</span>}
-                                <span style={{background:stream==="advance"?T.goldDim:T.tealDim,color:stream==="advance"?T.gold:T.teal,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{stream==="advance"?"Advance":"Income"}</span>
-                                <span style={{background:`${stC}18`,color:stC,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{inv.paymentStatus||"Pending"}</span>
-                              </div>
-                              <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,color:T.textMuted}}>
-                                <span style={{color:T.green,fontWeight:600}}>SAR {Number(inv.amount||0).toLocaleString()}</span>
-                                {collected>0&&<span style={{color:T.blue}}>✓ {formatSarCompact(collected)}</span>}
-                                {due>0&&<span style={{color:T.red}}>⏳ {formatSarCompact(due)}</span>}
-                                {inv.dueDate&&<span>Due: {fmtDate(inv.dueDate)}</span>}
-                                {inv.fileLink&&<a href={inv.fileLink} target="_blank" rel="noreferrer" style={{color:T.blue,textDecoration:"none",fontWeight:600}}>📎 View</a>}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {/* Certs */}
-                      {job.certs.map(cert=>(
-                        <div key={cert.id} style={{padding:"10px 16px 10px 62px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:`${T.teal}08`}}>
-                          <span style={{fontSize:14}}>📜</span>
-                          <span style={{fontWeight:700,fontSize:13,color:T.text}}>{cert.refNo?"Cert #"+cert.refNo:"Job Completion Certificate"}</span>
-                          {cert.completionDate&&<span style={{fontSize:12,color:T.textMuted}}>Completed: {fmtDate(cert.completionDate)}</span>}
-                          {cert.fileLink&&<a href={cert.fileLink} target="_blank" rel="noreferrer" style={{color:T.teal,textDecoration:"none",fontSize:12,fontWeight:600}}>📎 View</a>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            {/* ── Ungrouped invoices (no Job No.) ── */}
+            {ungroupedInvs.length > 0 && (
+              <div style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",background:T.card2,borderBottom:`1px solid ${T.border}`}}>
+                  <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:2}}>
+                    📋 All Invoices
+                    {ungroupedCerts.length>0&&<span style={{marginLeft:10,fontSize:12,color:T.teal}}>· {ungroupedCerts.length} cert{ungroupedCerts.length!==1?"s":""}</span>}
+                  </div>
+                  <div style={{fontSize:12,color:T.textMuted,display:"flex",gap:14,flexWrap:"wrap"}}>
+                    <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0))} invoiced</span>
+                    <span style={{color:T.blue}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0))} collected</span>
+                    {ungroupedInvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0)>0&&<span style={{color:T.red}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0))} due</span>}
+                    <span style={{color:T.textMuted}}>Add a Job No. in Finance to group into phases</span>
+                  </div>
                 </div>
-              );
-            })}
+                {ungroupedInvs.map(inv=>{
+                  const collected = getInvoiceCollectedAmount(inv);
+                  const due       = getInvoiceRemainingAmount(inv);
+                  const stC       = /paid|received/i.test(inv.paymentStatus||"") ? T.green : /partial/i.test(inv.paymentStatus||"") ? T.gold : T.red;
+                  const stream    = getInvoiceStream(inv);
+                  return (
+                    <div key={inv.id} style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                      <div style={{flex:1,minWidth:200}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                          <span style={{fontWeight:700,fontSize:13,color:T.text}}>{inv.name||"Invoice"}</span>
+                          {inv.refNo&&<span style={{background:T.greenDim,color:T.green,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>#{inv.refNo}</span>}
+                          <span style={{background:stream==="advance"?T.goldDim:T.tealDim,color:stream==="advance"?T.gold:T.teal,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{stream==="advance"?"Advance":"Income"}</span>
+                          <span style={{background:`${stC}18`,color:stC,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{inv.paymentStatus||"Pending"}</span>
+                        </div>
+                        <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,color:T.textMuted}}>
+                          <span style={{color:T.green,fontWeight:600}}>SAR {Number(inv.amount||0).toLocaleString()}</span>
+                          {collected>0&&<span style={{color:T.blue}}>✓ {formatSarCompact(collected)}</span>}
+                          {due>0&&<span style={{color:T.red}}>⏳ {formatSarCompact(due)}</span>}
+                          {inv.dueDate&&<span>Due: {fmtDate(inv.dueDate)}</span>}
+                          {inv.fileLink&&<a href={inv.fileLink} target="_blank" rel="noreferrer" style={{color:T.blue,textDecoration:"none",fontWeight:600}}>📎 View</a>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {ungroupedCerts.map(cert=>(
+                  <div key={cert.id} style={{padding:"10px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:`${T.teal}08`}}>
+                    <span style={{fontSize:14}}>📜</span>
+                    <span style={{fontWeight:600,fontSize:13,color:T.teal}}>{cert.name||"Certificate"}</span>
+                    {cert.refNo&&<span style={{background:T.tealDim,color:T.teal,borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:700}}>#{cert.refNo}</span>}
+                    {cert.expiryDate&&<span style={{fontSize:11,color:T.textMuted}}>Exp: {fmtDate(cert.expiryDate)}</span>}
+                    {cert.fileLink&&<a href={cert.fileLink} target="_blank" rel="noreferrer" style={{color:T.blue,textDecoration:"none",fontSize:12,fontWeight:600}}>📎 View</a>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── Named Job Phases ── */}
+            {jobs.length > 0 && (
+              <>
+                {ungroupedInvs.length > 0 && (
+                  <div style={{fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:.5,padding:"4px 4px 0"}}>JOB PHASES</div>
+                )}
+                {jobs.map(job => {
+                  const jobPct = poValue > 0 ? Math.min(100, Math.round((job.totalInvoiced / poValue) * 100)) : 0;
+                  const isExp  = expandJob === job.jobNo;
+                  const hasCerts = job.certs.length > 0;
+                  return (
+                    <div key={job.jobNo} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                      {/* Job header */}
+                      <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:isExp?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandJob(isExp?null:job.jobNo)}>
+                        <div style={{width:38,height:38,borderRadius:9,background:T.goldDim,border:`1px solid ${T.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,fontWeight:800,color:T.gold,fontFamily:"'Barlow Condensed',sans-serif"}}>
+                          J
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:14,fontWeight:700,color:T.text}}>Job {job.jobNo}</div>
+                          <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:"flex",gap:14,flexWrap:"wrap"}}>
+                            <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(job.totalInvoiced)} invoiced</span>
+                            <span style={{color:T.blue}}>{formatSarCompact(job.totalCollected)} collected</span>
+                            {job.totalDue>0&&<span style={{color:T.red}}>{formatSarCompact(job.totalDue)} due</span>}
+                            <span>{job.invoices.length} invoice{job.invoices.length!==1?"s":""}</span>
+                            {hasCerts&&<span style={{color:T.teal}}>📜 {job.certs.length} cert{job.certs.length!==1?"s":""}</span>}
+                          </div>
+                        </div>
+                        <div style={{width:100,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                          <span style={{fontSize:13,fontWeight:800,color:pctColor(jobPct)}}>{jobPct}%</span>
+                          <div style={{width:"100%",height:5,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                            <div style={{height:"100%",width:`${jobPct}%`,borderRadius:999,background:pctColor(jobPct)}}/>
+                          </div>
+                          <span style={{fontSize:10,color:T.textMuted}}>of total PO</span>
+                        </div>
+                        <span style={{color:T.textMuted,fontSize:14}}>{isExp?"▲":"▼"}</span>
+                      </div>
+                      {/* Expanded invoice list */}
+                      {isExp && (
+                        <div style={{borderTop:`1px solid ${T.border}`,background:T.card2}}>
+                          {job.invoices.map(inv=>{
+                            const collected = getInvoiceCollectedAmount(inv);
+                            const due       = getInvoiceRemainingAmount(inv);
+                            const stC       = /paid|received/i.test(inv.paymentStatus||"") ? T.green : /partial/i.test(inv.paymentStatus||"") ? T.gold : T.red;
+                            const stream    = getInvoiceStream(inv);
+                            return (
+                              <div key={inv.id} style={{padding:"12px 16px 12px 62px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                                <div style={{flex:1,minWidth:200}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                                    <span style={{fontWeight:700,fontSize:13,color:T.text}}>{inv.name||"Invoice"}</span>
+                                    {inv.refNo&&<span style={{background:T.greenDim,color:T.green,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>#{inv.refNo}</span>}
+                                    <span style={{background:stream==="advance"?T.goldDim:T.tealDim,color:stream==="advance"?T.gold:T.teal,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{stream==="advance"?"Advance":"Income"}</span>
+                                    <span style={{background:`${stC}18`,color:stC,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>{inv.paymentStatus||"Pending"}</span>
+                                  </div>
+                                  <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,color:T.textMuted}}>
+                                    <span style={{color:T.green,fontWeight:600}}>SAR {Number(inv.amount||0).toLocaleString()}</span>
+                                    {collected>0&&<span style={{color:T.blue}}>✓ {formatSarCompact(collected)}</span>}
+                                    {due>0&&<span style={{color:T.red}}>⏳ {formatSarCompact(due)}</span>}
+                                    {inv.dueDate&&<span>Due: {fmtDate(inv.dueDate)}</span>}
+                                    {inv.fileLink&&<a href={inv.fileLink} target="_blank" rel="noreferrer" style={{color:T.blue,textDecoration:"none",fontWeight:600}}>📎 View</a>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {job.certs.map(cert=>(
+                            <div key={cert.id} style={{padding:"10px 16px 10px 62px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:`${T.teal}08`}}>
+                              <span style={{fontSize:14}}>📜</span>
+                              <span style={{fontWeight:600,fontSize:13,color:T.teal}}>{cert.name||"Certificate"}</span>
+                              {cert.refNo&&<span style={{background:T.tealDim,color:T.teal,borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:700}}>#{cert.refNo}</span>}
+                              {cert.expiryDate&&<span style={{fontSize:11,color:T.textMuted}}>Exp: {fmtDate(cert.expiryDate)}</span>}
+                              {cert.fileLink&&<a href={cert.fileLink} target="_blank" rel="noreferrer" style={{color:T.blue,textDecoration:"none",fontSize:12,fontWeight:600}}>📎 View</a>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── Daily Reports ── */}
+            {/* ── Daily Reports ── */}
       <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div>
@@ -5017,6 +5071,7 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
         </FSelect>
       </FieldRow>
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Job Number"><FInput value={f.jobNo||""} onChange={set("jobNo")} color={T.green} placeholder="e.g. 1, 2, 3A…"/></FieldRow>
       <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Type">
