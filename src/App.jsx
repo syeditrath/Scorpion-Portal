@@ -2624,6 +2624,7 @@ export default function App() {
           )}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast}/></div>}
           {page==="costs" && (
             costAuthed
               ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go}/></div>
@@ -2670,6 +2671,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
     {id:"costs",     icon:"⊕", label:"Cost Control",       desc:"Budget vs actual, margin",  locked:!costAuthed},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
+    {id:"maintenance", icon:"🛠", label:"Maintenance", desc:"Equipment maintenance requests",},
     {id:"finance",   icon:"$", label:"Finance",            desc:"Invoices & work orders",    locked:!financeAuthed},
   ];
   return (
@@ -5976,7 +5978,58 @@ function EquipmentPage({data,setData,showToast}) {
 }
 
 /* ─── Equipment Detail ───────────────────────────────────────────────────── */
-function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}) {
+function MaintenancePage({data,setData,showToast}){
+  const [selectedId,setSelectedId]=useState(null);
+  const [request,setRequest]=useState("");
+  const equipment=data.equipment||[];
+  const selected=selectedId?equipment.find(e=>e.id===selectedId):null;
+  const addRequest=()=>{
+    if(!selected||!request.trim()) return;
+    const newEntry={id:uid(),request:request.trim(),date:new Date().toISOString().slice(0,10),status:"Pending"};
+    setData(prev=>{
+      const list=[...prev.equipment];
+      const idx=list.findIndex(e=>e.id===selectedId);
+      if(idx>=0){
+        const maint=(list[idx].maintenance||[]);
+        list[idx]={...list[idx],maintenance:[...maint,newEntry]};
+      }
+      return {...prev,equipment:list};
+    });
+    showToast("Maintenance request added");
+    setRequest("");
+  };
+  return(
+    <div style={{maxWidth:"min(800px,95vw)",margin:"0 auto",width:"100%"}}>
+      <PageHeader title="MAINTENANCE" sub="Raise maintenance requests for equipment" color={T.gold}>
+        <select value={selectedId||""} onChange={e=>setSelectedId(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
+          <option value="">Select equipment…</option>
+          {equipment.map(eq=><option key={eq.id} value={eq.id}>{eq.name}</option>)}
+        </select>
+      </PageHeader>
+      {selected && (
+        <div style={{marginTop:16}}>
+          <div style={{marginBottom:8,fontWeight:600}}>Equipment: {selected.name}</div>
+          <textarea value={request} onChange={e=>setRequest(e.target.value)} placeholder="Describe maintenance request" rows={4} style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px",fontSize:13,color:T.text}}/>
+          <Btn color={T.gold} solid onClick={addRequest} style={{marginTop:8}}>Submit Request</Btn>
+        </div>
+      )}
+      {selected && (selected.maintenance||[]).length>0 && (
+        <div style={{marginTop:24}}>
+          <div style={{fontWeight:600,marginBottom:8}}>Existing Requests</div>
+          <div style={{display:"grid",gap:8}}>
+            {(selected.maintenance||[]).map(r=>(
+              <div key={r.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px"}}>
+                <div style={{fontSize:13}}>{r.request}</div>
+                <div style={{fontSize:11,color:T.textMuted}}>{r.date} – {r.status}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
   const [activeTab,setActiveTab]=useState("certifications");
   const [subModal, setSubModal] =useState(null);
 
@@ -5985,7 +6038,7 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
     {id:"invoices",      label:"Invoices",      icon:"🧾",color:T.green},
     {id:"insurance",     label:"Insurance",     icon:"🛡",color:T.purple},
     {id:"permits",       label:"Permits",       icon:"⬡",color:T.gold},
-    {id:"maintenance",   label:"Maintenance",   icon:"🛠",color:T.gold},
+    {id:"maintenance",   label:"Maintenance",   icon:"🛠",   desc:"Maintenance requests",   color:T.gold},
   ];
 
   const eqFileRef=useRef();
