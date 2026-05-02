@@ -6006,10 +6006,11 @@ function MaintenancePage({data,setData,showToast}){
           {equipment.map(eq=><option key={eq.id} value={eq.id}>{eq.name}</option>)}
         </select>
       </PageHeader>
+      <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:12}}>MAINTENANCE REQUEST TICKET</div>
       {selected && (
         <div style={{marginTop:16}}>
           <div style={{marginBottom:8,fontWeight:600}}>Equipment: {selected.name}</div>
-          <textarea value={request} onChange={e=>setRequest(e.target.value)} placeholder="Describe maintenance request" rows={4} style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px",fontSize:13,color:T.text}}/>
+          <textarea value={request} onChange={e=>setRequest(e.target.value)} placeholder="Describe maintenance request" rows={4} style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px",fontSize:13,color:"#fff"}}/>
           <Btn color={T.gold} solid onClick={addRequest} style={{marginTop:8}}>Submit Request</Btn>
         </div>
       )}
