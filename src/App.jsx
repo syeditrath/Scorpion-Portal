@@ -1850,8 +1850,10 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
   const [editProj, setEditProj]     = useState(false);
   const [drModal,  setDrModal]      = useState(null);
   const [expandDr, setExpandDr]     = useState(null);
-  const [expandJob,     setExpandJob]     = useState(null);
-  const [expandAllInvs, setExpandAllInvs] = useState(false);
+  const [expandJob,          setExpandJob]          = useState(null);
+  const [expandAllInvs,      setExpandAllInvs]      = useState(false);
+  const [expandJobsSection,  setExpandJobsSection]  = useState(false);
+  const [expandDailySection, setExpandDailySection] = useState(false);
 
   const { invs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts } = deriveProjectStats(proj.project, projectDocs);
   const poValue = parseFloat(proj.poValue) || 0;
@@ -2021,11 +2023,22 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
 
             {/* ── Named Job Phases ── */}
             {jobs.length > 0 && (
-              <>
-                {ungroupedInvs.length > 0 && (
-                  <div style={{fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:.5,padding:"4px 4px 0"}}>JOB PHASES</div>
-                )}
-                {jobs.map(job => {
+              <div style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                <div onClick={()=>setExpandJobsSection(p=>!p)} style={{padding:"12px 16px",background:T.card2,borderBottom:expandJobsSection?`1px solid ${T.border}`:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:2}}>
+                      🏗️ Job Phases
+                      <span style={{marginLeft:8,fontSize:12,color:T.textMuted,fontWeight:400}}>{jobs.length} phase{jobs.length!==1?"s":""} · {jobs.reduce((s,j)=>s+j.invoices.length,0)} invoice{jobs.reduce((s,j)=>s+j.invoices.length,0)!==1?"s":""}</span>
+                    </div>
+                    <div style={{fontSize:12,color:T.textMuted,display:"flex",gap:14,flexWrap:"wrap"}}>
+                      <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(jobs.reduce((s,j)=>s+j.totalInvoiced,0))} invoiced</span>
+                      <span style={{color:T.blue}}>{formatSarCompact(jobs.reduce((s,j)=>s+j.totalCollected,0))} collected</span>
+                      {jobs.reduce((s,j)=>s+j.totalDue,0)>0&&<span style={{color:T.red}}>{formatSarCompact(jobs.reduce((s,j)=>s+j.totalDue,0))} due</span>}
+                    </div>
+                  </div>
+                  <span style={{color:T.textMuted,fontSize:14,flexShrink:0}}>{expandJobsSection?"▲":"▼"}</span>
+                </div>
+                {expandJobsSection && jobs.map(job => {
                   const jobPct = poValue > 0 ? Math.min(100, Math.round((job.totalInvoiced / poValue) * 100)) : 0;
                   const isExp  = expandJob === job.jobNo;
                   const hasCerts = job.certs.length > 0;
@@ -2097,20 +2110,21 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                     </div>
                   );
                 })}
-              </>
+              </div>
             )}
           </div>
         )}
       </div>
 
             {/* ── Daily Reports ── */}
-      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,overflow:"hidden",boxShadow:T.shadow}}>
+        {/* Collapsible header */}
+        <div onClick={()=>setExpandDailySection(p=>!p)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 22px",cursor:"pointer",background:T.card,borderBottom:expandDailySection?`1px solid ${T.border}`:"none"}}>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📝 DAILY REPORTS</div>
             <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{reports.length} report{reports.length!==1?"s":""}</div>
           </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
             {/* Export all reports to Excel */}
             {reports.length>0&&(
               <button onClick={()=>exportToExcel(
@@ -2148,8 +2162,9 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
             }}/>
             <button onClick={()=>setDrModal("new")} style={{background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Add Report</button>
           </div>
+          <span style={{color:T.textMuted,fontSize:14,marginLeft:8,flexShrink:0,pointerEvents:"none"}}>{expandDailySection?"▲":"▼"}</span>
         </div>
-        {reports.length===0 ? (
+        {expandDailySection && (reports.length===0 ? (
           <div style={{textAlign:"center",padding:"30px 20px",color:T.textMuted,fontSize:14}}>
             <div style={{fontSize:36,marginBottom:10}}>📋</div>
             No daily reports yet. Click <strong>+ Add Report</strong> to start tracking site progress.
@@ -2203,7 +2218,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
               );
             })}
           </div>
-        )}
+        ) : null)}
       </div>
 
       {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
