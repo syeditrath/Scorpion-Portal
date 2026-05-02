@@ -1850,7 +1850,8 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
   const [editProj, setEditProj]     = useState(false);
   const [drModal,  setDrModal]      = useState(null);
   const [expandDr, setExpandDr]     = useState(null);
-  const [expandJob, setExpandJob]   = useState(null);
+  const [expandJob,     setExpandJob]     = useState(null);
+  const [expandAllInvs, setExpandAllInvs] = useState(false);
 
   const { invs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts } = deriveProjectStats(proj.project, projectDocs);
   const poValue = parseFloat(proj.poValue) || 0;
@@ -1967,19 +1968,21 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
             {/* ── Ungrouped invoices (no Job No.) ── */}
             {ungroupedInvs.length > 0 && (
               <div style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",background:T.card2,borderBottom:`1px solid ${T.border}`}}>
-                  <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:2}}>
-                    📋 All Invoices
-                    {ungroupedCerts.length>0&&<span style={{marginLeft:10,fontSize:12,color:T.teal}}>· {ungroupedCerts.length} cert{ungroupedCerts.length!==1?"s":""}</span>}
+                <div onClick={()=>setExpandAllInvs(p=>!p)} style={{padding:"12px 16px",background:T.card2,borderBottom:expandAllInvs?`1px solid ${T.border}`:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:2}}>
+                      📋 All Invoices
+                      <span style={{marginLeft:8,fontSize:12,color:T.textMuted,fontWeight:400}}>{ungroupedInvs.length} invoice{ungroupedInvs.length!==1?"s":""}{ungroupedCerts.length>0?` · ${ungroupedCerts.length} cert${ungroupedCerts.length!==1?"s":""}`:""}</span>
+                    </div>
+                    <div style={{fontSize:12,color:T.textMuted,display:"flex",gap:14,flexWrap:"wrap"}}>
+                      <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0))} invoiced</span>
+                      <span style={{color:T.blue}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0))} collected</span>
+                      {ungroupedInvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0)>0&&<span style={{color:T.red}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0))} due</span>}
+                    </div>
                   </div>
-                  <div style={{fontSize:12,color:T.textMuted,display:"flex",gap:14,flexWrap:"wrap"}}>
-                    <span style={{color:T.green,fontWeight:600}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0))} invoiced</span>
-                    <span style={{color:T.blue}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0))} collected</span>
-                    {ungroupedInvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0)>0&&<span style={{color:T.red}}>{formatSarCompact(ungroupedInvs.reduce((s,d)=>s+getInvoiceRemainingAmount(d),0))} due</span>}
-                    <span style={{color:T.textMuted}}>Add a Job No. in Finance to group into phases</span>
-                  </div>
+                  <span style={{color:T.textMuted,fontSize:14,flexShrink:0}}>{expandAllInvs?"▲":"▼"}</span>
                 </div>
-                {ungroupedInvs.map(inv=>{
+                {expandAllInvs && ungroupedInvs.map(inv=>{
                   const collected = getInvoiceCollectedAmount(inv);
                   const due       = getInvoiceRemainingAmount(inv);
                   const stC       = /paid|received/i.test(inv.paymentStatus||"") ? T.green : /partial/i.test(inv.paymentStatus||"") ? T.gold : T.red;
@@ -2004,7 +2007,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
                     </div>
                   );
                 })}
-                {ungroupedCerts.map(cert=>(
+                {expandAllInvs && ungroupedCerts.map(cert=>(
                   <div key={cert.id} style={{padding:"10px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:`${T.teal}08`}}>
                     <span style={{fontSize:14}}>📜</span>
                     <span style={{fontWeight:600,fontSize:13,color:T.teal}}>{cert.name||"Certificate"}</span>
