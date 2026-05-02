@@ -6031,6 +6031,7 @@ function MaintenancePage({data,setData,showToast}){
   );
 }
 
+  function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}) {
   const [activeTab,setActiveTab]=useState("certifications");
   const [subModal, setSubModal] =useState(null);
 
