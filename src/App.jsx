@@ -6181,7 +6181,7 @@ function SubRecordModal({mode,type,rec,onClose,onSave}) {
     invoices:      {color:T.green, title:"INVOICE",        fields:[["invoiceNo","Invoice No.","","req"],["supplier","Supplier","","req"],["amount","Amount (SAR)"],["date","Invoice Date","date"],["description","Description","textarea"],["fileLink","File Link","link"]]},
     insurance:     {color:T.purple,title:"INSURANCE",      fields:[["policyNo","Policy No.","","req"],["insurer","Insurer","","req"],["type","Policy Type"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
     permits:       {color:T.gold,  title:"PERMIT",         fields:[["permitNo","Permit No.","","req"],["type","Permit Type"],["issuedBy","Issued By"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
-    maintenance:  {color:T.gold,  title:"MAINTENANCE",    fields:[["date","Date","date"],["description","Description","textarea"],["cost","Cost (SAR)"],["serviceProvider","Service Provider"],["fileLink","File Link","link"]]},
+    maintenance:  {color:T.gold,  title:"MAINTENANCE",    fields:[["date","Date","date"],["description","Description","textarea"],["reason","Reason for Request","textarea"],["cost","Cost (SAR)"],["serviceProvider","Service Provider"],["fileLink","File Link","link"]]},
   };
   const cfg=CONFIGS[type]||CONFIGS.certifications;
   return (
