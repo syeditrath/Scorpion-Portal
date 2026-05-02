@@ -589,102 +589,6 @@ const EMPTY_DATA = {
 /* ════════════════════════════════════════════════════════════════════════════
    LOGIN PAGE
 ════════════════════════════════════════════════════════════════════════════ */
-function LoginPage({onLogin}) {
-  const [pw,    setPw]    = useState("");
-  const [error, setError] = useState("");
-  const [show,  setShow]  = useState(false);
-  const [shake, setShake] = useState(false);
-
-  const attempt = () => {
-    if(!onLogin(pw)) {
-      setError("Incorrect password. Please try again.");
-      setShake(true);
-      setPw("");
-      setTimeout(()=>setShake(false), 600);
-    }
-  };
-
-  return (
-    <div style={{position:"fixed",inset:0,zIndex:9998,background:"linear-gradient(135deg,#080b10 0%,#0e1520 60%,#080b10 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-
-      {/* Background rings */}
-      <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
-        {[500,700,900].map((s,i)=>(
-          <div key={i} style={{position:"absolute",top:"50%",left:"50%",width:s,height:s,transform:"translate(-50%,-50%)",border:`1px solid rgba(251,191,36,${0.04-i*0.01})`,borderRadius:"50%",animation:`spinSlow ${16+i*6}s linear infinite ${i%2?"reverse":""}`}}/>
-        ))}
-      </div>
-
-      <div className="slide-up" style={{
-        background:"rgba(14,17,23,0.95)",
-        border:"1px solid rgba(251,191,36,0.2)",
-        borderRadius:20,
-        padding:"40px 36px",
-        width:"100%",
-        maxWidth:420,
-        backdropFilter:"blur(12px)",
-        boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
-        animation: shake ? "none" : undefined,
-        transform: shake ? "translateX(0)" : undefined,
-      }}>
-
-        {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",margin:"0 auto 16px",border:"2px solid rgba(251,191,36,0.5)",boxShadow:"0 0 24px rgba(251,191,36,0.2)"}}>
-            <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
-          </div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,letterSpacing:"2px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
-          <div style={{fontSize:12,color:"#38bdf8",letterSpacing:"3px",marginTop:4,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600}}>PORTAL ACCESS</div>
-        </div>
-
-        {/* Password field */}
-        <div style={{marginBottom:16}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:"1.5px"}}>COMPANY PASSWORD</label>
-          <div style={{position:"relative"}}>
-            <input
-              type={show?"text":"password"}
-              value={pw}
-              onChange={e=>{setPw(e.target.value);setError("");}}
-              onKeyDown={e=>e.key==="Enter"&&attempt()}
-              placeholder="Enter password…"
-              style={{width:"100%",background:"rgba(255,255,255,0.05)",border:`1px solid ${error?"rgba(248,113,113,0.6)":"rgba(255,255,255,0.12)"}`,borderRadius:10,padding:"12px 44px 12px 14px",fontSize:14,color:"#ffffff",outline:"none",colorScheme:"dark",transition:"border-color .2s"}}
-              onFocus={e=>e.target.style.borderColor="rgba(251,191,36,0.5)"}
-              onBlur={e=>e.target.style.borderColor=error?"rgba(248,113,113,0.6)":"rgba(255,255,255,0.12)"}
-            />
-            <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.4)",fontSize:16,cursor:"pointer",padding:2}}>
-              {show?"🙈":"👁"}
-            </button>
-          </div>
-          {error && <div style={{fontSize:12,color:"#f87171",marginTop:6,display:"flex",alignItems:"center",gap:5}}>⚠ {error}</div>}
-        </div>
-
-        {/* Login button */}
-        <button onClick={attempt} style={{
-          width:"100%",
-          background:"linear-gradient(135deg,#fbbf24,#f59e0b)",
-          border:"none",borderRadius:10,
-          padding:"13px",
-          fontFamily:"'Barlow Condensed',sans-serif",
-          fontWeight:800,fontSize:16,
-          color:"#080b10",
-          letterSpacing:"1.5px",
-          cursor:"pointer",
-          boxShadow:"0 4px 20px rgba(251,191,36,0.35)",
-          transition:"transform .15s,box-shadow .15s",
-          marginBottom:16,
-        }}
-          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 28px rgba(251,191,36,0.5)";}}
-          onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 20px rgba(251,191,36,0.35)";}}
-        >
-          ENTER PORTAL
-        </button>
-
-        <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.2)",letterSpacing:"1px"}}>
-          Contact your administrator if you forgot the password
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ════════════════════════════════════════════════════════════════════════════
    WELCOME SCREEN
@@ -5923,7 +5827,7 @@ function EquipmentPage({data,setData,showToast}) {
     setTimeout(()=>{
       setData(prev=>{
         const list=[...prev.equipment];
-        if(mode==="add")list.push({...eq,id:uid(),certifications:[],invoices:[],insurance:[],permits:[]});
+        if(mode==="add")list.push({...eq,id:uid(),certifications:[],invoices:[],insurance:[],permits:[],maintenance:[]});
         else{const i=list.findIndex(e=>e.id===eq.id);if(i>=0)list[i]=eq;}
         return{...prev,equipment:list};
       });
@@ -6081,6 +5985,7 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
     {id:"invoices",      label:"Invoices",      icon:"🧾",color:T.green},
     {id:"insurance",     label:"Insurance",     icon:"🛡",color:T.purple},
     {id:"permits",       label:"Permits",       icon:"⬡",color:T.gold},
+    {id:"maintenance",   label:"Maintenance",   icon:"🛠",color:T.gold},
   ];
 
   const eqFileRef=useRef();
@@ -6276,6 +6181,7 @@ function SubRecordModal({mode,type,rec,onClose,onSave}) {
     invoices:      {color:T.green, title:"INVOICE",        fields:[["invoiceNo","Invoice No.","","req"],["supplier","Supplier","","req"],["amount","Amount (SAR)"],["date","Invoice Date","date"],["description","Description","textarea"],["fileLink","File Link","link"]]},
     insurance:     {color:T.purple,title:"INSURANCE",      fields:[["policyNo","Policy No.","","req"],["insurer","Insurer","","req"],["type","Policy Type"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
     permits:       {color:T.gold,  title:"PERMIT",         fields:[["permitNo","Permit No.","","req"],["type","Permit Type"],["issuedBy","Issued By"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
+    maintenance:  {color:T.gold,  title:"MAINTENANCE",    fields:[["date","Date","date"],["description","Description","textarea"],["cost","Cost (SAR)"],["serviceProvider","Service Provider"],["fileLink","File Link","link"]]},
   };
   const cfg=CONFIGS[type]||CONFIGS.certifications;
   return (
