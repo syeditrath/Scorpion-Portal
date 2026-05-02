@@ -1018,7 +1018,7 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
   const excelRef = useRef();
   const upd = (k, v) => setF(p => ({ ...p, [k]: v }));
   const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
-  const LS = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
+  const LS = { display:"block", fontSize:11, fontWeight:700, color:"#fff", marginBottom:5, letterSpacing:.5 };
 
   /* Upload daily report file (PDF/image/doc) to Supabase */
   const handleFileUpload = async (file) => {
@@ -1463,7 +1463,7 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
   const [f, setF] = useState(proj ? { dailyReports:[], ...proj } : blank);
   const upd = (k,v) => setF(p=>({...p,[k]:v}));
   const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
-  const LS = { display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:.5 };
+  const LS = { display:"block", fontSize:11, fontWeight:700, color:"#fff", marginBottom:5, letterSpacing:.5 };
   return (
     <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:600,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
