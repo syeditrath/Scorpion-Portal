@@ -5978,53 +5978,66 @@ function EquipmentPage({data,setData,showToast}) {
 }
 
 /* ─── Equipment Detail ───────────────────────────────────────────────────── */
-function MaintenancePage({data,setData,showToast}){
+function MaintenancePage({data,setData,showToast}) {
   const [selectedId,setSelectedId]=useState(null);
-  const [request,setRequest]=useState("");
+  const [subModal,setSubModal]=useState(null);
   const equipment=data.equipment||[];
   const selected=selectedId?equipment.find(e=>e.id===selectedId):null;
-  const addRequest=()=>{
-    if(!selected||!request.trim()) return;
-    const newEntry={id:uid(),request:request.trim(),date:new Date().toISOString().slice(0,10),status:"Pending"};
+
+  const saveMaintenance=(rec,mode)=>{
     setData(prev=>{
       const list=[...prev.equipment];
       const idx=list.findIndex(e=>e.id===selectedId);
       if(idx>=0){
         const maint=(list[idx].maintenance||[]);
-        list[idx]={...list[idx],maintenance:[...maint,newEntry]};
+        if(mode==="add"){
+          list[idx]={...list[idx],maintenance:[...maint,rec]};
+        } else {
+          const i=maint.findIndex(r=>r.id===rec.id);
+          if(i>=0) maint[i]=rec;
+          list[idx]={...list[idx],maintenance:maint};
+        }
       }
       return {...prev,equipment:list};
     });
-    showToast("Maintenance request added");
-    setRequest("");
+    showToast(mode==="add"?"Maintenance request added":"Maintenance request updated");
+    setSubModal(null);
   };
-  return(
+
+  return (
     <div style={{maxWidth:"min(800px,95vw)",margin:"0 auto",width:"100%"}}>
       <PageHeader title="MAINTENANCE" sub="Raise maintenance requests for equipment" color={T.gold} />
       <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:12}}>MAINTENANCE REQUEST TICKET</div>
       <select value={selectedId||""} onChange={e=>setSelectedId(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
         <option value="">Select equipment…</option>
-        {equipment.map(eq=><option key={eq.id} value={eq.id}>{eq.name}</option>)}
+        {equipment.map(eq=> <option key={eq.id} value={eq.id}>{eq.name}</option>)}
       </select>
       {selected && (
-        <div style={{marginTop:16}}>
-          <div style={{marginBottom:8,fontWeight:600}}>Equipment: {selected.name}</div>
-          <textarea value={request} onChange={e=>setRequest(e.target.value)} placeholder="Describe maintenance request" rows={4} style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px",fontSize:13,color:"#fff"}}/>
-          <Btn color={T.gold} solid onClick={addRequest} style={{marginTop:8}}>Submit Request</Btn>
-        </div>
-      )}
-      {selected && (selected.maintenance||[]).length>0 && (
-        <div style={{marginTop:24}}>
-          <div style={{fontWeight:600,marginBottom:8}}>Existing Requests</div>
-          <div style={{display:"grid",gap:8}}>
-            {(selected.maintenance||[]).map(r=>(
-              <div key={r.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px"}}>
-                <div style={{fontSize:13}}>{r.request}</div>
-                <div style={{fontSize:11,color:T.textMuted}}>{r.date} – {r.status}</div>
+        <>
+          <Btn color={T.gold} solid onClick={()=>setSubModal({mode:"add"})} style={{marginTop:8,marginBottom:8}}>+ Add Maintenance</Btn>
+          {(selected.maintenance||[]).length>0 && (
+            <div style={{marginTop:16}}>
+              <div style={{fontWeight:600,marginBottom:8}}>Existing Requests</div>
+              <div style={{display:"grid",gap:8}}>
+                {selected.maintenance.map(r=> (
+                  <div key={r.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px"}}>
+                    <div style={{fontSize:13}}>{r.description||r.reason||r.serviceProvider||""}</div>
+                    <div style={{fontSize:11,color:T.textMuted}}>{r.date} – {r.status}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
+        </>
+      )}
+      {subModal && (
+        <SubRecordModal
+          mode={subModal.mode}
+          type="maintenance"
+          rec={subModal.rec}
+          onClose={()=>setSubModal(null)}
+          onSave={saveMaintenance}
+        />
       )}
     </div>
   );
