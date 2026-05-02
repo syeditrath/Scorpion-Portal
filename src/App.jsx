@@ -6000,13 +6000,12 @@ function MaintenancePage({data,setData,showToast}){
   };
   return(
     <div style={{maxWidth:"min(800px,95vw)",margin:"0 auto",width:"100%"}}>
-      <PageHeader title="MAINTENANCE" sub="Raise maintenance requests for equipment" color={T.gold}>
-        <select value={selectedId||""} onChange={e=>setSelectedId(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
-          <option value="">Select equipment…</option>
-          {equipment.map(eq=><option key={eq.id} value={eq.id}>{eq.name}</option>)}
-        </select>
-      </PageHeader>
+      <PageHeader title="MAINTENANCE" sub="Raise maintenance requests for equipment" color={T.gold} />
       <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:12}}>MAINTENANCE REQUEST TICKET</div>
+      <select value={selectedId||""} onChange={e=>setSelectedId(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
+        <option value="">Select equipment…</option>
+        {equipment.map(eq=><option key={eq.id} value={eq.id}>{eq.name}</option>)}
+      </select>
       {selected && (
         <div style={{marginTop:16}}>
           <div style={{marginBottom:8,fontWeight:600}}>Equipment: {selected.name}</div>
