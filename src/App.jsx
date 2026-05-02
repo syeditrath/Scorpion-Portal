@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
-import LoginPage from "./components/LoginPage";
 
 /* ─── Global CSS ─────────────────────────────────────────────────────────── */
 const GLOBAL_CSS = `
@@ -5924,7 +5923,7 @@ function EquipmentPage({data,setData,showToast}) {
     setTimeout(()=>{
       setData(prev=>{
         const list=[...prev.equipment];
-        if(mode==="add")list.push({...eq,id:uid(),certifications:[],invoices:[],insurance:[],permits:[],maintenance:[]});
+        if(mode==="add")list.push({...eq,id:uid(),certifications:[],invoices:[],insurance:[],permits:[]});
         else{const i=list.findIndex(e=>e.id===eq.id);if(i>=0)list[i]=eq;}
         return{...prev,equipment:list};
       });
@@ -6082,7 +6081,6 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
     {id:"invoices",      label:"Invoices",      icon:"🧾",color:T.green},
     {id:"insurance",     label:"Insurance",     icon:"🛡",color:T.purple},
     {id:"permits",       label:"Permits",       icon:"⬡",color:T.gold},
-    {id:"maintenance",   label:"Maintenance",   icon:"🛠",color:T.gold},
   ];
 
   const eqFileRef=useRef();
@@ -6278,7 +6276,6 @@ function SubRecordModal({mode,type,rec,onClose,onSave}) {
     invoices:      {color:T.green, title:"INVOICE",        fields:[["invoiceNo","Invoice No.","","req"],["supplier","Supplier","","req"],["amount","Amount (SAR)"],["date","Invoice Date","date"],["description","Description","textarea"],["fileLink","File Link","link"]]},
     insurance:     {color:T.purple,title:"INSURANCE",      fields:[["policyNo","Policy No.","","req"],["insurer","Insurer","","req"],["type","Policy Type"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
     permits:       {color:T.gold,  title:"PERMIT",         fields:[["permitNo","Permit No.","","req"],["type","Permit Type"],["issuedBy","Issued By"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
-    maintenance:  {color:T.gold,  title:"MAINTENANCE",    fields:[["date","Date","date"],["description","Description","textarea"],["cost","Cost (SAR)"],["serviceProvider","Service Provider"],["fileLink","File Link","link"]]},
   };
   const cfg=CONFIGS[type]||CONFIGS.certifications;
   return (
