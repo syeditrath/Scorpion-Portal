@@ -6121,6 +6121,7 @@ function MaintenancePage({data,setData,showToast}) {
   const [modal,        setModal]        = useState(null);    // null | {mode,ticket,eqId}
   const [closeModal,    setCloseModal]    = useState(null);
   const [closeNotes,    setCloseNotes]    = useState("");
+  const [closeBy,       setCloseBy]       = useState("");
   const [closeFile,     setCloseFile]     = useState({link:"",name:""});
   const [closingUpload, setClosingUpload] = useState(false);
   const [closingUpErr,  setClosingUpErr]  = useState("");
@@ -6198,17 +6199,19 @@ function MaintenancePage({data,setData,showToast}) {
   };
 
   /* Close a ticket */
-  const closeTicket = (ticket, notes, file) => {
+  const closeTicket = (ticket, notes, file, closedBy) => {
     updateTicket(ticket._eqId, {
       ...ticket,
       status: "Closed",
       closedAt: new Date().toISOString().slice(0,10),
       closingNotes: notes,
+      closedBy: closedBy,
       ...(file.link ? {completionFileLink:file.link, completionFileName:file.name} : {}),
     });
     showToast("Ticket closed ✓");
     setCloseModal(null);
     setCloseNotes("");
+    setCloseBy("");
     setCloseFile({link:"",name:""});
   };
 
@@ -6229,6 +6232,26 @@ function MaintenancePage({data,setData,showToast}) {
   return (
     <div style={{maxWidth:"min(960px,95vw)",margin:"0 auto",width:"100%"}}>
       <PageHeader title="MAINTENANCE TICKETS" sub="Raise, track and close equipment maintenance requests" color={T.gold}>
+        <ExportBtn
+          data={allTickets.map(t=>({
+            "Ticket ID":        t.id||"",
+            "Equipment":        t._eqName||"",
+            "Project":          t.project||"",
+            "Status":           t.status||"Open",
+            "Description":      t.description||"",
+            "Reason":           t.reason||"",
+            "Raised By":        t.raisedBy||"",
+            "Date Raised":      t.raisedAt||"",
+            "Service Provider": t.serviceProvider||"",
+            "Est. Cost (SAR)":  t.cost||"",
+            "Closed By":        t.closedBy||"",
+            "Date Closed":      t.closedAt||"",
+            "Closing Notes":    t.closingNotes||"",
+            "File Link":        t.fileLink||"",
+            "Completion File":  t.completionFileLink||"",
+          }))}
+          filename="Maintenance_Tickets"
+        />
         <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Raise Ticket</Btn>
       </PageHeader>
 
@@ -6301,8 +6324,10 @@ function MaintenancePage({data,setData,showToast}) {
                     <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,color:T.textMuted}}>
                       <span style={{fontWeight:600,color:T.gold}}>⚙ {ticket._eqName}</span>
                       {ticket.project && <span>📍 {ticket.project}</span>}
-                      {ticket.raisedAt && <span>Raised: {fmtDate(ticket.raisedAt)}</span>}
-                      {ticket.closedAt && <span style={{color:"#10b981"}}>Closed: {fmtDate(ticket.closedAt)}</span>}
+                      {ticket.raisedBy && <span>👤 Raised by: <strong style={{color:T.text}}>{ticket.raisedBy}</strong></span>}
+                      {ticket.raisedAt && <span>on {fmtDate(ticket.raisedAt)}</span>}
+                      {ticket.closedBy && <span style={{color:"#10b981"}}>✓ Closed by: <strong>{ticket.closedBy}</strong></span>}
+                      {ticket.closedAt && <span style={{color:"#10b981"}}>on {fmtDate(ticket.closedAt)}</span>}
                       {ticket.cost && <span>SAR {Number(ticket.cost).toLocaleString()}</span>}
                     </div>
                   </div>
@@ -6350,6 +6375,12 @@ function MaintenancePage({data,setData,showToast}) {
                         <div>
                           <div style={{fontSize:10,fontWeight:700,color:"#10b981",marginBottom:4,letterSpacing:.5}}>CLOSING NOTES</div>
                           <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{ticket.closingNotes}</div>
+                        </div>
+                      )}
+                      {ticket.closedBy && (
+                        <div>
+                          <div style={{fontSize:10,fontWeight:700,color:"#10b981",marginBottom:4,letterSpacing:.5}}>CLOSED BY</div>
+                          <div style={{fontSize:13,color:T.text,fontWeight:600}}>{ticket.closedBy}</div>
                         </div>
                       )}
                     </div>
@@ -6403,6 +6434,10 @@ function MaintenancePage({data,setData,showToast}) {
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:"#10b981",marginBottom:4}}>✓ CLOSE TICKET</div>
             <div style={{fontSize:13,color:T.textMuted,marginBottom:18}}>{closeModal.description||closeModal.reason||"Maintenance Request"} — <span style={{color:T.gold}}>{closeModal._eqName}</span></div>
 
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>CLOSED BY *</div>
+            <input value={closeBy} onChange={e=>setCloseBy(e.target.value)} placeholder="Your name (person closing this ticket)"
+              style={{...IS,marginBottom:16,fontFamily:"inherit"}}/>
+
             <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>CLOSING NOTES (optional)</div>
             <textarea
               value={closeNotes}
@@ -6443,11 +6478,11 @@ function MaintenancePage({data,setData,showToast}) {
             {closingUpErr&&<div style={{fontSize:12,color:T.red,marginBottom:10,fontWeight:600}}>⚠ {closingUpErr}</div>}
 
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <button onClick={()=>{setCloseModal(null);setCloseFile({link:"",name:""});}}
+              <button onClick={()=>{setCloseModal(null);setCloseNotes("");setCloseBy("");setCloseFile({link:"",name:""});}}
                 style={{background:"transparent",border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
                 Cancel
               </button>
-              <button onClick={()=>closeTicket(closeModal,closeNotes,closeFile)}
+              <button onClick={()=>{if(!closeBy.trim()){alert("Please enter your name (Closed By)");return;}closeTicket(closeModal,closeNotes,closeFile,closeBy);}}
                 style={{background:"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:800,cursor:"pointer"}}>
                 ✓ Confirm Close
               </button>
@@ -6540,6 +6575,10 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
             <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>SERVICE PROVIDER</div>
             <input value={f.serviceProvider||""} onChange={e=>set("serviceProvider")(e.target.value)} placeholder="Who will carry out the work?" style={{...IS}}/>
           </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>RAISED BY *</div>
+            <input value={f.raisedBy||""} onChange={e=>set("raisedBy")(e.target.value)} placeholder="Your name (person raising this ticket)" style={{...IS}}/>
+          </div>
           {/* ── File upload ── */}
           <div>
             <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>ATTACH FILE</div>
@@ -6584,6 +6623,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
             <button onClick={()=>{
               if(!f.eqId){alert("Please select equipment");return;}
               if(!f.description){alert("Please describe the issue");return;}
+              if(!f.raisedBy?.trim()){alert("Please enter your name (Raised By)");return;}
               onSave(f.eqId, f);
             }}
               style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 28px",fontSize:14,fontWeight:800,cursor:"pointer"}}>
