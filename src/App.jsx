@@ -6116,69 +6116,375 @@ function EquipmentPage({data,setData,showToast}) {
 
 /* ─── Equipment Detail ───────────────────────────────────────────────────── */
 function MaintenancePage({data,setData,showToast}) {
-  const [selectedId,setSelectedId]=useState(null);
-  const [subModal,setSubModal]=useState(null);
-  const equipment=data.equipment||[];
-  const selected=selectedId?equipment.find(e=>e.id===selectedId):null;
+  const [filterStatus, setFilterStatus] = useState("Open");  // "All" | "Open" | "Closed"
+  const [filterProj,   setFilterProj]   = useState("All");
+  const [modal,        setModal]        = useState(null);    // null | {mode,ticket,eqId}
+  const [closeModal,   setCloseModal]   = useState(null);    // ticket to close
+  const [closeNotes,   setCloseNotes]   = useState("");
+  const [expandId,     setExpandId]     = useState(null);
 
-  const saveMaintenance=(rec,mode)=>{
-    setData(prev=>{
-      const list=[...prev.equipment];
-      const idx=list.findIndex(e=>e.id===selectedId);
-      if(idx>=0){
-        const maint=(list[idx].maintenance||[]);
-        if(mode==="add"){
-          list[idx]={...list[idx],maintenance:[...maint,rec]};
-        } else {
-          const i=maint.findIndex(r=>r.id===rec.id);
-          if(i>=0) maint[i]=rec;
-          list[idx]={...list[idx],maintenance:maint};
-        }
-      }
-      return {...prev,equipment:list};
+  const equipment = data.equipment || [];
+  const projects  = data.projects  || [];
+
+  /* Flatten ALL maintenance tickets across all equipment */
+  const allTickets = equipment.flatMap(eq =>
+    (eq.maintenance || []).map(t => ({ ...t, _eqId: eq.id, _eqName: eq.name }))
+  );
+
+  /* Status colours */
+  const STATUS = {
+    "Open":        { color:"#ef4444", bg:"rgba(239,68,68,.12)",   icon:"🔴" },
+    "In Progress": { color:"#f59e0b", bg:"rgba(245,158,11,.12)",  icon:"🟡" },
+    "Closed":      { color:"#10b981", bg:"rgba(16,185,129,.12)",  icon:"🟢" },
+  };
+  const sOf = t => STATUS[t.status] || STATUS["Open"];
+
+  /* Filtered + sorted tickets */
+  const visible = allTickets
+    .filter(t => filterStatus === "All" || (t.status||"Open") === filterStatus)
+    .filter(t => filterProj   === "All" || t.project === filterProj)
+    .sort((a,b) => {
+      const order = {"Open":0,"In Progress":1,"Closed":2};
+      const so = (order[a.status||"Open"]||0) - (order[b.status||"Open"]||0);
+      if (so !== 0) return so;
+      return (b.raisedAt||b.date||"").localeCompare(a.raisedAt||a.date||"");
     });
-    showToast(mode==="add"?"Maintenance request added":"Maintenance request updated");
-    setSubModal(null);
+
+  const openCount   = allTickets.filter(t => (t.status||"Open") === "Open").length;
+  const inProgCount = allTickets.filter(t => t.status === "In Progress").length;
+  const closedCount = allTickets.filter(t => t.status === "Closed").length;
+
+  /* Update a ticket inside its equipment's maintenance array */
+  const updateTicket = (eqId, updated) => {
+    setData(prev => {
+      const list = prev.equipment.map(eq => {
+        if (eq.id !== eqId) return eq;
+        return { ...eq, maintenance: (eq.maintenance||[]).map(t => t.id===updated.id ? updated : t) };
+      });
+      return { ...prev, equipment: list };
+    });
   };
 
+  /* Add new ticket */
+  const addTicket = (eqId, rec) => {
+    setData(prev => {
+      const list = prev.equipment.map(eq => {
+        if (eq.id !== eqId) return eq;
+        const ticket = { ...rec, id: uid(), status: "Open", raisedAt: new Date().toISOString().slice(0,10) };
+        return { ...eq, maintenance: [...(eq.maintenance||[]), ticket] };
+      });
+      return { ...prev, equipment: list };
+    });
+    showToast("Maintenance ticket raised");
+    setModal(null);
+  };
+
+  /* Close a ticket */
+  const closeTicket = (ticket, notes) => {
+    updateTicket(ticket._eqId, {
+      ...ticket,
+      status: "Closed",
+      closedAt: new Date().toISOString().slice(0,10),
+      closingNotes: notes,
+    });
+    showToast("Ticket closed ✓");
+    setCloseModal(null);
+    setCloseNotes("");
+  };
+
+  /* Reopen a ticket */
+  const reopenTicket = ticket => {
+    updateTicket(ticket._eqId, { ...ticket, status: "Open", closedAt: "", closingNotes: "" });
+    showToast("Ticket reopened");
+  };
+
+  /* Mark in progress */
+  const markInProgress = ticket => {
+    updateTicket(ticket._eqId, { ...ticket, status: "In Progress" });
+    showToast("Ticket marked In Progress");
+  };
+
+  const IS = { background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, color:T.textSub, outline:"none", width:"100%" };
+
   return (
-    <div style={{maxWidth:"min(800px,95vw)",margin:"0 auto",width:"100%"}}>
-      <PageHeader title="MAINTENANCE" sub="Raise maintenance requests for equipment" color={T.gold} />
-      <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:12}}>MAINTENANCE REQUEST TICKET</div>
-      <select value={selectedId||""} onChange={e=>setSelectedId(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
-        <option value="">Select equipment…</option>
-        {equipment.map(eq=> <option key={eq.id} value={eq.id}>{eq.name}</option>)}
-      </select>
-      {selected && (
-        <>
-          <Btn color={T.gold} solid onClick={()=>setSubModal({mode:"add"})} style={{marginTop:8,marginBottom:8}}>+ Add Maintenance</Btn>
-          {(selected.maintenance||[]).length>0 && (
-            <div style={{marginTop:16}}>
-              <div style={{fontWeight:600,marginBottom:8}}>Existing Requests</div>
-              <div style={{display:"grid",gap:8}}>
-                {selected.maintenance.map(r=> (
-                  <div key={r.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px"}}>
-                    <div style={{fontSize:13}}>{r.description||r.reason||r.serviceProvider||""}</div>
-                    <div style={{fontSize:11,color:T.textMuted}}>{r.date} – {r.status}</div>
+    <div style={{maxWidth:"min(960px,95vw)",margin:"0 auto",width:"100%"}}>
+      <PageHeader title="MAINTENANCE TICKETS" sub="Raise, track and close equipment maintenance requests" color={T.gold}>
+        <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Raise Ticket</Btn>
+      </PageHeader>
+
+      {/* ── Stats strip ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:20}}>
+        {[
+          {label:"Total",       value:allTickets.length,  color:T.textMuted},
+          {label:"Open",        value:openCount,          color:"#ef4444"},
+          {label:"In Progress", value:inProgCount,        color:"#f59e0b"},
+          {label:"Closed",      value:closedCount,        color:"#10b981"},
+        ].map(s=>(
+          <div key={s.label} onClick={()=>setFilterStatus(s.label==="Total"?"All":s.label)}
+            style={{background:T.card,border:`1px solid ${filterStatus===(s.label==="Total"?"All":s.label)?s.color:T.border}`,borderRadius:12,padding:"14px 16px",textAlign:"center",cursor:"pointer",transition:"all .15s"}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:s.color}}>{s.value}</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Filters ── */}
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <div style={{display:"flex",gap:6}}>
+          {["All","Open","In Progress","Closed"].map(s=>(
+            <button key={s} onClick={()=>setFilterStatus(s)}
+              style={{padding:"6px 14px",borderRadius:999,border:`1px solid ${filterStatus===s?T.gold:T.border}`,background:filterStatus===s?T.goldDim:"transparent",color:filterStatus===s?T.gold:T.textSub,fontSize:12,fontWeight:filterStatus===s?700:500,cursor:"pointer",transition:"all .15s"}}>
+              {s}
+            </button>
+          ))}
+        </div>
+        {projects.length > 0 && (
+          <select value={filterProj} onChange={e=>setFilterProj(e.target.value)}
+            style={{...IS, width:"auto",fontSize:12,padding:"6px 12px"}}>
+            <option value="All">All Projects</option>
+            {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
+        <span style={{fontSize:12,color:T.textMuted,marginLeft:"auto"}}>{visible.length} ticket{visible.length!==1?"s":""}</span>
+      </div>
+
+      {/* ── Ticket list ── */}
+      {visible.length === 0 ? (
+        <div style={{textAlign:"center",padding:"60px 20px",background:T.card,border:`1px solid ${T.border}`,borderRadius:16}}>
+          <div style={{fontSize:48,marginBottom:12}}>🛠</div>
+          <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:6}}>
+            {allTickets.length === 0 ? "No tickets yet" : "No tickets match this filter"}
+          </div>
+          <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>
+            {allTickets.length === 0 ? "Raise a maintenance request to get started" : "Try a different status or project filter"}
+          </div>
+          {allTickets.length === 0 && <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Raise First Ticket</Btn>}
+        </div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {visible.map((ticket, i) => {
+            const s   = sOf(ticket);
+            const isE = expandId === ticket.id;
+            const status = ticket.status || "Open";
+            return (
+              <div key={ticket.id} style={{background:T.card,border:`1px solid ${status==="Open"?"#ef444444":status==="In Progress"?"#f59e0b44":T.border}`,borderLeft:`4px solid ${s.color}`,borderRadius:14,overflow:"hidden",animationDelay:`${i*.03}s`}} className="fade-up">
+
+                {/* ── Ticket header (always visible) ── */}
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer"}} onClick={()=>setExpandId(isE?null:ticket.id)}>
+                  {/* Status badge */}
+                  <div style={{background:s.bg,border:`1px solid ${s.color}44`,borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,color:s.color,whiteSpace:"nowrap",flexShrink:0,marginTop:2}}>
+                    {s.icon} {status}
                   </div>
-                ))}
+                  {/* Main info */}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:14,color:T.text,marginBottom:4}}>{ticket.description || ticket.reason || "Maintenance Request"}</div>
+                    <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,color:T.textMuted}}>
+                      <span style={{fontWeight:600,color:T.gold}}>⚙ {ticket._eqName}</span>
+                      {ticket.project && <span>📍 {ticket.project}</span>}
+                      {ticket.raisedAt && <span>Raised: {fmtDate(ticket.raisedAt)}</span>}
+                      {ticket.closedAt && <span style={{color:"#10b981"}}>Closed: {fmtDate(ticket.closedAt)}</span>}
+                      {ticket.cost && <span>SAR {Number(ticket.cost).toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  {/* Action buttons */}
+                  <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                    {status === "Open" && (
+                      <button onClick={()=>markInProgress(ticket)}
+                        style={{background:"rgba(245,158,11,.15)",border:"1px solid rgba(245,158,11,.3)",color:"#f59e0b",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                        ▶ Start
+                      </button>
+                    )}
+                    {(status === "Open" || status === "In Progress") && (
+                      <button onClick={()=>{setCloseModal(ticket);setCloseNotes("");}}
+                        style={{background:"rgba(16,185,129,.15)",border:"1px solid rgba(16,185,129,.3)",color:"#10b981",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                        ✓ Close
+                      </button>
+                    )}
+                    {status === "Closed" && (
+                      <button onClick={()=>reopenTicket(ticket)}
+                        style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                        ↺ Reopen
+                      </button>
+                    )}
+                    <span style={{color:T.textMuted,fontSize:13,marginLeft:4}}>{isE?"▲":"▼"}</span>
+                  </div>
+                </div>
+
+                {/* ── Expanded detail ── */}
+                {isE && (
+                  <div style={{borderTop:`1px solid ${T.border}`,background:T.card2,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+                      {ticket.reason && (
+                        <div>
+                          <div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4,letterSpacing:.5}}>REASON FOR REQUEST</div>
+                          <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{ticket.reason}</div>
+                        </div>
+                      )}
+                      {ticket.serviceProvider && (
+                        <div>
+                          <div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4,letterSpacing:.5}}>SERVICE PROVIDER</div>
+                          <div style={{fontSize:13,color:T.text}}>{ticket.serviceProvider}</div>
+                        </div>
+                      )}
+                      {ticket.closingNotes && (
+                        <div>
+                          <div style={{fontSize:10,fontWeight:700,color:"#10b981",marginBottom:4,letterSpacing:.5}}>CLOSING NOTES</div>
+                          <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{ticket.closingNotes}</div>
+                        </div>
+                      )}
+                    </div>
+                    {ticket.fileLink && (
+                      <a href={ticket.fileLink} target="_blank" rel="noreferrer"
+                        style={{display:"inline-flex",alignItems:"center",gap:6,background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:600,color:T.blue,textDecoration:"none",alignSelf:"flex-start"}}>
+                        📎 View Attachment
+                      </a>
+                    )}
+                    {/* Timeline */}
+                    <div style={{display:"flex",gap:0,alignItems:"center",marginTop:4}}>
+                      {[
+                        {label:"Raised",      date:ticket.raisedAt, done:true},
+                        {label:"In Progress", date:status==="In Progress"||status==="Closed"?ticket.raisedAt:"", done:status==="In Progress"||status==="Closed"},
+                        {label:"Closed",      date:ticket.closedAt, done:status==="Closed"},
+                      ].map((step,si)=>(
+                        <React.Fragment key={si}>
+                          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                            <div style={{width:28,height:28,borderRadius:"50%",background:step.done?"#10b981":T.card2,border:`2px solid ${step.done?"#10b981":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>
+                              {step.done?"✓":"○"}
+                            </div>
+                            <div style={{fontSize:10,color:step.done?T.text:T.textMuted,fontWeight:step.done?600:400,textAlign:"center"}}>{step.label}</div>
+                            {step.date&&<div style={{fontSize:10,color:T.textMuted}}>{fmtDate(step.date)}</div>}
+                          </div>
+                          {si<2&&<div style={{flex:1,height:2,background:step.done&&(si===0?status!=="Open":status==="Closed")?"#10b981":T.border,margin:"0 4px",marginBottom:22}}/>}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </>
+            );
+          })}
+        </div>
       )}
-      {subModal && (
-        <SubRecordModal
-          mode={subModal.mode}
-          type="maintenance"
-          rec={subModal.rec}
-          onClose={()=>setSubModal(null)}
-          onSave={saveMaintenance}
+
+      {/* ── Raise Ticket Modal ── */}
+      {modal && (
+        <RaiseTicketModal
+          equipment={equipment}
+          projects={projects}
+          onClose={()=>setModal(null)}
+          onSave={addTicket}
         />
+      )}
+
+      {/* ── Close Ticket Modal ── */}
+      {closeModal && (
+        <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setCloseModal(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:480,padding:"24px",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:"#10b981",marginBottom:4}}>✓ CLOSE TICKET</div>
+            <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>{closeModal.description||closeModal.reason||"Maintenance Request"} — <span style={{color:T.gold}}>{closeModal._eqName}</span></div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>CLOSING NOTES (optional)</div>
+            <textarea
+              value={closeNotes}
+              onChange={e=>setCloseNotes(e.target.value)}
+              placeholder="Describe what was done, parts replaced, outcome…"
+              rows={4}
+              style={{...IS,resize:"vertical",fontFamily:"inherit",lineHeight:1.6}}
+            />
+            <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
+              <button onClick={()=>setCloseModal(null)}
+                style={{background:"transparent",border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                Cancel
+              </button>
+              <button onClick={()=>closeTicket(closeModal,closeNotes)}
+                style={{background:"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:800,cursor:"pointer"}}>
+                ✓ Confirm Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 }
+
+function RaiseTicketModal({equipment,projects,onClose,onSave}) {
+  const [f,setF] = useState({date: new Date().toISOString().slice(0,10), status:"Open"});
+  const set = k => v => setF(p=>({...p,[k]:v}));
+  const IS  = {background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",width:"100%",fontFamily:"inherit"};
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+        <div style={{padding:"20px 24px 0",position:"sticky",top:0,background:T.card,zIndex:1}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.gold,marginBottom:2}}>🛠 RAISE MAINTENANCE TICKET</div>
+          <div style={{fontSize:12,color:T.textMuted,marginBottom:16}}>Fill in the details below — the ticket will be logged as Open</div>
+        </div>
+        <div style={{padding:"0 24px 24px",display:"flex",flexDirection:"column",gap:14}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>EQUIPMENT *</div>
+            <select value={f.eqId||""} onChange={e=>set("eqId")(e.target.value)}
+              style={{...IS,colorScheme:"dark"}}>
+              <option value="">Select equipment…</option>
+              {equipment.map(eq=><option key={eq.id} value={eq.id}>{eq.name}{eq.model?` — ${eq.model}`:""}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>PROJECT</div>
+            <select value={f.project||""} onChange={e=>set("project")(e.target.value)}
+              style={{...IS,colorScheme:"dark"}}>
+              <option value="">Select project…</option>
+              {projects.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>DESCRIPTION OF ISSUE *</div>
+            <textarea value={f.description||""} onChange={e=>set("description")(e.target.value)}
+              placeholder="Describe the problem or maintenance needed…" rows={3}
+              style={{...IS,resize:"vertical",lineHeight:1.6}}/>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>REASON / PRIORITY</div>
+            <textarea value={f.reason||""} onChange={e=>set("reason")(e.target.value)}
+              placeholder="Why is this needed? Is it urgent?" rows={2}
+              style={{...IS,resize:"vertical",lineHeight:1.6}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>DATE</div>
+              <input type="date" value={f.date||""} onChange={e=>set("date")(e.target.value)} style={{...IS,colorScheme:"dark"}}/>
+            </div>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>EST. COST (SAR)</div>
+              <input type="number" value={f.cost||""} onChange={e=>set("cost")(e.target.value)} placeholder="0" style={{...IS}}/>
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>SERVICE PROVIDER</div>
+            <input value={f.serviceProvider||""} onChange={e=>set("serviceProvider")(e.target.value)} placeholder="Who will carry out the work?" style={{...IS}}/>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>FILE LINK</div>
+            <input value={f.fileLink||""} onChange={e=>set("fileLink")(e.target.value)} placeholder="Google Drive / SharePoint link…" style={{...IS}}/>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:4}}>
+            <button onClick={onClose}
+              style={{background:"transparent",border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+              Cancel
+            </button>
+            <button onClick={()=>{
+              if(!f.eqId){alert("Please select equipment");return;}
+              if(!f.description){alert("Please describe the issue");return;}
+              onSave(f.eqId, f);
+            }}
+              style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:10,padding:"10px 28px",fontSize:14,fontWeight:800,cursor:"pointer"}}>
+              🛠 Raise Ticket
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
   function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}) {
   const [activeTab,setActiveTab]=useState("certifications");
@@ -6334,7 +6640,7 @@ function MaintenancePage({data,setData,showToast}) {
         </div>
       }
 
-      {subModal&&<SubRecordModal mode={subModal.mode} type={subModal.type} rec={subModal.rec} onClose={()=>setSubModal(null)} onSave={(rec,mode)=>saveSubRecord(subModal.type,rec,mode)}/>}
+      {subModal&&<SubRecordModal mode={subModal.mode} type={subModal.type} rec={subModal.rec} projects={projects} onClose={()=>setSubModal(null)} onSave={(rec,mode)=>saveSubRecord(subModal.type,rec,mode)}/>}
     </div>
   );
 }
@@ -6377,7 +6683,7 @@ function SubRecordCard({r,type,color,delay,onEdit,onDel}) {
   );
 }
 
-function SubRecordModal({mode,type,rec,onClose,onSave}) {
+function SubRecordModal({mode,type,rec,onClose,onSave,projects}) {
   const [f,setF]=useState(rec||{});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
   const CONFIGS={
@@ -6385,7 +6691,7 @@ function SubRecordModal({mode,type,rec,onClose,onSave}) {
     invoices:      {color:T.green, title:"INVOICE",        fields:[["invoiceNo","Invoice No.","","req"],["supplier","Supplier","","req"],["amount","Amount (SAR)"],["date","Invoice Date","date"],["description","Description","textarea"],["fileLink","File Link","link"]]},
     insurance:     {color:T.purple,title:"INSURANCE",      fields:[["policyNo","Policy No.","","req"],["insurer","Insurer","","req"],["type","Policy Type"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
     permits:       {color:T.gold,  title:"PERMIT",         fields:[["permitNo","Permit No.","","req"],["type","Permit Type"],["issuedBy","Issued By"],["issueDate","Issue Date","date"],["expiryDate","Expiry Date","date"],["fileLink","File Link","link"]]},
-    maintenance:  {color:T.gold,  title:"MAINTENANCE",    fields:[["date","Date","date"],["description","Description","textarea"],["reason","Reason for Request","textarea"],["cost","Cost (SAR)"],["serviceProvider","Service Provider"],["fileLink","File Link","link"]]},
+    maintenance:   {color:T.gold,  title:"MAINTENANCE",    fields:[["project","Project","select"],["date","Date","date"],["description","Description","textarea"],["reason","Reason for Request","textarea"],["cost","Cost (SAR)"],["serviceProvider","Service Provider"],["status","Status","status"],["fileLink","File Link","link"]]},
   };
   const cfg=CONFIGS[type]||CONFIGS.certifications;
   return (
@@ -6397,6 +6703,19 @@ function SubRecordModal({mode,type,rec,onClose,onSave}) {
             ?<FTextarea value={f[k]||""} onChange={set(k)} color={cfg.color}/>
             :ftype==="link"
               ?<FLink value={f[k]||""} onChange={set(k)}/>
+              :ftype==="select"
+                ?<FSelect value={f[k]||""} onChange={set(k)} color={cfg.color}>
+                    <option value="">Select project…</option>
+                    {(projects||[]).map(p=><option key={p} value={p}>{p}</option>)}
+                  </FSelect>
+              :ftype==="status"
+                ?<FSelect value={f[k]||""} onChange={set(k)} color={cfg.color}>
+                    <option value="">Select status…</option>
+                    <option>Pending</option>
+                    <option>In Progress</option>
+                    <option>Completed</option>
+                    <option>On Hold</option>
+                  </FSelect>
               :<FInput type={ftype||"text"} value={f[k]||""} onChange={set(k)} color={cfg.color}/>
           }
         </FieldRow>
