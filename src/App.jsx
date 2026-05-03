@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import * as XLSX from "xlsx";
 
 /* ─── Global CSS ─────────────────────────────────────────────────────────── */
@@ -6366,7 +6366,7 @@ function MaintenancePage({data,setData,showToast}) {
                         {label:"In Progress", date:status==="In Progress"||status==="Closed"?ticket.raisedAt:"", done:status==="In Progress"||status==="Closed"},
                         {label:"Closed",      date:ticket.closedAt, done:status==="Closed"},
                       ].map((step,si)=>(
-                        <React.Fragment key={si}>
+                        <Fragment key={si}>
                           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
                             <div style={{width:28,height:28,borderRadius:"50%",background:step.done?"#10b981":T.card2,border:`2px solid ${step.done?"#10b981":T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>
                               {step.done?"✓":"○"}
@@ -6375,7 +6375,7 @@ function MaintenancePage({data,setData,showToast}) {
                             {step.date&&<div style={{fontSize:10,color:T.textMuted}}>{fmtDate(step.date)}</div>}
                           </div>
                           {si<2&&<div style={{flex:1,height:2,background:step.done&&(si===0?status!=="Open":status==="Closed")?"#10b981":T.border,margin:"0 4px",marginBottom:22}}/>}
-                        </React.Fragment>
+                        </Fragment>
                       ))}
                     </div>
                   </div>
