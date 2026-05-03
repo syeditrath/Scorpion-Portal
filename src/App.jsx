@@ -6119,8 +6119,26 @@ function MaintenancePage({data,setData,showToast}) {
   const [filterStatus, setFilterStatus] = useState("Open");  // "All" | "Open" | "Closed"
   const [filterProj,   setFilterProj]   = useState("All");
   const [modal,        setModal]        = useState(null);    // null | {mode,ticket,eqId}
-  const [closeModal,   setCloseModal]   = useState(null);    // ticket to close
-  const [closeNotes,   setCloseNotes]   = useState("");
+  const [closeModal,    setCloseModal]    = useState(null);
+  const [closeNotes,    setCloseNotes]    = useState("");
+  const [closeFile,     setCloseFile]     = useState({link:"",name:""});
+  const [closingUpload, setClosingUpload] = useState(false);
+  const [closingUpErr,  setClosingUpErr]  = useState("");
+  const closeFileRef = useRef();
+
+  const handleCloseUpload = async (file) => {
+    if (!file) return;
+    setClosingUpload(true); setClosingUpErr("");
+    try {
+      const folder = "maintenance/completions";
+      const url = await uploadToSupabase(file, folder);
+      setCloseFile({link:url, name:file.name});
+    } catch(err) {
+      setClosingUpErr("Upload failed: " + (err.message||"check Supabase config"));
+    } finally {
+      setClosingUpload(false);
+    }
+  };
   const [expandId,     setExpandId]     = useState(null);
 
   const equipment = data.equipment || [];
@@ -6180,16 +6198,18 @@ function MaintenancePage({data,setData,showToast}) {
   };
 
   /* Close a ticket */
-  const closeTicket = (ticket, notes) => {
+  const closeTicket = (ticket, notes, file) => {
     updateTicket(ticket._eqId, {
       ...ticket,
       status: "Closed",
       closedAt: new Date().toISOString().slice(0,10),
       closingNotes: notes,
+      ...(file.link ? {completionFileLink:file.link, completionFileName:file.name} : {}),
     });
     showToast("Ticket closed ✓");
     setCloseModal(null);
     setCloseNotes("");
+    setCloseFile({link:"",name:""});
   };
 
   /* Reopen a ticket */
@@ -6379,23 +6399,55 @@ function MaintenancePage({data,setData,showToast}) {
       {/* ── Close Ticket Modal ── */}
       {closeModal && (
         <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setCloseModal(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:480,padding:"24px",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:500,maxHeight:"90vh",overflowY:"auto",padding:"24px",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:"#10b981",marginBottom:4}}>✓ CLOSE TICKET</div>
-            <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>{closeModal.description||closeModal.reason||"Maintenance Request"} — <span style={{color:T.gold}}>{closeModal._eqName}</span></div>
+            <div style={{fontSize:13,color:T.textMuted,marginBottom:18}}>{closeModal.description||closeModal.reason||"Maintenance Request"} — <span style={{color:T.gold}}>{closeModal._eqName}</span></div>
+
             <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>CLOSING NOTES (optional)</div>
             <textarea
               value={closeNotes}
               onChange={e=>setCloseNotes(e.target.value)}
               placeholder="Describe what was done, parts replaced, outcome…"
               rows={4}
-              style={{...IS,resize:"vertical",fontFamily:"inherit",lineHeight:1.6}}
+              style={{...IS,resize:"vertical",fontFamily:"inherit",lineHeight:1.6,marginBottom:16}}
             />
-            <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
-              <button onClick={()=>setCloseModal(null)}
+
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>COMPLETION DOCUMENT (optional)</div>
+            {closeFile.link ? (
+              <div style={{display:"flex",alignItems:"center",gap:10,background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",marginBottom:16}}>
+                <span style={{fontSize:20}}>📄</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{closeFile.name}</div>
+                  <a href={closeFile.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:T.blue,fontWeight:600,textDecoration:"none"}}>↗ View</a>
+                </div>
+                <button onClick={()=>setCloseFile({link:"",name:""})}
+                  style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>
+              </div>
+            ) : (
+              <div
+                onClick={()=>!closingUpload&&closeFileRef.current.click()}
+                style={{border:`2px dashed ${T.border}`,borderRadius:10,padding:"16px",textAlign:"center",cursor:closingUpload?"wait":"pointer",marginBottom:16,transition:"all .2s"}}
+                onDragOver={e=>{e.preventDefault();}}
+                onDrop={e=>{e.preventDefault();const file=e.dataTransfer.files[0];if(file)handleCloseUpload(file);}}>
+                {closingUpload
+                  ? <div style={{fontSize:13,color:T.gold,fontWeight:600}}>⏳ Uploading…</div>
+                  : <>
+                      <div style={{fontSize:22,marginBottom:4}}>📎</div>
+                      <div style={{fontSize:12,color:T.textMuted}}>Attach completion report, photo or certificate</div>
+                    </>
+                }
+                <input ref={closeFileRef} type="file" style={{display:"none"}}
+                  onChange={e=>{if(e.target.files[0]){handleCloseUpload(e.target.files[0]);e.target.value="";}}}/>
+              </div>
+            )}
+            {closingUpErr&&<div style={{fontSize:12,color:T.red,marginBottom:10,fontWeight:600}}>⚠ {closingUpErr}</div>}
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={()=>{setCloseModal(null);setCloseFile({link:"",name:""});}}
                 style={{background:"transparent",border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
                 Cancel
               </button>
-              <button onClick={()=>closeTicket(closeModal,closeNotes)}
+              <button onClick={()=>closeTicket(closeModal,closeNotes,closeFile)}
                 style={{background:"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"#fff",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:800,cursor:"pointer"}}>
                 ✓ Confirm Close
               </button>
@@ -6408,9 +6460,36 @@ function MaintenancePage({data,setData,showToast}) {
 }
 
 function RaiseTicketModal({equipment,projects,onClose,onSave}) {
-  const [f,setF] = useState({date: new Date().toISOString().slice(0,10), status:"Open"});
+  const [f,        setF]        = useState({date: new Date().toISOString().slice(0,10), status:"Open"});
+  const [uploading,setUploading] = useState(false);
+  const [uploadErr,setUploadErr] = useState("");
+  const [dragging, setDragging]  = useState(false);
+  const fileRef = useRef();
   const set = k => v => setF(p=>({...p,[k]:v}));
   const IS  = {background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",width:"100%",fontFamily:"inherit"};
+
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true); setUploadErr("");
+    try {
+      const folder = `maintenance/${(f.project||"general").replace(/[^a-zA-Z0-9]/g,"_")}`;
+      const url = await uploadToSupabase(file, folder);
+      setF(p=>({...p, fileLink:url, fileName:file.name}));
+    } catch(err) {
+      setUploadErr("Upload failed: " + (err.message||"check Supabase config"));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const fileIcon = name => {
+    if (!name) return "📎";
+    if (/\.pdf$/i.test(name))       return "📄";
+    if (/\.(xlsx?|csv)$/i.test(name)) return "📊";
+    if (/\.(png|jpe?g|webp|gif)$/i.test(name)) return "🖼️";
+    return "📎";
+  };
+
   return (
     <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",boxShadow:T.shadow,animation:"modalFloatIn .3s ease both"}}>
@@ -6461,9 +6540,41 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
             <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>SERVICE PROVIDER</div>
             <input value={f.serviceProvider||""} onChange={e=>set("serviceProvider")(e.target.value)} placeholder="Who will carry out the work?" style={{...IS}}/>
           </div>
+          {/* ── File upload ── */}
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>FILE LINK</div>
-            <input value={f.fileLink||""} onChange={e=>set("fileLink")(e.target.value)} placeholder="Google Drive / SharePoint link…" style={{...IS}}/>
+            <div style={{fontSize:12,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:.5}}>ATTACH FILE</div>
+            {f.fileLink ? (
+              /* File attached — preview row */
+              <div style={{display:"flex",alignItems:"center",gap:10,background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px"}}>
+                <span style={{fontSize:22,flexShrink:0}}>{fileIcon(f.fileName||f.fileLink)}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.fileName||"Attached file"}</div>
+                  <a href={f.fileLink} target="_blank" rel="noreferrer" style={{fontSize:11,color:T.blue,fontWeight:600,textDecoration:"none"}}>↗ View / Download</a>
+                </div>
+                <button onClick={()=>setF(p=>({...p,fileLink:"",fileName:""}))}
+                  style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,cursor:"pointer",flexShrink:0}}>✕</button>
+              </div>
+            ) : (
+              /* Drop zone */
+              <div
+                onDragOver={e=>{e.preventDefault();setDragging(true);}}
+                onDragLeave={()=>setDragging(false)}
+                onDrop={e=>{e.preventDefault();setDragging(false);const file=e.dataTransfer.files[0];if(file)handleUpload(file);}}
+                onClick={()=>!uploading&&fileRef.current.click()}
+                style={{border:`2px dashed ${dragging?T.gold:T.border}`,borderRadius:10,padding:"20px 16px",textAlign:"center",cursor:uploading?"wait":"pointer",background:dragging?T.goldDim:"transparent",transition:"all .2s"}}>
+                {uploading
+                  ? <div style={{fontSize:13,color:T.gold,fontWeight:600}}>⏳ Uploading…</div>
+                  : <>
+                      <div style={{fontSize:26,marginBottom:6}}>📎</div>
+                      <div style={{fontSize:13,fontWeight:600,color:T.text,marginBottom:3}}>Drop file here or click to browse</div>
+                      <div style={{fontSize:11,color:T.textMuted}}>PDF, images, Excel — any relevant documentation</div>
+                    </>
+                }
+                <input ref={fileRef} type="file" style={{display:"none"}}
+                  onChange={e=>{if(e.target.files[0]){handleUpload(e.target.files[0]);e.target.value="";}}}/>
+              </div>
+            )}
+            {uploadErr && <div style={{fontSize:12,color:T.red,marginTop:6,fontWeight:600}}>⚠ {uploadErr}</div>}
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end",paddingTop:4}}>
             <button onClick={onClose}
