@@ -955,26 +955,47 @@ function dprReadRange(ws, rangeStr) {
   } catch { return ""; }
 }
 
-/* Detect if workbook is the Scorpion DPR template (has "Daily DPR Form" sheet
-   OR has the header text in cell D3) */
+/* Detect if workbook is the Scorpion DPR template.
+   Checks sheet name first, then scans common header cells for DPR keywords. */
 function isScorpionDprTemplate(wb) {
-  if (wb.SheetNames.includes("Daily DPR Form")) return true;
+  if (wb.SheetNames.some(n => /daily.?dpr|dpr.?form|daily.?progress/i.test(n))) return true;
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const title = dprReadCell(ws, "D3");
-  return title.includes("DAILY PROGRESS REPORT");
+  const checkCells = ["A1","B1","C1","D1","A2","B2","C2","D2","A3","B3","C3","D3","E3","F3","G3","H3","A4","D4"];
+  for (const ref of checkCells) {
+    const v = ((ws[ref] && (ws[ref].v !== undefined ? ws[ref].v : ws[ref].w)) || "").toString().toUpperCase();
+    if (v.includes("DAILY PROGRESS") || v.includes("DAILY REPORT") || v.includes("DPR")) return true;
+  }
+  return false;
 }
 
-/* Parse a single Scorpion DPR form sheet into a report record */
-function parseScorpionDprSheet(wb) {
-  const ws = wb.Sheets[wb.SheetNames.includes("Daily DPR Form") ? "Daily DPR Form" : wb.SheetNames[0]];
+/* Read one cell cleanly, resolving merged cell anchors via mergeMap. */
+function dprReadExact(ws, ref, mergeMap) {
+  const c = ws[ref];
+  if (c) {
+    if (c.t === "d" || c.v instanceof Date) return excelDateToStr(c.v) || c.w || "";
+    if (c.v !== undefined && c.v !== null && c.v !== "") return String(c.v).trim();
+    if (c.w) return String(c.w).trim();
+  }
+  return mergeMap[ref] || "";
+}
 
-  // Build a merged-cell lookup: for any cell inside a merged range,
-  // return the value of the top-left anchor cell.
+/* Parse a single Scorpion DPR form sheet — reads ONLY the exact cells specified. */
+function parseScorpionDprSheet(wb) {
+  const sheetName = wb.SheetNames.find(n => /daily.?dpr|dpr.?form|daily.?progress/i.test(n)) || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+
+  // Build merge map: every cell inside a merged range points to anchor value
   const mergeMap = {};
   if (ws["!merges"]) {
     ws["!merges"].forEach(m => {
       const anchorRef = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
-      const anchorVal = dprReadCell(ws, anchorRef);
+      const ac = ws[anchorRef];
+      let anchorVal = "";
+      if (ac) {
+        if (ac.t === "d" || ac.v instanceof Date) anchorVal = excelDateToStr(ac.v) || ac.w || "";
+        else if (ac.v !== undefined && ac.v !== null) anchorVal = String(ac.v).trim();
+        else if (ac.w) anchorVal = String(ac.w).trim();
+      }
       for (let r = m.s.r; r <= m.e.r; r++) {
         for (let c = m.s.c; c <= m.e.c; c++) {
           mergeMap[XLSX.utils.encode_cell({ r, c })] = anchorVal;
@@ -983,67 +1004,31 @@ function parseScorpionDprSheet(wb) {
     });
   }
 
-  // Helper: read a cell, falling back to merge map, then scan the same row
-  // across a wide range of columns (A–N) for the first non-empty value.
-  const cell = (ref) => {
-    let v = dprReadCell(ws, ref);
-    if (v) return v;
-    // Try merge map
-    if (mergeMap[ref]) return mergeMap[ref];
-    // Scan same row across columns A–N
-    const row = ref.replace(/[A-Z]+/g, "");
-    const cols = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N"];
-    for (const c2 of cols) {
-      const alt = dprReadCell(ws, c2 + row);
-      if (alt) return alt;
-      if (mergeMap[c2 + row]) return mergeMap[c2 + row];
-    }
-    return "";
-  };
-
-  // Helper: read a value-label pair — scans the cell AND adjacent cells in
-  // the same row, skipping cells that look like labels (all uppercase / short).
-  const cellVal = (ref) => {
-    const v = cell(ref);
-    // If it looks like a label rather than data, also try adjacent columns
-    if (v && v.length > 1 && !/^[A-Z\s\/\-\(\)\.]+$/.test(v)) return v;
-    const row = ref.replace(/[A-Z]+/g, "");
-    const cols = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N"];
-    for (const c2 of cols) {
-      const alt = dprReadCell(ws, c2 + row) || mergeMap[c2 + row] || "";
-      if (alt && alt.length > 1 && !/^[A-Z\s\/\-\(\)\.]+$/.test(alt)) return alt;
-    }
-    return v; // fall back to whatever we found
-  };
+  const rd = (ref) => dprReadExact(ws, ref, mergeMap);
 
   return {
     id: uid(),
     dprSource: "scorpion_template",
-    // Section 1 — Header
-    project:         dprReadCell(ws,"C8")  || mergeMap["C8"]  || "",
-    date:            dprReadCell(ws,"H8")  || mergeMap["H8"]  || "",
-    // Section 2 — Work Profile & Activity
-    profile:         dprReadCell(ws,"C13") || mergeMap["C13"] || "",
-    activity:        dprReadCell(ws,"H13") || mergeMap["H13"] || "",
-    // Section 3 — Permits & Standby
-    permitReceived:  dprReadCell(ws,"C14") || mergeMap["C14"] || "",
-    permitHours:     dprReadCell(ws,"H14") || mergeMap["H14"] || "",
-    standbyReason:   dprReadCell(ws,"C15") || mergeMap["C15"] || "",
-    // Section 4 — Progress
-    progressToday:   dprReadCell(ws,"E18") || mergeMap["E18"] || "",
-    accumulated:     dprReadCell(ws,"G18") || mergeMap["G18"] || "",
-    // Section 5 — Activity Summary
-    activities:      dprReadRange(ws,"A27:N32") || dprReadCell(ws,"A27") || mergeMap["A27"] || "",
+    project:        rd("C8"),
+    date:           rd("H8"),
+    profile:        rd("C13"),
+    activity:       rd("H13"),
+    permitReceived: rd("C14"),
+    permitHours:    rd("H14"),
+    standbyReason:  rd("C15"),
+    progressToday:  rd("E18"),
+    accumulated:    rd("G18"),
+    activities:     dprReadRange(ws, "A27:N32") || rd("A27"),
   };
 }
-
 function parseDailyReportExcel(arrayBuffer) {
   const wb = XLSX.read(arrayBuffer, { type:"array", cellDates:true });
 
-  // ── Scorpion Premium DPR Template path ──
+  // ── Scorpion DPR Template path — always try this first ──
   if (isScorpionDprTemplate(wb)) {
     const rec = parseScorpionDprSheet(wb);
-    return [rec].filter(r => r.date || r.activities || r.project);
+    // Always return the record so the user can see what was parsed
+    return [rec];
   }
 
   // ── Generic column-mapped path (legacy / other formats) ──
@@ -4546,7 +4531,9 @@ function ProjectDocs({data,setData,showToast}) {
   const docs     = data.projectDocs || [];
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
-  const counts   = Object.fromEntries(PD_TABS.map(t=>[t.id, docs.filter(d=>d.subTab===t.id).length]));
+  const counts   = Object.fromEntries(PD_TABS.map(t=>[t.id,
+    docs.filter(d => d.subTab===t.id && (!selectedProject || d.project===selectedProject)).length
+  ]));
 
   const openProject = (project) => {
     setSelectedProject(project);
