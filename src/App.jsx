@@ -989,20 +989,20 @@ function parseScorpionDprSheet(wb) {
     id: uid(),
     dprSource: "scorpion_template",
     // Section 1 — Header
-    date:          dprReadCell(ws,"I8") || cell("I8"),
-    project:       dprReadCell(ws,"D8") || cell("D8"),
-    contractor:    dprReadCell(ws,"D9") || cell("D9"),
-    client:        dprReadCell(ws,"I9") || cell("I9"),
-    shiftTiming:   dprReadCell(ws,"D10") || cell("D10"),
-    weather:       dprReadCell(ws,"I10") || cell("I10"),
+    date:          dprReadCell(ws,"H8") || cell("H8"),
+    project:       dprReadCell(ws,"C8") || cell("C8"),
+    contractor:    dprReadCell(ws,"C9") || cell("C9"),
+    client:        dprReadCell(ws,"H9") || cell("H9"),
+    shiftTiming:   dprReadCell(ws,"C10") || cell("C10"),
+    weather:       dprReadCell(ws,"H10") || cell("H10"),
     // Section 2 — Work Profile & Activity
-    profile:       dprReadCell(ws,"D13") || cell("D13"),
-    activity:      dprReadCell(ws,"I13") || cell("I13"),
+    profile:       dprReadCell(ws,"C13") || cell("C13"),
+    activity:      dprReadCell(ws,"H13") || cell("H13"),
     // Section 3 — Progress
-    totalQty:      dprReadCell(ws,"C18") || cell("C18"),
-    prevProgress:  dprReadCell(ws,"E18") || cell("E18"),
-    progressToday: dprReadCell(ws,"G18") || cell("G18"),
-    accumulated:   dprReadCell(ws,"I18") || cell("I18"),
+    totalQty:      dprReadCell(ws,"A18") || cell("A18"),
+    prevProgress:  dprReadCell(ws,"C18") || cell("C18"),
+    progressToday: dprReadCell(ws,"E18") || cell("E18"),
+    accumulated:   dprReadCell(ws,"G18") || cell("G18"),
     // Section 4 — Drilling
     force:         dprReadCell(ws,"C23") || cell("C23"),
     torque:        dprReadCell(ws,"E23") || cell("E23"),
@@ -1011,7 +1011,7 @@ function parseScorpionDprSheet(wb) {
     mudDensity:    dprReadCell(ws,"I23") || cell("I23"),
     mudViscosity:  dprReadCell(ws,"J23") || cell("J23"),
     // Section 5 — Activity summaries
-    activities:    dprReadRange(ws,"B27:K31"),
+    activities:    dprReadCell(ws,"A27") || cell("A27"),
     activityNextDay: dprReadRange(ws,"B33:K37"),
     // Section 6 — Personnel
     manpower:      manpowerList.length ? String(manpowerList.length) : "",
