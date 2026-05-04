@@ -400,16 +400,17 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
 }
 
 /* ─── EmailJS Config ──────────────────────────────────────────────────────── */
-const EMAILJS_SERVICE_ID  = "service_628rnep";
-const EMAILJS_TEMPLATE_ID = "template_uro8tbd";
-const EMAILJS_PUBLIC_KEY  = "ZmHZyJMawS8ZflAZJ";
+const EMAILJS_SERVICE_ID        = "service_628rnep";
+const EMAILJS_TEMPLATE_ID       = "template_uro8tbd";
+const EMAILJS_MAINT_TEMPLATE_ID = "template_j1n2tbr"; // Maintenance ticket notification
+const EMAILJS_PUBLIC_KEY        = "ZmHZyJMawS8ZflAZJ";
 const NOTIFY_STORAGE_KEY  = "cta_notify_settings";
 const NOTIFY_LAST_SENT_KEY = "cta_notify_last_sent";
 
 function loadNotifySettings() {
   try {
     const s = localStorage.getItem(NOTIFY_STORAGE_KEY);
-    if (!s) return { enabled: false, emails: [], thresholdDays: 90 };
+    if (!s) return { enabled: false, emails: [], thresholdDays: 90, maintEmails: [] };
     const p = JSON.parse(s);
     // migrate old single-email field
     if (!p.emails) p.emails = p.email ? [p.email] : [];
@@ -487,6 +488,58 @@ function buildEmailPayload(alertsToSend, recipientEmail, isTest = false) {
     sent_date:      today,
   };
 }
+function buildMaintenanceEmailPayload(ticket, eqName, recipientEmail) {
+  const today = new Date().toLocaleDateString("en-GB", {weekday:"long",year:"numeric",month:"long",day:"numeric"});
+  const lines = [];
+  lines.push(`Scorpion Arabia — Maintenance Ticket Raised`);
+  lines.push(`${"─".repeat(50)}`);
+  lines.push(`A new maintenance ticket has been raised on ${today}.`);
+  lines.push(``);
+  lines.push(`TICKET DETAILS`);
+  lines.push(`${"─".repeat(40)}`);
+  lines.push(`  Equipment     : ${eqName || "—"}`);
+  lines.push(`  Project       : ${ticket.project || "—"}`);
+  lines.push(`  Raised By     : ${ticket.raisedBy || "—"}`);
+  lines.push(`  Date          : ${ticket.raisedAt || today}`);
+  lines.push(`  Status        : Open`);
+  lines.push(``);
+  lines.push(`  Description   : ${ticket.description || "—"}`);
+  if (ticket.reason)          lines.push(`  Reason        : ${ticket.reason}`);
+  if (ticket.serviceProvider) lines.push(`  Service Prov. : ${ticket.serviceProvider}`);
+  if (ticket.cost)            lines.push(`  Est. Cost     : SAR ${Number(ticket.cost).toLocaleString()}`);
+  lines.push(``);
+  lines.push(`${"─".repeat(50)}`);
+  lines.push(`Please log in to the Scorpion Arabia Portal to review and action this ticket.`);
+
+  return {
+    to_email:         recipientEmail,
+    subject:          `🛠 Maintenance Ticket Raised — ${eqName}${ticket.project ? " / " + ticket.project : ""} (${ticket.raisedBy || "Unknown"})`,
+    ticket_equipment: eqName || "—",
+    ticket_project:   ticket.project || "—",
+    ticket_raised_by: ticket.raisedBy || "—",
+    ticket_date:      ticket.raisedAt || today,
+    ticket_desc:      ticket.description || "—",
+    ticket_reason:    ticket.reason || "—",
+    ticket_provider:  ticket.serviceProvider || "—",
+    ticket_cost:      ticket.cost ? `SAR ${Number(ticket.cost).toLocaleString()}` : "—",
+    ticket_status:    "Open",
+    alert_list:       lines.join("\n"),
+    sent_date:        today,
+  };
+}
+
+function sendMaintenanceEmail(ticket, eqName, maintEmails) {
+  if (!maintEmails || !maintEmails.length) return;
+  if (!window.emailjs) return;
+  maintEmails.forEach(email => {
+    const payload = buildMaintenanceEmailPayload(ticket, eqName, email);
+    window.emailjs
+      .send(EMAILJS_SERVICE_ID, EMAILJS_MAINT_TEMPLATE_ID, payload)
+      .then(() => console.log(`Maintenance email sent to ${email}`))
+      .catch(err => console.warn("Maintenance email failed:", err));
+  });
+}
+
 const COMPANY_PASSWORD  = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY          = "cta_auth";
 const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
@@ -3214,8 +3267,9 @@ function darkenTextShadow(color) {
    NOTIFICATION SETTINGS MODAL
 ════════════════════════════════════════════════════════════════════════════ */
 function NotificationSettingsModal({ settings, allExpiries, sending, testResult, onSave, onClose, onTest }) {
-  const [form, setForm]       = useState({ ...settings, emails: settings.emails || (settings.email ? [settings.email] : []) });
-  const [newEmail, setNewEmail] = useState("");
+  const [form, setForm]         = useState({ ...settings, emails: settings.emails || (settings.email ? [settings.email] : []), maintEmails: settings.maintEmails || [] });
+  const [newEmail,     setNewEmail]     = useState("");
+  const [newMaintEmail,setNewMaintEmail] = useState("");
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const addEmail = () => {
@@ -3300,6 +3354,37 @@ function NotificationSettingsModal({ settings, allExpiries, sending, testResult,
             </button>
           </div>
           <div style={{fontSize:11,color:T.textMuted,marginTop:5}}>Press Enter or click Add · each recipient gets a separate email</div>
+        </div>
+
+        {/* ── Maintenance Ticket Recipients ── */}
+        <div style={{marginBottom:18,background:`${T.gold}08`,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <span style={{fontSize:16}}>🛠</span>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:T.text}}>Maintenance Ticket Alerts</div>
+              <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>These recipients get an email immediately when a new maintenance ticket is raised</div>
+            </div>
+          </div>
+          {form.maintEmails.length > 0 && (
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+              {form.maintEmails.map(e => (
+                <div key={e} style={{display:"flex",alignItems:"center",gap:6,background:T.goldDim,border:`1px solid ${T.gold}44`,borderRadius:8,padding:"5px 10px"}}>
+                  <span style={{fontSize:13,color:T.text,fontWeight:500}}>✉ {e}</span>
+                  <button onClick={()=>set("maintEmails",form.maintEmails.filter(x=>x!==e))} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,lineHeight:1,padding:0}}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}>
+            <input type="email" value={newMaintEmail} onChange={e=>setNewMaintEmail(e.target.value)}
+              onKeyDown={e=>{ if(e.key!=="Enter") return; const v=newMaintEmail.trim().toLowerCase(); if(!v||!v.includes("@")||form.maintEmails.includes(v)) return; set("maintEmails",[...form.maintEmails,v]); setNewMaintEmail(""); }}
+              placeholder="Add maintenance alert recipient…"
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.text,outline:"none"}}
+              onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}/>
+            <button onClick={()=>{ const v=newMaintEmail.trim().toLowerCase(); if(!v||!v.includes("@")||form.maintEmails.includes(v)) return; set("maintEmails",[...form.maintEmails,v]); setNewMaintEmail(""); }}
+              style={{background:T.goldDim,border:`1px solid ${T.gold}55`,borderRadius:10,padding:"10px 16px",color:T.gold,fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Add</button>
+          </div>
+          <div style={{fontSize:11,color:T.textMuted,marginTop:5}}>Press Enter or click Add · separate from expiry alert recipients</div>
         </div>
 
         {/* Threshold */}
@@ -6194,6 +6279,10 @@ function MaintenancePage({data,setData,showToast}) {
       });
       return { ...prev, equipment: list };
     });
+    // Send email notification
+    const eqName = (data.equipment||[]).find(e=>e.id===eqId)?.name||"";
+    const maintEmails = (loadNotifySettings().maintEmails||[]);
+    setTimeout(()=>sendMaintenanceEmail({...rec,id:"new",status:"Open",raisedAt:new Date().toISOString().slice(0,10)},eqName,maintEmails),500);
     showToast("Maintenance ticket raised");
     setModal(null);
   };
