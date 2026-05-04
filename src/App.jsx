@@ -1020,31 +1020,20 @@ function parseScorpionDprSheet(wb) {
     id: uid(),
     dprSource: "scorpion_template",
     // Section 1 — Header
-    date:          dprReadCell(ws,"H8")  || cell("H8"),
-    project:       dprReadCell(ws,"C8")  || cell("C8"),
-    weather:       dprReadCell(ws,"H10") || cell("H10"),
+    project:         dprReadCell(ws,"C8")  || mergeMap["C8"]  || "",
+    date:            dprReadCell(ws,"H8")  || mergeMap["H8"]  || "",
     // Section 2 — Work Profile & Activity
-    profile:       cellVal("C13"),
-    activity:      cellVal("H13"),
+    profile:         dprReadCell(ws,"C13") || mergeMap["C13"] || "",
+    activity:        dprReadCell(ws,"H13") || mergeMap["H13"] || "",
     // Section 3 — Permits & Standby
-    permitReceived:  cellVal("C17"),
-    permitHours:     cellVal("C18"),
-    standbyReason:   cellVal("C19"),
+    permitReceived:  dprReadCell(ws,"C14") || mergeMap["C14"] || "",
+    permitHours:     dprReadCell(ws,"H14") || mergeMap["H14"] || "",
+    standbyReason:   dprReadCell(ws,"C15") || mergeMap["C15"] || "",
     // Section 4 — Progress
-    totalQty:      cellVal("A23"),
-    prevProgress:  cellVal("C23"),
-    progressToday: cellVal("E23"),
-    accumulated:   cellVal("G23"),
-    // Section 5 — Drilling parameters
-    force:         cellVal("C28"),
-    torque:        cellVal("E28"),
-    mudPressure:   cellVal("G28"),
-    pumpRate:      cellVal("H28"),
-    // Section 6 — Activity summaries
-    activities:    dprReadRange(ws,"A32:N36") || cellVal("A32"),
-    // Section 9 — Comments
-    issues:  dprReadRange(ws,"B76:E78"),
-    notes:   dprReadRange(ws,"G76:K78"),
+    progressToday:   dprReadCell(ws,"E18") || mergeMap["E18"] || "",
+    accumulated:     dprReadCell(ws,"G18") || mergeMap["G18"] || "",
+    // Section 5 — Activity Summary
+    activities:      dprReadRange(ws,"A27:N32") || dprReadCell(ws,"A27") || mergeMap["A27"] || "",
   };
 }
 
@@ -1359,51 +1348,33 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
   const exportMaster = () => {
     if (!allRows.length) return;
     const headers = [
-      "Project",
+      "Project Name",
       "Date",
-      "Weather",
-      "Work Profile",
+      "Profile",
       "Activity",
       "Permit Received",
       "Permit Hours",
       "Standby Reason",
-      "Total Qty (m)",
-      "Prev Progress (m)",
       "Progress Today (m)",
-      "Accumulated (m)",
-      "Force (Ton)",
-      "Torque (Ton/m)",
-      "Mud Pressure (PSI)",
-      "Pump Rate (gal/min)",
-      "Today's Activities",
-      "Issues / Delays",
-      "Notes",
+      "Accumulated Progress (m)",
+      "Activity Summary",
     ];
     const toRow = r => [
       r._project || r.project || "",
       r.date || "",
-      r.weather || "",
       r.profile || "",
       r.activity || "",
       r.permitReceived || "",
       r.permitHours || "",
       r.standbyReason || "",
-      r.totalQty || "",
-      r.prevProgress || "",
       r.progressToday || "",
       r.accumulated || "",
-      r.force || "",
-      r.torque || "",
-      r.mudPressure || "",
-      r.pumpRate || "",
       r.activities || "",
-      r.issues || "",
-      r.notes || "",
     ];
     const rows = allRows.map(toRow);
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const colWidths = [22, 12, 14, 18, 22, 14, 12, 30, 14, 16, 16, 16, 12, 14, 16, 18, 40, 30, 30];
+    const colWidths = [28, 14, 20, 24, 16, 14, 32, 18, 22, 50];
     ws["!cols"] = colWidths.map(w => ({ wch: w }));
     ws["!freeze"] = { xSplit: 0, ySplit: 1 };
 
