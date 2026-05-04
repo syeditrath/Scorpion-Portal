@@ -628,7 +628,7 @@ const EMPTY_DATA = {
   manpower: [],
   equipment: [],
   scorpionDocCats: DEFAULT_SCORPION_CATS,
-  projects: ["NEOM Phase 1","NEOM Phase 2","Riyadh Metro"],
+  projects: [{name:"NEOM Phase 1",client:"NEOM"},{name:"NEOM Phase 2",client:"NEOM"},{name:"Riyadh Metro",client:"Saudi Rail"}],
   projectDocs: [],
   projectAnalysis: [],
   costControl: [],  // { id, project, category, description, amount, date, refNo, notes, budgeted }
@@ -913,6 +913,34 @@ function dprReadCell(ws, ref) {
   return c.w ? String(c.w).trim() : "";
 }
 
+/* ── Project helpers ─────────────────────────────────────────────────────── */
+const pName = p => typeof p === "string" ? p : (p?.name ?? "");
+
+function renderProjectOptions(projects) {
+  const byClient = {};
+  const noClient = [];
+  (projects || []).forEach(p => {
+    const n = pName(p);
+    const c = typeof p === "object" ? p.client : "";
+    if (c) { if (!byClient[c]) byClient[c] = []; byClient[c].push(n); }
+    else noClient.push(n);
+  });
+  const clients = Object.keys(byClient).sort();
+  return (
+    <>
+      {clients.map(c => (
+        <optgroup key={c} label={"▸ " + c}>
+          {byClient[c].map(n => <option key={n} value={n}>{n}</option>)}
+        </optgroup>
+      ))}
+      {noClient.length > 0 && clients.length > 0
+        ? <optgroup label="▸ Other">{noClient.map(n => <option key={n} value={n}>{n}</option>)}</optgroup>
+        : noClient.map(n => <option key={n} value={n}>{n}</option>)
+      }
+    </>
+  );
+}
+
 function dprReadRange(ws, rangeStr) {
   try {
     const range = XLSX.utils.decode_range(rangeStr);
@@ -966,23 +994,24 @@ function parseScorpionDprSheet(wb) {
     profile:       dprReadCell(ws,"C13") || cell("C13"),
     activity:      dprReadCell(ws,"H13") || cell("H13"),
     // Section 3 — Permits & Standby (new — rows shifted +5)
-    permitReceived:  dprReadCell(ws,"C14") || cell("C14"),
-    permitHours:     dprReadCell(ws,"H14") || cell("H14"),
-    standbyReason:   dprReadCell(ws,"C15") || cell("C15"),
+    permitReceived:  dprReadCell(ws,"C17") || cell("C17"),
+    permitHours:     dprReadCell(ws,"C18") || cell("C18"),
+    standbyReason:   dprReadCell(ws,"C19") || cell("C19"),
     // Section 4 — Progress (rows shifted +5 from original)
-    totalQty:      dprReadCell(ws,"A18") || cell("A18"),
-    prevProgress:  dprReadCell(ws,"C18") || cell("C18"),
-    progressToday: dprReadCell(ws,"E18") || cell("E18"),
-    accumulated:   dprReadCell(ws,"G18") || cell("G18"),
+    totalQty:      dprReadCell(ws,"A23") || cell("A23"),
+    prevProgress:  dprReadCell(ws,"C23") || cell("C23"),
+    progressToday: dprReadCell(ws,"E23") || cell("E23"),
+    accumulated:   dprReadCell(ws,"G23") || cell("G23"),
     // Section 5 — Drilling (rows shifted +5)
     force:         dprReadCell(ws,"C28") || cell("C28"),
     torque:        dprReadCell(ws,"E28") || cell("E28"),
     mudPressure:   dprReadCell(ws,"G28") || cell("G28"),
     pumpRate:      dprReadCell(ws,"H28") || cell("H28"),
     // Section 6 — Activity summaries (rows shifted +5)
-    activities:    dprReadCell(ws,"A27") || cell("A27"),
+    activities:    dprReadCell(ws,"A32") || cell("A32"),
     // Section 9 — Comments (rows shifted +5)
-    
+    issues:  dprReadRange(ws,"B76:E78"),
+    notes:   dprReadRange(ws,"G76:K78"),
   };
 }
 
@@ -2028,42 +2057,6 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
         )}
       </div>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      
             {/* ── Daily Reports ── */}
       <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,overflow:"hidden",boxShadow:T.shadow}}>
         {/* Collapsible header */}
@@ -2786,71 +2779,125 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
 
 /* ── Projects Manager Modal ──────────────────────────────────────────────── */
 function ProjectsModal({projects,onSave,onClose}) {
-  const [list,    setList]    = useState([...projects]);
+  const [list,    setList]    = useState(projects.map(p=>typeof p==="string"?{name:p,client:""}:{...p}));
   const [newName, setNewName] = useState("");
-  const [editing, setEditing] = useState(null); // {idx, val}
+  const [newClient,setNewClient]=useState("");
+  const [editing, setEditing] = useState(null); // {idx, field, val}
+
+  const clients = [...new Set(list.map(p=>p.client).filter(Boolean))].sort();
 
   const add = () => {
     const n=newName.trim();
-    if(!n||list.includes(n)) return;
-    setList(l=>[...l,n]);
+    if(!n||list.some(x=>x.name===n)) return;
+    setList(l=>[...l,{name:n,client:newClient.trim()}]);
     setNewName("");
   };
 
   const del = idx => setList(l=>l.filter((_,i)=>i!==idx));
 
-  const startEdit = (idx,val) => setEditing({idx,val});
+  const startEdit = (idx,field,val) => setEditing({idx,field,val});
   const commitEdit = () => {
     if(!editing) return;
-    const n=editing.val.trim();
-    if(n&&!list.some((x,i)=>x===n&&i!==editing.idx)){
-      setList(l=>l.map((x,i)=>i===editing.idx?n:x));
+    const v=editing.val.trim();
+    if(editing.field==="name"){
+      if(v&&!list.some((x,i)=>x.name===v&&i!==editing.idx))
+        setList(l=>l.map((x,i)=>i===editing.idx?{...x,name:v}:x));
+    } else {
+      setList(l=>l.map((x,i)=>i===editing.idx?{...x,client:v}:x));
     }
     setEditing(null);
   };
 
+  // Group by client for display
+  const byClient = {};
+  const noClient = [];
+  list.forEach((p,i)=>{ if(p.client){if(!byClient[p.client])byClient[p.client]=[];byClient[p.client].push({...p,_idx:i});}else noClient.push({...p,_idx:i}); });
+  const clientGroups = Object.keys(byClient).sort();
+
+  const renderRow = (p,i) => (
+    <div key={p._idx} style={{display:"flex",alignItems:"center",gap:7,padding:"8px 12px",background:T.bg,borderRadius:9,marginBottom:6,border:`1px solid ${T.border}`}}>
+      <div style={{width:6,height:6,borderRadius:"50%",background:T.blue,flexShrink:0}}/>
+      <div style={{flex:1,minWidth:0}}>
+        {editing&&editing.idx===p._idx&&editing.field==="name"
+          ?<input autoFocus value={editing.val} onChange={e=>setEditing({...editing,val:e.target.value})} onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}} onBlur={commitEdit}
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.blue}`,borderRadius:6,padding:"4px 8px",fontSize:13,color:T.text,outline:"none"}}/>
+          :<div style={{fontSize:13,fontWeight:600,color:T.text,cursor:"text"}} onDoubleClick={()=>startEdit(p._idx,"name",p.name)}>{p.name}</div>
+        }
+        {editing&&editing.idx===p._idx&&editing.field==="client"
+          ?<input autoFocus value={editing.val} onChange={e=>setEditing({...editing,val:e.target.value})} onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}} onBlur={commitEdit}
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.gold}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:T.text,outline:"none",marginTop:3}}/>
+          :<div style={{fontSize:11,color:p.client?T.gold:T.textMuted,marginTop:2,cursor:"text"}} onDoubleClick={()=>startEdit(p._idx,"client",p.client||"")}>{p.client||"No client — double-click to assign"}</div>
+        }
+      </div>
+      <button onClick={()=>startEdit(p._idx,"name",p.name)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Rename">✎</button>
+      <button onClick={()=>del(p._idx)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Delete">✕</button>
+    </div>
+  );
+
   return (
     <Overlay onClose={onClose}>
-      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:460,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:500,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
+        {/* Header */}
         <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>MANAGE PROJECTS</div>
-            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Add, rename or delete projects</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{list.length} project{list.length!==1?"s":""} across {clients.length} client{clients.length!==1?"s":""}</div>
           </div>
           <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>×</button>
         </div>
 
         {/* Add new */}
         <div style={{padding:"14px 22px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-          <div style={{display:"flex",gap:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:8,letterSpacing:".5px"}}>ADD NEW PROJECT</div>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
             <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
-              placeholder="New project name…"
-              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+              placeholder="Project name…"
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
               onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
-            <button onClick={add} style={{background:T.green,color:"#000",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>+ Add</button>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <input value={newClient} onChange={e=>setNewClient(e.target.value)} list="existing-clients" onKeyDown={e=>e.key==="Enter"&&add()}
+              placeholder="Client name (optional)…"
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+              onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}/>
+            <datalist id="existing-clients">{clients.map(c=><option key={c} value={c}/>)}</datalist>
+            <button onClick={add} style={{background:T.green,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0,cursor:"pointer"}}>+ Add</button>
           </div>
         </div>
 
-        {/* List */}
+        {/* Grouped list */}
         <div style={{flex:1,overflowY:"auto",padding:"12px 22px"}}>
-          <div style={{fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:10,letterSpacing:".5px"}}>PROJECTS ({list.length})</div>
           {list.length===0&&<div style={{textAlign:"center",padding:"30px",color:T.textMuted,fontSize:13}}>No projects yet.</div>}
-          {list.map((p,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:T.bg,borderRadius:9,marginBottom:7,border:`1px solid ${T.border}`}}>
-              <div style={{width:7,height:7,borderRadius:"50%",background:T.blue,flexShrink:0}}/>
-              {editing&&editing.idx===i
-                ? <input autoFocus value={editing.val} onChange={e=>setEditing({...editing,val:e.target.value})} onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}} onBlur={commitEdit}
-                    style={{flex:1,background:T.inputBg,border:`1px solid ${T.blue}`,borderRadius:6,padding:"5px 9px",fontSize:13,color:T.text,outline:"none"}}/>
-                : <span style={{flex:1,fontSize:14,color:T.text,cursor:"text"}} onDoubleClick={()=>startEdit(i,p)}>{p}</span>
-              }
-              <button onClick={()=>startEdit(i,p)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✎</button>
-              <button onClick={()=>del(i)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✕</button>
+
+          {/* Grouped by client */}
+          {clientGroups.map(c=>(
+            <div key={c} style={{marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:800,color:T.gold,letterSpacing:".8px",textTransform:"uppercase"}}>{c}</div>
+                <div style={{flex:1,height:1,background:T.border}}/>
+                <div style={{fontSize:10,color:T.textMuted}}>{byClient[c].length} project{byClient[c].length!==1?"s":""}</div>
+              </div>
+              {byClient[c].map(renderRow)}
             </div>
           ))}
+
+          {/* Ungrouped */}
+          {noClient.length>0&&(
+            <div style={{marginBottom:16}}>
+              {clientGroups.length>0&&(
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:800,color:T.textMuted,letterSpacing:".8px"}}>NO CLIENT</div>
+                  <div style={{flex:1,height:1,background:T.border}}/>
+                </div>
+              )}
+              {noClient.map(renderRow)}
+            </div>
+          )}
         </div>
 
-        <div style={{padding:"12px 22px 22px",flexShrink:0,borderTop:`1px solid ${T.border}`}}>
-          <button onClick={()=>{onSave(list);onClose();}} style={{width:"100%",background:T.blue,border:"none",color:"#000",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700}}>Save Projects</button>
+        <div style={{padding:"12px 22px 22px",flexShrink:0,borderTop:`1px solid ${T.border}`,display:"flex",gap:10}}>
+          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          <button onClick={()=>{onSave(list);onClose();}} style={{flex:2,background:`linear-gradient(135deg,${T.blue},#2563eb)`,border:"none",color:"#fff",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer"}}>Save Projects</button>
         </div>
       </div>
     </Overlay>
@@ -3503,8 +3550,8 @@ function CostControlPage({data, setData, showToast, go}) {
   // ── Project overview cards ──
   if (!selProj) {
     const allMargin    = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.margin; },0);
-    const allRevenue   = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.revenue; },0);
-    const allCostTotal = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.totalCost; },0);
+    const allRevenue   = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.revenue; },0);
+    const allCostTotal = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.totalCost; },0);
     const overallPct   = allRevenue>0 ? Math.round((allMargin/allRevenue)*100) : null;
 
     return (
@@ -3536,7 +3583,7 @@ function CostControlPage({data, setData, showToast, go}) {
 
         {/* Project cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
-          {projects.map((proj,i)=>{
+          {projects.map((proj,i)=>{ proj=pName(proj);
             const {poValue,revenue,collected,totalCost,margin,marginPct,costs} = getProjFinancials(proj);
             const costByCat = COST_CATS.map(c=>({
               ...c,
@@ -3822,7 +3869,7 @@ function CostEntryModal({mode, entry, projects, onClose, onSave}) {
       <FieldRow label="Project *">
         <FSelect value={f.project||""} onChange={set("project")} color={T.teal}>
           <option value="">Select project…</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
       <FieldRow label="Category *">
@@ -4042,7 +4089,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   const dueFromAdvance  = advanceInvs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
   const collectionRate  = totalInvoiceValue > 0 ? Math.round((totalReceived / totalInvoiceValue) * 100) : 0;
 
-  const projectBreakdown = projects.map(proj => {
+  const projectBreakdown = projects.map(proj => { proj = pName(proj);
     const pinvs     = filteredInvoiceDocs.filter(d => d.project === proj);
     const invoiced  = pinvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
     const collected = pinvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
@@ -4217,7 +4264,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
             {projects.length === 0
               ? <Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={() => {}}/>
               : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
-                  {projects.map((p,i) => {
+                  {projects.map((p,i) => { p=pName(p);
                     const pinvs = invoiceDocs.filter(d => d.project === p);
                     const total = pinvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
                     const collected = pinvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
@@ -4267,7 +4314,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <select value={fProj} onChange={e => setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
                 <option value="">All Projects</option>
-                {projects.map(p => <option key={p} value={p}>{p}</option>)}
+                {renderProjectOptions(projects)}
               </select>
               <Btn color={T.purple} solid onClick={() => setModal({mode:"add"})}>+ Add Work Order</Btn>
             </div>
@@ -4575,7 +4622,7 @@ function ProjectDocs({data,setData,showToast}) {
         {projects.length===0
           ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={()=>{}}/>
           : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
-              {projects.map((project,i)=>{
+              {projects.map((project,i)=>{ project=pName(project);
                 const projectDocs = docs.filter(d=>d.project===project);
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
                 const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
@@ -4762,7 +4809,7 @@ function ProjectDocs({data,setData,showToast}) {
             onAdd={()=>{}}
           />
         : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
-            {projects.map((p,i)=>{
+            {projects.map((p,i)=>{ p=pName(p);
               const pcerts = certAll.filter(d=>d.project===p);
 
               return (
@@ -4873,7 +4920,7 @@ function ProjectDocs({data,setData,showToast}) {
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
                   <option value="">All Projects</option>
-                  {projects.map(p=><option key={p} value={p}>{p}</option>)}
+                  {renderProjectOptions(projects)}
                 </select>
                 <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Add Report</Btn>
               </div>
@@ -5066,7 +5113,7 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
       <FieldRow label="Project *">
         <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
           <option value="">Select project…</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
@@ -5171,7 +5218,7 @@ function CertificateModal({mode,doc,projects,onClose,onSave}) {
       <FieldRow label="Project *">
         <FSelect value={f.project||""} onChange={set("project")} color={T.blue}>
           <option value="">Select project…</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
       <FieldRow label="Job Number"><FInput value={f.jobNo||""} onChange={set("jobNo")} color={T.blue}/></FieldRow>
@@ -5196,7 +5243,7 @@ function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
       <FieldRow label="Project *">
         <FSelect value={f.project||""} onChange={set("project")} color={T.purple}>
           <option value="">Select project…</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
       <FieldRow label="Reference No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.purple}/></FieldRow>
@@ -5294,7 +5341,7 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
       <FieldRow label="Project *">
         <FSelect value={f.project || ""} onChange={v => setF(p => ({...p, project:v}))} color={T.gold}>
           <option value="">Select project…</option>
-          {projects.map(p => <option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
 
@@ -5981,7 +6028,7 @@ function PersonModal({mode,person,cats,projects,onClose,onSave}) {
       <FieldRow label="Assigned Project">
         <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
           <option value="">No project assigned</option>
-          {(projects||[]).map(p=><option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
       <FieldRow label="ID No."><FInput value={f.idNo||""} onChange={set("idNo")} color={T.green}/></FieldRow>
@@ -6118,7 +6165,7 @@ function EquipmentPage({data,setData,showToast}) {
       <PageHeader title="EQUIPMENT" sub="Assets with certifications, invoices, insurance & permits" color={T.gold}>
         <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
           <option value="">All Projects</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </select>
         <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
           <option value="">All Statuses</option>
@@ -6364,7 +6411,7 @@ function MaintenancePage({data,setData,showToast}) {
           <select value={filterProj} onChange={e=>setFilterProj(e.target.value)}
             style={{...IS, width:"auto",fontSize:12,padding:"6px 12px"}}>
             <option value="All">All Projects</option>
-            {projects.map(p=><option key={p} value={p}>{p}</option>)}
+            {renderProjectOptions(projects)}
           </select>
         )}
         <span style={{fontSize:12,color:T.textMuted,marginLeft:"auto"}}>{visible.length} ticket{visible.length!==1?"s":""}</span>
@@ -6625,7 +6672,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
             <select value={f.project||""} onChange={e=>set("project")(e.target.value)}
               style={{...IS,colorScheme:"dark"}}>
               <option value="">Select project…</option>
-              {projects.map(p=><option key={p} value={p}>{p}</option>)}
+              {renderProjectOptions(projects)}
             </select>
           </div>
           <div>
@@ -6936,7 +6983,7 @@ function SubRecordModal({mode,type,rec,onClose,onSave,projects}) {
               :ftype==="select"
                 ?<FSelect value={f[k]||""} onChange={set(k)} color={cfg.color}>
                     <option value="">Select project…</option>
-                    {(projects||[]).map(p=><option key={p} value={p}>{p}</option>)}
+                    {renderProjectOptions(projects)}
                   </FSelect>
               :ftype==="status"
                 ?<FSelect value={f[k]||""} onChange={set(k)} color={cfg.color}>
@@ -6966,7 +7013,7 @@ function EqModal({mode,eq,projects,onClose,onSave}) {
       <FieldRow label="Project">
         <FSelect value={f.project||""} onChange={set("project")} color={T.gold}>
           <option value="">Select…</option>
-          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
       <FieldRow label="Status">
@@ -7526,7 +7573,7 @@ function BulkUploadModal({ subTab, projects, onClose, onImport }) {
         }
       });
       // Auto-fill project if only one option
-      if (!rec.project && projects.length === 1) rec.project = projects[0];
+      if (!rec.project && projects.length === 1) rec.project = pName(projects[0]);
       return rec;
     }).filter(r => fields.filter(f=>f.required).every(f => r[f.key]));
   };
@@ -8133,7 +8180,7 @@ function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
                 style={{width:"100%", background:T.inputBg, border:`1px solid ${selProj ? T.blue+"66" : T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:selProj ? T.text : T.textMuted, outline:"none", colorScheme:"light"}}
               >
                 <option value="">Select project…</option>
-                {projects.map(p => <option key={p} value={p}>{p}</option>)}
+                {renderProjectOptions(projects)}
               </select>
             </div>
             <div style={{flex:1, minWidth:160}}>
