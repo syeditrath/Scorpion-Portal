@@ -4596,16 +4596,21 @@ function ProjectDocs({data,setData,showToast}) {
         let projectRec = analysis.find(p => p.project === projectName);
 
         const analysisReport = {
-          id: savedDoc.id,
-          date: savedDoc.date,
-          name: savedDoc.name,
-          fileName: savedDoc.fileName,
-          fileLink: savedDoc.fileLink,
-          extractedFields: savedDoc.extractedFields,
-          activity: savedDoc.activity,
-          progressToday: savedDoc.progressToday,
-          accumulated: savedDoc.accumulated,
-          notes: savedDoc.notes,
+          id:             savedDoc.id,
+          date:           savedDoc.date,
+          name:           savedDoc.name,
+          fileName:       savedDoc.fileName,
+          fileLink:       savedDoc.fileLink,
+          extractedFields:savedDoc.extractedFields,
+          profile:        savedDoc.profile,
+          activity:       savedDoc.activity,
+          permitReceived: savedDoc.permitReceived,
+          permitHours:    savedDoc.permitHours,
+          standbyReason:  savedDoc.standbyReason,
+          progressToday:  savedDoc.progressToday,
+          accumulated:    savedDoc.accumulated,
+          activities:     savedDoc.activities,
+          notes:          savedDoc.notes,
         };
 
         if (!projectRec) {
@@ -5334,24 +5339,26 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
       }
 
       const extracted = {
-        field1:  r.project || f.project || defaultProject || "",
-        field2:  [r.contractor, r.client].filter(Boolean).join(" / "),
-        field8:  r.activity || "",
-        field9:  r.totalQty || "",
-        field11: r.progressToday || "",
-        field12: r.accumulated || "",
-        field19: r.permitHours || "",
-        field27: r.notes || "",
+        project:        r.project        || f.project || defaultProject || "",
+        date:           r.date           || "",
+        profile:        r.profile        || "",
+        activity:       r.activity       || "",
+        permitReceived: r.permitReceived || "",
+        permitHours:    (r.permitHours !== undefined && r.permitHours !== null) ? String(r.permitHours) : "",
+        standbyReason:  r.standbyReason  || "",
+        progressToday:  (r.progressToday !== undefined && r.progressToday !== null) ? String(r.progressToday) : "",
+        accumulated:    (r.accumulated   !== undefined && r.accumulated   !== null) ? String(r.accumulated)   : "",
+        activities:     r.activities     || "",
       };
 
       setF(prev => ({
         ...prev,
         ...r,
-        project: prev.project || r.project || defaultProject || "",
-        name: file.name.replace(/\.[^/.]+$/, ""),
-        date: file.name.replace(/\.[^/.]+$/, ""),
-        fileName: file.name,
-        fileLink: fileUrl,
+        project:         prev.project || r.project || defaultProject || "",
+        name:            file.name.replace(/\.[^/.]+$/, ""),
+        date:            r.date || "",
+        fileName:        file.name,
+        fileLink:        fileUrl,
         extractedFields: extracted,
       }));
 
