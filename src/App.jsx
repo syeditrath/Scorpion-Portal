@@ -1372,10 +1372,10 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
       r.profile || "",
       r.activity || "",
       r.permitReceived || "",
-      r.permitHours || "",
+      (r.permitHours  !== undefined && r.permitHours  !== null) ? String(r.permitHours)  : "",
       r.standbyReason || "",
-      r.progressToday || "",
-      r.accumulated || "",
+      (r.progressToday !== undefined && r.progressToday !== null) ? String(r.progressToday) : "",
+      (r.accumulated   !== undefined && r.accumulated   !== null) ? String(r.accumulated)   : "",
       r.activities || "",
     ];
     const rows = allRows.map(toRow);
@@ -2111,21 +2111,16 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
             {reports.length>0&&(
               <button onClick={()=>exportToExcel(
                 reports.map(r=>({
-                  "Project": proj.project,
-                  "Date": r.date,
-                  
-                  "Client": r.client||"",
-                  
-                  "Work Profile": r.profile||"",
-                  "Activity": r.activity||"",
-                  "Total Qty (m)": r.totalQty||"",
-                  
-                  "Accumulated (m)": r.accumulated||"",
-                  
-                  "Today's Activities": r.activities||"",
-                  
-                  "Issues / Delays": r.issues||"",
-                  
+                  "Project":               proj.project,
+                  "Date":                  r.date || "",
+                  "Work Profile":          r.profile || "",
+                  "Activity":              r.activity || "",
+                  "Permit Received":       r.permitReceived || "",
+                  "Permit Hours":          (r.permitHours !== undefined && r.permitHours !== null) ? String(r.permitHours) : "",
+                  "Standby Reason":        r.standbyReason || "",
+                  "Progress Today (m)":   (r.progressToday !== undefined && r.progressToday !== null) ? String(r.progressToday) : "",
+                  "Accumulated (m)":      (r.accumulated !== undefined && r.accumulated !== null) ? String(r.accumulated) : "",
+                  "Activity Summary":      r.activities || "",
                 })),
                 `Daily_Reports_${(proj.project||"Project").replace(/\s+/g,"_")}`
               )}
