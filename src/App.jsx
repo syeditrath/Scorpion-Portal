@@ -967,49 +967,82 @@ function isScorpionDprTemplate(wb) {
 /* Parse a single Scorpion DPR form sheet into a report record */
 function parseScorpionDprSheet(wb) {
   const ws = wb.Sheets[wb.SheetNames.includes("Daily DPR Form") ? "Daily DPR Form" : wb.SheetNames[0]];
-  // Helper: try primary cell, then scan siblings in same row if empty
+
+  // Build a merged-cell lookup: for any cell inside a merged range,
+  // return the value of the top-left anchor cell.
+  const mergeMap = {};
+  if (ws["!merges"]) {
+    ws["!merges"].forEach(m => {
+      const anchorRef = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
+      const anchorVal = dprReadCell(ws, anchorRef);
+      for (let r = m.s.r; r <= m.e.r; r++) {
+        for (let c = m.s.c; c <= m.e.c; c++) {
+          mergeMap[XLSX.utils.encode_cell({ r, c })] = anchorVal;
+        }
+      }
+    });
+  }
+
+  // Helper: read a cell, falling back to merge map, then scan the same row
+  // across a wide range of columns (A–N) for the first non-empty value.
   const cell = (ref) => {
     let v = dprReadCell(ws, ref);
     if (v) return v;
-    // scan nearby cells in same row (merged cells store value in anchor)
-    const col = ref.replace(/\d+/, "");
-    const row = ref.replace(/[A-Z]+/, "");
-    const cols = ["B","C","D","E","F","G","H","I","J","K"];
+    // Try merge map
+    if (mergeMap[ref]) return mergeMap[ref];
+    // Scan same row across columns A–N
+    const row = ref.replace(/[A-Z]+/g, "");
+    const cols = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N"];
     for (const c2 of cols) {
-      if (c2 === col) continue;
       const alt = dprReadCell(ws, c2 + row);
       if (alt) return alt;
+      if (mergeMap[c2 + row]) return mergeMap[c2 + row];
     }
     return "";
+  };
+
+  // Helper: read a value-label pair — scans the cell AND adjacent cells in
+  // the same row, skipping cells that look like labels (all uppercase / short).
+  const cellVal = (ref) => {
+    const v = cell(ref);
+    // If it looks like a label rather than data, also try adjacent columns
+    if (v && v.length > 1 && !/^[A-Z\s\/\-\(\)\.]+$/.test(v)) return v;
+    const row = ref.replace(/[A-Z]+/g, "");
+    const cols = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N"];
+    for (const c2 of cols) {
+      const alt = dprReadCell(ws, c2 + row) || mergeMap[c2 + row] || "";
+      if (alt && alt.length > 1 && !/^[A-Z\s\/\-\(\)\.]+$/.test(alt)) return alt;
+    }
+    return v; // fall back to whatever we found
   };
 
   return {
     id: uid(),
     dprSource: "scorpion_template",
     // Section 1 — Header
-    date:          dprReadCell(ws,"H8") || cell("H8"),
-    project:       dprReadCell(ws,"C8") || cell("C8"),
+    date:          dprReadCell(ws,"H8")  || cell("H8"),
+    project:       dprReadCell(ws,"C8")  || cell("C8"),
     weather:       dprReadCell(ws,"H10") || cell("H10"),
     // Section 2 — Work Profile & Activity
-    profile:       dprReadCell(ws,"C13") || cell("C13"),
-    activity:      dprReadCell(ws,"H13") || cell("H13"),
-    // Section 3 — Permits & Standby (new — rows shifted +5)
-    permitReceived:  dprReadCell(ws,"C17") || cell("C17"),
-    permitHours:     dprReadCell(ws,"C18") || cell("C18"),
-    standbyReason:   dprReadCell(ws,"C19") || cell("C19"),
-    // Section 4 — Progress (rows shifted +5 from original)
-    totalQty:      dprReadCell(ws,"A23") || cell("A23"),
-    prevProgress:  dprReadCell(ws,"C23") || cell("C23"),
-    progressToday: dprReadCell(ws,"E23") || cell("E23"),
-    accumulated:   dprReadCell(ws,"G23") || cell("G23"),
-    // Section 5 — Drilling (rows shifted +5)
-    force:         dprReadCell(ws,"C28") || cell("C28"),
-    torque:        dprReadCell(ws,"E28") || cell("E28"),
-    mudPressure:   dprReadCell(ws,"G28") || cell("G28"),
-    pumpRate:      dprReadCell(ws,"H28") || cell("H28"),
-    // Section 6 — Activity summaries (rows shifted +5)
-    activities:    dprReadCell(ws,"A32") || cell("A32"),
-    // Section 9 — Comments (rows shifted +5)
+    profile:       cellVal("C13"),
+    activity:      cellVal("H13"),
+    // Section 3 — Permits & Standby
+    permitReceived:  cellVal("C17"),
+    permitHours:     cellVal("C18"),
+    standbyReason:   cellVal("C19"),
+    // Section 4 — Progress
+    totalQty:      cellVal("A23"),
+    prevProgress:  cellVal("C23"),
+    progressToday: cellVal("E23"),
+    accumulated:   cellVal("G23"),
+    // Section 5 — Drilling parameters
+    force:         cellVal("C28"),
+    torque:        cellVal("E28"),
+    mudPressure:   cellVal("G28"),
+    pumpRate:      cellVal("H28"),
+    // Section 6 — Activity summaries
+    activities:    dprReadRange(ws,"A32:N36") || cellVal("A32"),
+    // Section 9 — Comments
     issues:  dprReadRange(ws,"B76:E78"),
     notes:   dprReadRange(ws,"G76:K78"),
   };
@@ -1328,35 +1361,49 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
     const headers = [
       "Project",
       "Date",
+      "Weather",
       "Work Profile",
       "Activity",
       "Permit Received",
       "Permit Hours",
       "Standby Reason",
       "Total Qty (m)",
+      "Prev Progress (m)",
       "Progress Today (m)",
       "Accumulated (m)",
+      "Force (Ton)",
+      "Torque (Ton/m)",
+      "Mud Pressure (PSI)",
+      "Pump Rate (gal/min)",
       "Today's Activities",
       "Issues / Delays",
+      "Notes",
     ];
     const toRow = r => [
       r._project || r.project || "",
       r.date || "",
+      r.weather || "",
       r.profile || "",
       r.activity || "",
       r.permitReceived || "",
       r.permitHours || "",
       r.standbyReason || "",
       r.totalQty || "",
+      r.prevProgress || "",
       r.progressToday || "",
       r.accumulated || "",
+      r.force || "",
+      r.torque || "",
+      r.mudPressure || "",
+      r.pumpRate || "",
       r.activities || "",
       r.issues || "",
+      r.notes || "",
     ];
     const rows = allRows.map(toRow);
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const colWidths = [22, 12, 18, 22, 14, 12, 30, 14, 16, 16, 40, 30];
+    const colWidths = [22, 12, 14, 18, 22, 14, 12, 30, 14, 16, 16, 16, 12, 14, 16, 18, 40, 30, 30];
     ws["!cols"] = colWidths.map(w => ({ wch: w }));
     ws["!freeze"] = { xSplit: 0, ySplit: 1 };
 
