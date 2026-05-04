@@ -956,49 +956,47 @@ function dprReadRange(ws, rangeStr) {
 }
 
 /* Detect if workbook is the Scorpion DPR template.
-   Checks sheet name first, then scans common header cells for DPR keywords. */
+   The template always has a sheet named "Daily DPR Form". */
 function isScorpionDprTemplate(wb) {
-  if (wb.SheetNames.some(n => /daily.?dpr|dpr.?form|daily.?progress/i.test(n))) return true;
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const checkCells = ["A1","B1","C1","D1","A2","B2","C2","D2","A3","B3","C3","D3","E3","F3","G3","H3","A4","D4"];
-  for (const ref of checkCells) {
-    const v = ((ws[ref] && (ws[ref].v !== undefined ? ws[ref].v : ws[ref].w)) || "").toString().toUpperCase();
-    if (v.includes("DAILY PROGRESS") || v.includes("DAILY REPORT") || v.includes("DPR")) return true;
-  }
-  return false;
+  return wb.SheetNames.includes("Daily DPR Form");
 }
 
-/* Read one cell cleanly, resolving merged cell anchors via mergeMap. */
+/* Read a cell value cleanly — handles dates, numbers (including 0), strings.
+   Falls back to the merge anchor map if the cell itself is empty. */
 function dprReadExact(ws, ref, mergeMap) {
   const c = ws[ref];
-  if (c) {
+  if (c !== undefined) {
+    // Date type
     if (c.t === "d" || c.v instanceof Date) return excelDateToStr(c.v) || c.w || "";
-    if (c.v !== undefined && c.v !== null && c.v !== "") return String(c.v).trim();
+    // Any value including numeric 0
+    if (c.v !== undefined && c.v !== null) return String(c.v).trim();
     if (c.w) return String(c.w).trim();
   }
-  return mergeMap[ref] || "";
+  // Merged cell — value lives in the anchor cell, not here
+  return (mergeMap && mergeMap[ref]) ? mergeMap[ref] : "";
 }
 
-/* Parse a single Scorpion DPR form sheet — reads ONLY the exact cells specified. */
+/* Parse the Scorpion DPR template.
+   PRIMARY: reads the ERP field table in columns L/M (most reliable, no merge issues).
+   FALLBACK: reads the exact named cells directly. */
 function parseScorpionDprSheet(wb) {
-  const sheetName = wb.SheetNames.find(n => /daily.?dpr|dpr.?form|daily.?progress/i.test(n)) || wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
+  const ws = wb.Sheets["Daily DPR Form"] || wb.Sheets[wb.SheetNames[0]];
 
-  // Build merge map: every cell inside a merged range points to anchor value
+  // Build merge map so any cell in a merged region resolves to the anchor value
   const mergeMap = {};
   if (ws["!merges"]) {
     ws["!merges"].forEach(m => {
       const anchorRef = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
       const ac = ws[anchorRef];
-      let anchorVal = "";
+      let v = "";
       if (ac) {
-        if (ac.t === "d" || ac.v instanceof Date) anchorVal = excelDateToStr(ac.v) || ac.w || "";
-        else if (ac.v !== undefined && ac.v !== null) anchorVal = String(ac.v).trim();
-        else if (ac.w) anchorVal = String(ac.w).trim();
+        if (ac.t === "d" || ac.v instanceof Date) v = excelDateToStr(ac.v) || ac.w || "";
+        else if (ac.v !== undefined && ac.v !== null) v = String(ac.v).trim();
+        else if (ac.w) v = String(ac.w).trim();
       }
       for (let r = m.s.r; r <= m.e.r; r++) {
-        for (let c = m.s.c; c <= m.e.c; c++) {
-          mergeMap[XLSX.utils.encode_cell({ r, c })] = anchorVal;
+        for (let c2 = m.s.c; c2 <= m.e.c; c2++) {
+          mergeMap[XLSX.utils.encode_cell({ r, c: c2 })] = v;
         }
       }
     });
@@ -1006,19 +1004,43 @@ function parseScorpionDprSheet(wb) {
 
   const rd = (ref) => dprReadExact(ws, ref, mergeMap);
 
+  // Read ERP key-value table from columns L & M (rows 1 onward)
+  const erp = {};
+  for (let row = 1; row <= 40; row++) {
+    const key = rd(XLSX.utils.encode_cell({ r: row - 1, c: 11 }));   // col L
+    const val = rd(XLSX.utils.encode_cell({ r: row - 1, c: 12 }));   // col M
+    if (key) erp[key.trim()] = val;
+  }
+
+  // Helper: prefer ERP table value, fall back to direct cell read
+  const get = (erpKey, cellRef) => {
+    const erpVal = erp[erpKey];
+    // ERP value of "0" is valid — only skip if truly missing
+    if (erpVal !== undefined && erpVal !== null && erpVal !== "") return erpVal;
+    return rd(cellRef);
+  };
+
+  // Date: ERP stores as Excel serial (number), direct cell is a Date object
+  const rawDate = erp["report_date"] || rd("H8");
+  const date = excelDateToStr(
+    typeof rawDate === "string" && /^\d+$/.test(rawDate.trim())
+      ? Number(rawDate)
+      : rawDate
+  ) || rawDate;
+
   return {
     id: uid(),
     dprSource: "scorpion_template",
-    project:        rd("C8"),
-    date:           rd("H8"),
-    profile:        rd("C13"),
-    activity:       rd("H13"),
+    project:        get("project_name",  "C8"),
+    date:           date,
+    profile:        get("profile",       "C13"),
+    activity:       get("activity",      "H13"),
     permitReceived: rd("C14"),
     permitHours:    rd("H14"),
     standbyReason:  rd("C15"),
-    progressToday:  rd("E18"),
-    accumulated:    rd("G18"),
-    activities:     dprReadRange(ws, "A27:N32") || rd("A27"),
+    progressToday:  get("progress_today_m",   "E18"),
+    accumulated:    get("accumulated_progress_m", "G18"),
+    activities:     get("today_summary",  "A27") || dprReadRange(ws, "A27:I29"),
   };
 }
 function parseDailyReportExcel(arrayBuffer) {
