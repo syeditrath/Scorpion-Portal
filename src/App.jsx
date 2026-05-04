@@ -955,76 +955,35 @@ function parseScorpionDprSheet(wb) {
     return "";
   };
 
-  const manpowerSheet = wb.Sheets["Manpower_Data"];
-  const equipmentSheet = wb.Sheets["Equipment_Data"];
-
-  // Manpower from dedicated sheet if it has data, else parse inline rows 40-45
-  let manpowerList = [];
-  if (manpowerSheet) {
-    const rows = XLSX.utils.sheet_to_json(manpowerSheet, { defval:"" });
-    manpowerList = rows.filter(r => r.Name || r["Name"]).map(r => `${r.Name||r["Name"]} (${r.Position||""})${r["Working Hours"]?" — "+r["Working Hours"]+"h":""}`.replace(/\s*\(\)/,"")).filter(Boolean);
-  } else {
-    for (let row = 40; row <= 44; row++) {
-      // 3 blocks per row: B/C/D, E/F/G, H/I/J
-      [[`B${row}`,`C${row}`,`D${row}`],[`E${row}`,`F${row}`,`G${row}`],[`H${row}`,`I${row}`,`J${row}`]].forEach(([n,p,h])=>{
-        const name = dprReadCell(ws, n);
-        if (name) manpowerList.push(`${name}${dprReadCell(ws,p)?" ("+dprReadCell(ws,p)+")":""}${dprReadCell(ws,h)?" — "+dprReadCell(ws,h)+"h":""}`);
-      });
-    }
-  }
-
-  // Equipment from dedicated sheet if available, else parse inline rows 48-62
-  let equipmentList = [];
-  if (equipmentSheet) {
-    const rows = XLSX.utils.sheet_to_json(equipmentSheet, { defval:"" });
-    equipmentList = rows.filter(r => r.Description || r["Description"]).map(r => `${r.Description||""} [${r.Condition||""}] Asset:${r["Asset No."]||""} ${r.Hours||""}h`.replace(/\s+/g," ").trim()).filter(Boolean);
-  } else {
-    for (let row = 48; row <= 62; row++) {
-      const desc = dprReadCell(ws, `B${row}`) || dprReadCell(ws, `C${row}`);
-      if (desc) equipmentList.push(`${desc}${dprReadCell(ws,`D${row}`)?" ["+dprReadCell(ws,`D${row}`)+"]":""}${dprReadCell(ws,`F${row}`)?" Asset:"+dprReadCell(ws,`F${row}`):""}${dprReadCell(ws,`H${row}`)?" "+dprReadCell(ws,`H${row}`)+"h":""}`);
-    }
-  }
-
   return {
     id: uid(),
     dprSource: "scorpion_template",
     // Section 1 — Header
     date:          dprReadCell(ws,"H8") || cell("H8"),
     project:       dprReadCell(ws,"C8") || cell("C8"),
-    contractor:    dprReadCell(ws,"C9") || cell("C9"),
-    client:        dprReadCell(ws,"H9") || cell("H9"),
-    shiftTiming:   dprReadCell(ws,"C10") || cell("C10"),
     weather:       dprReadCell(ws,"H10") || cell("H10"),
     // Section 2 — Work Profile & Activity
     profile:       dprReadCell(ws,"C13") || cell("C13"),
     activity:      dprReadCell(ws,"H13") || cell("H13"),
-    // Section 3 — Progress
-    totalQty:      dprReadCell(ws,"A18") || cell("A18"),
-    prevProgress:  dprReadCell(ws,"C18") || cell("C18"),
-    progressToday: dprReadCell(ws,"E18") || cell("E18"),
-    accumulated:   dprReadCell(ws,"G18") || cell("G18"),
-    // Section 4 — Drilling
-    force:         dprReadCell(ws,"C23") || cell("C23"),
-    torque:        dprReadCell(ws,"E23") || cell("E23"),
-    mudPressure:   dprReadCell(ws,"G23") || cell("G23"),
-    pumpRate:      dprReadCell(ws,"H23") || cell("H23"),
-    mudDensity:    dprReadCell(ws,"I23") || cell("I23"),
-    mudViscosity:  dprReadCell(ws,"J23") || cell("J23"),
-    // Section 5 — Activity summaries
-    activities:    dprReadCell(ws,"A27") || cell("A27"),
-    activityNextDay: dprReadRange(ws,"B33:K37"),
-    // Section 6 — Personnel
-    manpower:      manpowerList.length ? String(manpowerList.length) : "",
-    manpowerList:  manpowerList.join(" | "),
-    // Section 7 — Equipment
-    equipment:     equipmentList.join(" | "),
-    // Section 8 — Bentonite
-    bentoniteStored:    dprReadCell(ws,"C66") || cell("C66"),
-    bentoniteUsed:      dprReadCell(ws,"F66") || cell("F66"),
-    bentoniteRemaining: dprReadCell(ws,"I66") || cell("I66"),
-    // Section 9 — Comments
-    issues:  dprReadRange(ws,"B71:E73"),
-    notes:   dprReadRange(ws,"G71:K73"),
+    // Section 3 — Permits & Standby (new — rows shifted +5)
+    permitReceived:  dprReadCell(ws,"C17") || cell("C17"),
+    permitHours:     dprReadCell(ws,"C18") || cell("C18"),
+    standbyReason:   dprReadCell(ws,"C19") || cell("C19"),
+    // Section 4 — Progress (rows shifted +5 from original)
+    totalQty:      dprReadCell(ws,"A23") || cell("A23"),
+    prevProgress:  dprReadCell(ws,"C23") || cell("C23"),
+    progressToday: dprReadCell(ws,"E23") || cell("E23"),
+    accumulated:   dprReadCell(ws,"G23") || cell("G23"),
+    // Section 5 — Drilling (rows shifted +5)
+    force:         dprReadCell(ws,"C28") || cell("C28"),
+    torque:        dprReadCell(ws,"E28") || cell("E28"),
+    mudPressure:   dprReadCell(ws,"G28") || cell("G28"),
+    pumpRate:      dprReadCell(ws,"H28") || cell("H28"),
+    // Section 6 — Activity summaries (rows shifted +5)
+    activities:    dprReadCell(ws,"A32") || cell("A32"),
+    // Section 9 — Comments (rows shifted +5)
+    issues:  dprReadRange(ws,"B76:E78"),
+    notes:   dprReadRange(ws,"G76:K78"),
   };
 }
 
@@ -1191,12 +1150,37 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
                     </div>
                   </div>
                 )}
+                {/* Permits & Standby */}
+                {(f.permitReceived||f.permitHours||f.standbyReason) && (
+                  <div>
+                    <label style={LS}>PERMITS & STANDBY</label>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {f.permitReceived&&(
+                        <div style={{background:f.permitReceived.toLowerCase()==="yes"?T.greenDim:T.redDim,border:`1px solid ${f.permitReceived.toLowerCase()==="yes"?T.green:T.red}44`,borderRadius:8,padding:"6px 14px",fontSize:12,display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{color:T.textMuted}}>Permit: </span>
+                          <span style={{fontWeight:800,color:f.permitReceived.toLowerCase()==="yes"?T.green:T.red}}>{f.permitReceived}</span>
+                        </div>
+                      )}
+                      {f.permitHours&&(
+                        <div style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 14px",fontSize:12}}>
+                          <span style={{color:T.textMuted}}>Permit Hours: </span>
+                          <span style={{fontWeight:700,color:T.text}}>{f.permitHours}</span>
+                        </div>
+                      )}
+                    </div>
+                    {f.standbyReason&&(
+                      <div style={{marginTop:8,fontSize:12,color:T.textSub,padding:"8px 10px",background:T.card2,borderRadius:7,border:`1px solid ${T.border}`,lineHeight:1.6}}>
+                        <span style={{color:T.textMuted,fontWeight:700}}>Standby Reason: </span>{f.standbyReason}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* Drilling parameters */}
                 {(f.force||f.torque||f.mudPressure||f.pumpRate) && (
                   <div>
                     <label style={LS}>DRILLING PARAMETERS</label>
                     <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                      {[["Force (Ton)",f.force],["Torque (Ton/m)",f.torque],["Mud Press (PSI)",f.mudPressure],["Pump Rate (gal/min)",f.pumpRate],["Mud Density",f.mudDensity],["Mud Viscosity",f.mudViscosity]].map(([l,v])=>v?(
+                      {[["Force (Ton)",f.force],["Torque (Ton/m)",f.torque],["Mud Press (PSI)",f.mudPressure],["Pump Rate (gal/min)",f.pumpRate]].map(([l,v])=>v?(
                         <div key={l} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",fontSize:12}}>
                           <span style={{color:T.textMuted}}>{l}: </span><span style={{fontWeight:700,color:T.text}}>{v}</span>
                         </div>
@@ -1204,38 +1188,10 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
                     </div>
                   </div>
                 )}
-                {/* Bentonite */}
-                {(f.bentoniteStored||f.bentoniteUsed||f.bentoniteRemaining) && (
-                  <div>
-                    <label style={LS}>BENTONITE MATERIAL (bags)</label>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                      {[["Stored",f.bentoniteStored,T.textMuted],["Used Today",f.bentoniteUsed,T.orange],["Remaining",f.bentoniteRemaining,T.green]].map(([l,v,c])=>(
-                        <div key={l} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:c}}>{v||"—"}</div>
-                          <div style={{fontSize:10,color:T.textMuted,marginTop:2}}>{l}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {/* Client/contractor info */}
-                {(f.contractor||f.client||f.shiftTiming) && (
-                  <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                    {[["Contractor",f.contractor],["Client",f.client],["Shift",f.shiftTiming]].map(([l,v])=>v?(
-                      <div key={l} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",fontSize:12}}>
-                        <span style={{color:T.textMuted}}>{l}: </span><span style={{fontWeight:700,color:T.text}}>{v}</span>
-                      </div>
-                    ):null)}
-                  </div>
-                )}
-                {/* Next day plan */}
-                {f.activityNextDay && (
-                  <div><label style={LS}>NEXT DAY PLAN</label><div style={{fontSize:12,color:T.textSub,padding:"8px 10px",background:T.card2,borderRadius:7,border:`1px solid ${T.border}`,lineHeight:1.6}}>{f.activityNextDay}</div></div>
-                )}
-                {/* Manpower list */}
-                {f.manpowerList && (
-                  <div><label style={LS}>PERSONNEL ON SITE</label><div style={{fontSize:12,color:T.text,padding:"8px 10px",background:T.card2,borderRadius:7,border:`1px solid ${T.border}`,lineHeight:1.7}}>{f.manpowerList.split(" | ").map((p,i)=><div key={i}>{p}</div>)}</div></div>
-                )}
+
+
+
+
               </div>
             </div>
           )}
@@ -4524,7 +4480,6 @@ function ProjectDocs({data,setData,showToast}) {
           activity: savedDoc.activity,
           progressToday: savedDoc.progressToday,
           accumulated: savedDoc.accumulated,
-          bentoniteUsed: savedDoc.bentoniteUsed,
           notes: savedDoc.notes,
         };
 
@@ -5260,7 +5215,7 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
         field9:  r.totalQty || "",
         field11: r.progressToday || "",
         field12: r.accumulated || "",
-        field19: r.bentoniteUsed || "",
+        field19: r.permitHours || "",
         field27: r.notes || "",
       };
 
