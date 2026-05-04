@@ -966,24 +966,23 @@ function parseScorpionDprSheet(wb) {
     profile:       dprReadCell(ws,"C13") || cell("C13"),
     activity:      dprReadCell(ws,"H13") || cell("H13"),
     // Section 3 — Permits & Standby (new — rows shifted +5)
-    permitReceived:  dprReadCell(ws,"C17") || cell("C17"),
-    permitHours:     dprReadCell(ws,"C18") || cell("C18"),
-    standbyReason:   dprReadCell(ws,"C19") || cell("C19"),
+    permitReceived:  dprReadCell(ws,"C14") || cell("C14"),
+    permitHours:     dprReadCell(ws,"H14") || cell("H14"),
+    standbyReason:   dprReadCell(ws,"C15") || cell("C15"),
     // Section 4 — Progress (rows shifted +5 from original)
-    totalQty:      dprReadCell(ws,"A23") || cell("A23"),
-    prevProgress:  dprReadCell(ws,"C23") || cell("C23"),
-    progressToday: dprReadCell(ws,"E23") || cell("E23"),
-    accumulated:   dprReadCell(ws,"G23") || cell("G23"),
+    totalQty:      dprReadCell(ws,"A18") || cell("A18"),
+    prevProgress:  dprReadCell(ws,"C18") || cell("C18"),
+    progressToday: dprReadCell(ws,"E18") || cell("E18"),
+    accumulated:   dprReadCell(ws,"G18") || cell("G18"),
     // Section 5 — Drilling (rows shifted +5)
     force:         dprReadCell(ws,"C28") || cell("C28"),
     torque:        dprReadCell(ws,"E28") || cell("E28"),
     mudPressure:   dprReadCell(ws,"G28") || cell("G28"),
     pumpRate:      dprReadCell(ws,"H28") || cell("H28"),
     // Section 6 — Activity summaries (rows shifted +5)
-    activities:    dprReadCell(ws,"A32") || cell("A32"),
+    activities:    dprReadCell(ws,"A27") || cell("A27"),
     // Section 9 — Comments (rows shifted +5)
-    issues:  dprReadRange(ws,"B76:E78"),
-    notes:   dprReadRange(ws,"G76:K78"),
+    
   };
 }
 
@@ -2029,6 +2028,42 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
         )}
       </div>
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
             {/* ── Daily Reports ── */}
       <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,overflow:"hidden",boxShadow:T.shadow}}>
         {/* Collapsible header */}
