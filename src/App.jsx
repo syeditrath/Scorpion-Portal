@@ -1328,7 +1328,11 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
     const headers = [
       "Project",
       "Date",
+      "Work Profile",
       "Activity",
+      "Permit Received",
+      "Permit Hours",
+      "Standby Reason",
       "Total Qty (m)",
       "Progress Today (m)",
       "Accumulated (m)",
@@ -1338,7 +1342,11 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
     const toRow = r => [
       r._project || r.project || "",
       r.date || "",
+      r.profile || "",
       r.activity || "",
+      r.permitReceived || "",
+      r.permitHours || "",
+      r.standbyReason || "",
       r.totalQty || "",
       r.progressToday || "",
       r.accumulated || "",
@@ -1348,7 +1356,7 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
     const rows = allRows.map(toRow);
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const colWidths = [22, 12, 22, 14, 16, 16, 40, 30];
+    const colWidths = [22, 12, 18, 22, 14, 12, 30, 14, 16, 16, 40, 30];
     ws["!cols"] = colWidths.map(w => ({ wch: w }));
     ws["!freeze"] = { xSplit: 0, ySplit: 1 };
 
@@ -1440,7 +1448,7 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr style={{background:T.card2}}>
-                      {["Project","Date","Activity","Total Qty (m)","Progress Today (m)","Accumulated (m)","Issues / Delays","Source"].map(h=>(
+                      {["Project","Date","Work Profile","Activity","Permit Received","Permit Hours","Standby Reason","Total Qty (m)","Progress Today (m)","Accumulated (m)","Issues / Delays","Source"].map(h=>(
                         <th key={h} style={{padding:"8px 12px",textAlign:"left",fontWeight:700,fontSize:11,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
                       ))}
                     </tr>
@@ -1450,7 +1458,15 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
                       <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
                         <td style={{padding:"8px 12px",fontWeight:600,color:T.text,whiteSpace:"nowrap"}}>{r._project||r.project||"—"}</td>
                         <td style={{padding:"8px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.date?fmtDate(r.date):"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.profile||"—"}</td>
                         <td style={{padding:"8px 12px",color:T.textSub,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.activity||"—"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"center"}}>
+                          {r.permitReceived
+                            ? <span style={{background:r.permitReceived.toLowerCase()==="yes"?T.greenDim:T.redDim,color:r.permitReceived.toLowerCase()==="yes"?T.green:T.red,fontWeight:700,borderRadius:6,padding:"2px 8px"}}>{r.permitReceived}</span>
+                            : <span style={{color:T.textMuted}}>—</span>}
+                        </td>
+                        <td style={{padding:"8px 12px",color:T.textSub,textAlign:"center"}}>{r.permitHours||"—"}</td>
+                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.standbyReason||"—"}</td>
                         <td style={{padding:"8px 12px",color:T.textSub,textAlign:"center"}}>{r.totalQty||"—"}</td>
                         <td style={{padding:"8px 12px",textAlign:"center"}}>
                           {r.progressToday
