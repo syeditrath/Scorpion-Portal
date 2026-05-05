@@ -631,6 +631,7 @@ const EMPTY_DATA = {
   projects: [{name:"NEOM Phase 1",client:"NEOM"},{name:"NEOM Phase 2",client:"NEOM"},{name:"Riyadh Metro",client:"Saudi Rail"}],
   projectDocs: [],
   projectAnalysis: [],
+  rigs: [],          // { id, project, name }
   costControl: [],  // { id, project, category, description, amount, date, refNo, notes, budgeted }
                     // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Overhead"|"Other"
 };
@@ -4645,6 +4646,24 @@ function ProjectDocs({data,setData,showToast}) {
     showToast("Deleted","del");
   };
 
+  // ── Rig management ──────────────────────────────────────────────────
+  const rigs = data.rigs || [];
+  const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
+  const [rigInput, setRigInput] = useState("");
+
+  const addRig = () => {
+    const name = rigInput.trim();
+    if (!name || !selectedProject) return;
+    if (rigs.some(r=>r.project===selectedProject && r.name===name)) { showToast("Rig already exists","del"); return; }
+    setData(prev=>({...prev, rigs:[...(prev.rigs||[]), {id:uid(), project:selectedProject, name}]}));
+    setRigInput("");
+    showToast("Rig added ✓");
+  };
+  const delRig = id => {
+    setData(prev=>({...prev, rigs:(prev.rigs||[]).filter(r=>r.id!==id)}));
+    showToast("Rig removed","del");
+  };
+
   // ── Derived data (no hooks below this line) ───────────────────────────
   const certAll   = docs.filter(d=>d.subTab==="certificates");
   const projCerts = selProj ? certAll.filter(d=>d.project===selProj) : [];
@@ -4706,6 +4725,7 @@ function ProjectDocs({data,setData,showToast}) {
                       </div>
                     </div>
 
+                    {(()=>{const rc=(data.rigs||[]).filter(r=>r.project===project).length; return rc>0&&<div style={{marginTop:10,fontSize:11,color:T.textMuted}}>🔩 {rc} rig{rc!==1?"s":""}</div>;})()}
                     <div style={{marginTop:14,fontSize:12,color:T.blue,fontWeight:700,textAlign:"right"}}>Open Project →</div>
                   </button>
                 );
@@ -4726,6 +4746,48 @@ function ProjectDocs({data,setData,showToast}) {
         </div>
       </div>
       <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={changeTab}/>
+
+      {/* ── Rigs / Spreads panel ── */}
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>
+            🔩 RIGS / SPREADS
+            <span style={{marginLeft:8,fontSize:12,color:T.textMuted,fontWeight:500,fontFamily:"inherit"}}>{projRigs.length} defined</span>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input
+              value={rigInput}
+              onChange={e=>setRigInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&addRig()}
+              placeholder="New rig name (e.g. Rig 1)…"
+              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",width:200}}
+            />
+            <button onClick={addRig}
+              style={{background:T.gold,border:"none",color:"#000",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              + Add Rig
+            </button>
+          </div>
+        </div>
+        {projRigs.length > 0 && (
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>
+            {projRigs.map(r=>{
+              const eqCount = (data.equipment||[]).filter(e=>e.rig===r.name&&e.project===selectedProject).length;
+              const maintCount = (data.equipment||[]).filter(e=>e.rig===r.name&&e.project===selectedProject)
+                .flatMap(e=>(e.maintenance||[]).filter(t=>(t.status||"Open")!=="Closed")).length;
+              return (
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,background:T.card2,border:`1px solid ${maintCount>0?"#f59e0b44":T.border}`,borderRadius:10,padding:"8px 14px"}}>
+                  <span style={{fontWeight:700,fontSize:13,color:T.text}}>🔩 {r.name}</span>
+                  <span style={{fontSize:11,color:T.textMuted}}>{eqCount} eq</span>
+                  {maintCount>0&&<span style={{fontSize:11,color:"#f59e0b",fontWeight:700}}>⚠ {maintCount} open</span>}
+                  <button onClick={()=>delRig(r.id)}
+                    style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>✕</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {projRigs.length===0&&<div style={{fontSize:12,color:T.textMuted,marginTop:10}}>No rigs defined yet — add one above, then assign equipment to it in the Equipment section.</div>}
+      </div>
 
       {/* ══ INVOICES ════════════════════════════════════════════════════ */}
       {/* ══ CERTIFICATES ════════════════════════════════════════════════ */}
@@ -6115,6 +6177,7 @@ function CertModal({mode,cert,onClose,onSave}) {
    EQUIPMENT PAGE
 ════════════════════════════════════════════════════════════════════════════ */
 function EquipmentPage({data,setData,showToast}) {
+  const rigs = data.rigs || [];
   const [modal,   setModal]   = useState(null);
   const [selEq,   setSelEq]   = useState(null); // selected equipment
   const [fProj,   setFProj]   = useState("");
@@ -6254,6 +6317,7 @@ function EquipmentPage({data,setData,showToast}) {
                       {eq.model&&<Chip>{eq.model}</Chip>}
                       {eq.serialNo&&<Chip>S/N: {eq.serialNo}</Chip>}
                       {eq.project&&<Chip>{eq.project}</Chip>}
+                      {eq.rig&&<Chip>🔩 {eq.rig}</Chip>}
                       {eq.operator&&<Chip>Op: {eq.operator}</Chip>}
                     </div>
                     <div style={{marginTop:8,fontSize:12,color:T.textMuted,display:"flex",gap:12}}>
@@ -6275,7 +6339,7 @@ function EquipmentPage({data,setData,showToast}) {
         </div>
       }
 
-      {modal&&<EqModal mode={modal.mode} eq={modal.eq} projects={projects} onClose={()=>setModal(null)} onSave={saveEq}/>}
+      {modal&&<EqModal mode={modal.mode} eq={modal.eq} projects={projects} rigs={rigs} onClose={()=>setModal(null)} onSave={saveEq}/>}
       </>}
     </div>
   );
@@ -6285,6 +6349,7 @@ function EquipmentPage({data,setData,showToast}) {
 function MaintenancePage({data,setData,showToast}) {
   const [filterStatus, setFilterStatus] = useState("Open");  // "All" | "Open" | "Closed"
   const [filterProj,   setFilterProj]   = useState("All");
+  const [filterRig,    setFilterRig]    = useState("All");
   const [modal,        setModal]        = useState(null);    // null | {mode,ticket,eqId}
   const [closeModal,    setCloseModal]    = useState(null);
   const [closeNotes,    setCloseNotes]    = useState("");
@@ -6311,10 +6376,11 @@ function MaintenancePage({data,setData,showToast}) {
 
   const equipment = data.equipment || [];
   const projects  = data.projects  || [];
+  const rigs      = data.rigs      || [];
 
   /* Flatten ALL maintenance tickets across all equipment */
   const allTickets = equipment.flatMap(eq =>
-    (eq.maintenance || []).map(t => ({ ...t, _eqId: eq.id, _eqName: eq.name }))
+    (eq.maintenance || []).map(t => ({ ...t, _eqId: eq.id, _eqName: eq.name, _eqRig: eq.rig || "", _eqProject: eq.project || "" }))
   );
 
   /* Status colours */
@@ -6326,9 +6392,15 @@ function MaintenancePage({data,setData,showToast}) {
   const sOf = t => STATUS[t.status] || STATUS["Open"];
 
   /* Filtered + sorted tickets */
+  /* Rigs for the selected project filter */
+  const rigsForFilter = filterProj === "All"
+    ? [...new Set(rigs.map(r=>r.name))]
+    : rigs.filter(r=>r.project===filterProj).map(r=>r.name);
+
   const visible = allTickets
     .filter(t => filterStatus === "All" || (t.status||"Open") === filterStatus)
-    .filter(t => filterProj   === "All" || t.project === filterProj)
+    .filter(t => filterProj   === "All" || (t.project === filterProj || t._eqProject === filterProj))
+    .filter(t => filterRig    === "All" || t._eqRig === filterRig)
     .sort((a,b) => {
       const order = {"Open":0,"In Progress":1,"Closed":2};
       const so = (order[a.status||"Open"]||0) - (order[b.status||"Open"]||0);
@@ -6453,10 +6525,17 @@ function MaintenancePage({data,setData,showToast}) {
           ))}
         </div>
         {projects.length > 0 && (
-          <select value={filterProj} onChange={e=>setFilterProj(e.target.value)}
+          <select value={filterProj} onChange={e=>{setFilterProj(e.target.value);setFilterRig("All");}}
             style={{...IS, width:"auto",fontSize:12,padding:"6px 12px"}}>
             <option value="All">All Projects</option>
             {renderProjectOptions(projects)}
+          </select>
+        )}
+        {rigsForFilter.length > 0 && (
+          <select value={filterRig} onChange={e=>setFilterRig(e.target.value)}
+            style={{...IS, width:"auto",fontSize:12,padding:"6px 12px"}}>
+            <option value="All">All Rigs</option>
+            {rigsForFilter.map(r=><option key={r} value={r}>{r}</option>)}
           </select>
         )}
         <span style={{fontSize:12,color:T.textMuted,marginLeft:"auto"}}>{visible.length} ticket{visible.length!==1?"s":""}</span>
@@ -6494,6 +6573,7 @@ function MaintenancePage({data,setData,showToast}) {
                     <div style={{fontWeight:700,fontSize:14,color:T.text,marginBottom:4}}>{ticket.description || ticket.reason || "Maintenance Request"}</div>
                     <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,color:T.textMuted}}>
                       <span style={{fontWeight:600,color:T.gold}}>⚙ {ticket._eqName}</span>
+                      {ticket._eqRig && <span style={{color:T.blue,fontWeight:600}}>🔩 {ticket._eqRig}</span>}
                       {ticket.project && <span>📍 {ticket.project}</span>}
                       {ticket.raisedBy && <span>👤 Raised by: <strong style={{color:T.text}}>{ticket.raisedBy}</strong></span>}
                       {ticket.raisedAt && <span>on {fmtDate(ticket.raisedAt)}</span>}
@@ -7046,9 +7126,11 @@ function SubRecordModal({mode,type,rec,onClose,onSave,projects}) {
   );
 }
 
-function EqModal({mode,eq,projects,onClose,onSave}) {
+function EqModal({mode,eq,projects,rigs,onClose,onSave}) {
   const [f,setF]=useState(eq||{});
   const set=k=>v=>setF(p=>({...p,[k]:v}));
+  // Rigs available for the currently selected project
+  const projRigs = (rigs||[]).filter(r=>r.project===f.project);
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} EQUIPMENT`} color={T.gold} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Equipment name required");return;}onSave(f,mode);}}>
@@ -7056,9 +7138,16 @@ function EqModal({mode,eq,projects,onClose,onSave}) {
       <FieldRow label="Model / Make"><FInput value={f.model||""} onChange={set("model")} color={T.gold}/></FieldRow>
       <FieldRow label="Serial Number"><FInput value={f.serialNo||""} onChange={set("serialNo")} color={T.gold}/></FieldRow>
       <FieldRow label="Project">
-        <FSelect value={f.project||""} onChange={set("project")} color={T.gold}>
+        <FSelect value={f.project||""} onChange={v=>{setF(p=>({...p,project:v,rig:""}));}} color={T.gold}>
           <option value="">Select…</option>
           {renderProjectOptions(projects)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Rig / Spread">
+        <FSelect value={f.rig||""} onChange={set("rig")} color={T.gold}>
+          <option value="">Select rig…</option>
+          {projRigs.map(r=><option key={r.id} value={r.name}>{r.name}</option>)}
+          {projRigs.length===0&&f.project&&<option disabled>— No rigs for this project yet —</option>}
         </FSelect>
       </FieldRow>
       <FieldRow label="Status">
