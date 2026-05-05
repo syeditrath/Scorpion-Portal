@@ -4653,8 +4653,9 @@ function ProjectDocs({data,setData,showToast}) {
 
   const addRig = () => {
     const name = rigInput.trim();
-    if (!name || !selectedProject) return;
-    if (rigs.some(r=>r.project===selectedProject && r.name===name)) { showToast("Rig already exists","del"); return; }
+    if (!name) { showToast("Enter a rig name first","del"); return; }
+    if (!selectedProject) { showToast("No project selected","del"); return; }
+    if ((data.rigs||[]).some(r=>r.project===selectedProject && r.name===name)) { showToast("Rig already exists","del"); return; }
     setData(prev=>({...prev, rigs:[...(prev.rigs||[]), {id:uid(), project:selectedProject, name}]}));
     setRigInput("");
     showToast("Rig added ✓");
@@ -4762,7 +4763,7 @@ function ProjectDocs({data,setData,showToast}) {
               placeholder="New rig name (e.g. Rig 1)…"
               style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",width:200}}
             />
-            <button onClick={addRig}
+            <button type="button" onClick={e=>{e.preventDefault();e.stopPropagation();addRig();}}
               style={{background:T.gold,border:"none",color:"#000",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               + Add Rig
             </button>
@@ -4779,7 +4780,7 @@ function ProjectDocs({data,setData,showToast}) {
                   <span style={{fontWeight:700,fontSize:13,color:T.text}}>🔩 {r.name}</span>
                   <span style={{fontSize:11,color:T.textMuted}}>{eqCount} eq</span>
                   {maintCount>0&&<span style={{fontSize:11,color:"#f59e0b",fontWeight:700}}>⚠ {maintCount} open</span>}
-                  <button onClick={()=>delRig(r.id)}
+                  <button type="button" onClick={e=>{e.preventDefault();e.stopPropagation();delRig(r.id);}}
                     style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>✕</button>
                 </div>
               );
