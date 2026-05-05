@@ -4546,6 +4546,7 @@ function ProjectDocs({data,setData,showToast}) {
   const [fProj,   setFProj]   = useState("");
   const [bulkModal, setBulkModal] = useState(false);
   const [multiPdfModal, setMultiPdfModal] = useState(null);
+  const [rigInput, setRigInput] = useState("");
   const docs     = data.projectDocs || [];
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
@@ -4649,7 +4650,6 @@ function ProjectDocs({data,setData,showToast}) {
   // ── Rig management ──────────────────────────────────────────────────
   const rigs = data.rigs || [];
   const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
-  const [rigInput, setRigInput] = useState("");
 
   const addRig = () => {
     const name = rigInput.trim();
