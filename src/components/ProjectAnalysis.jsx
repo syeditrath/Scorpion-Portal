@@ -2350,8 +2350,6 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         })()}
       </div>
 
-      {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} workOrders={(data.projectDocs||[]).filter(d=>d.subTab==="workorders")} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
-      {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} rigs={(data.rigs||[]).filter(r=>r.project===proj.project)} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
       </> /* end detailTab===overview */}
 
       {detailTab==="analysis" && <>
@@ -2598,6 +2596,10 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         <ProjectDurationChart proj={proj} reports={reports} />
       )}
       </> /* end detailTab===analysis */}
+
+      {/* Modals are tab-independent — must render regardless of which detail tab is active */}
+      {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} workOrders={(data.projectDocs||[]).filter(d=>d.subTab==="workorders")} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
+      {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} rigs={(data.rigs||[]).filter(r=>r.project===proj.project)} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
 
     </div>
   );
