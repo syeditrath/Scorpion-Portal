@@ -6,6 +6,7 @@ import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_
 import { uploadFile, saveAppData, getPreviewUrl, isCloudflareConfigured } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, FInput, FTextarea, FSelect, PageHeader, Empty, daysLeft, pctColor, deriveProjectStats } from "./UI.jsx";
 import { RiskAlertsBar, ProjectAnalysisProNav, AnalyticsTab, TimelineTab, BudgetTab, ReportsTab, computeRiskInsights, costSheetsByProject } from "./ProjectAnalysisPro.jsx";
+import { CostBaselinePanel } from "./CostBaseline.jsx";
 
 /* Flexible column-header mapping for generic/legacy daily report Excel files
    (non-Scorpion-template). Header text is upper-cased before matching. */
@@ -1762,6 +1763,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 
         return (
           <div className="fade-in">
+            <CostBaselinePanel proj={proj} data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>💰 COST SHEET — {proj.project}</div>
               <button onClick={addSheet} style={{background:T.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",letterSpacing:"1px"}}>+ ADD ENTRY</button>
